@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* G2 colour tokens. Components use these through the Tailwind theme below, never a raw hex. */
+:root {
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-muted: #f3eee6;
+  --border: #e7dfd3;
+  --text: #1c1917;
+  --text-muted: #6b635a;
+  --primary: #c2410c;
+  --primary-hover: #9a3412;
+  --primary-soft: #fff1e6;
+  --primary-fg: #ffffff;
+  --accent-gold: #b8862b;
+  --success: #15803d;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --info: #1d4ed8;
+  --brand: var(--primary);
+  --brand-fg: #ffffff;
+  --elev-card: 0 1px 2px rgb(28 25 23 / 0.04), 0 2px 8px rgb(28 25 23 / 0.05);
+  --elev-sheet: 0 8px 24px rgb(28 25 23 / 0.1), 0 24px 56px rgb(28 25 23 / 0.14);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #141210;
+  --surface: #1e1b18;
+  --surface-muted: #292521;
+  --border: #3a342e;
+  --text: #f5f1ea;
+  --text-muted: #a8a096;
+  --primary: #f97316;
+  --primary-hover: #fb923c;
+  --primary-soft: #3b2314;
+  --primary-fg: #141210;
+  --accent-gold: #d4a84b;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #60a5fa;
+  --elev-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.25);
+  --elev-sheet: 0 8px 24px rgb(0 0 0 / 0.45), 0 24px 56px rgb(0 0 0 / 0.5);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent-gold: var(--accent-gold);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-brand: var(--brand);
+  --color-brand-fg: var(--brand-fg);
+  --font-sans: var(--font-inter), var(--font-devanagari), var(--font-gujarati), system-ui, sans-serif;
+  --font-heading: var(--font-jakarta), var(--font-devanagari), var(--font-gujarati), system-ui, sans-serif;
+  --shadow-card: var(--elev-card);
+  --shadow-sheet: var(--elev-sheet);
+  --animate-sheet-right: sheet-right 200ms ease-out;
+  --animate-sheet-up: sheet-up 200ms ease-out;
+  --animate-fade: fade 150ms ease-out;
+  --animate-pop: pop 150ms ease-out;
+}
+
+@keyframes sheet-right {
+  from { transform: translateX(24px); opacity: 0; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+}
+@keyframes fade {
+  from { opacity: 0; }
+}
+@keyframes pop {
+  from { transform: scale(0.97); opacity: 0; }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  button, [role="button"], a, summary, label[for] {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  ::selection {
+    background: var(--primary-soft);
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+@utility font-heading {
+  font-family: var(--font-heading);
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility skeleton {
+  background: var(--surface-muted);
+  border-radius: 8px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+}
+
+/* Printing a document that is open in a sheet: print the sheet, not the page behind it. */
+@media print {
+  body:has([role="dialog"]) [data-app-root] {
+    display: none !important;
+  }
+  [role="dialog"] {
+    position: static !important;
+    max-width: none !important;
+    max-height: none !important;
+    transform: none !important;
+    animation: none !important;
+    box-shadow: none !important;
+  }
+  [role="dialog"] .overflow-y-auto {
+    overflow: visible !important;
+  }
+}

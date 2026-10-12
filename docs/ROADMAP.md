@@ -11,8 +11,9 @@ Last updated: 11 Oct 2026.
 | --- | --- | --- | --- |
 | 1. Foundation | Design system, app shell, login, setup wizard, dashboard, settings, schema | G, A2 | Built on demo data |
 | 2. Sales | Menu master, packages, enquiries, quotation builder, orders, calendar, booking mode | B1 to B5 | Built on demo data |
-| 3. Supply | Recipes, stock, vendors, third-party food, cutlery | C | Code written; needs `supabase/migrations/0003_supply.sql` run, then testing |
-| 4. Staff and operations | Workers, tasks, payroll, kitchen, dispatch, on-site | D | Planned |
+| 3. Supply | Recipes, stock, vendors, third-party food, cutlery | C | Built and tested against the database |
+| 4A. Staff | Workers, priced tasks, attendance, payouts, monthly payroll, chef per dish | D1, D2 | Code written; needs `supabase/migrations/0004_staff.sql` run, then testing |
+| 4B. Operations | Kitchen production, dispatch and transport, on-site event screen | D3 to D5 | Planned |
 | 5. Payments, documents and public menus | Schedules, invoices, PDFs, Razorpay, QR and public menu pages | E | Planned |
 | 6. Reports, messaging and access | Reports, WhatsApp, email and SMS, permissions | F | Planned |
 | 7. Platform | Super admin, subscription billing, Excel import, AI add-ons | A1, A3, F4 | Planned |

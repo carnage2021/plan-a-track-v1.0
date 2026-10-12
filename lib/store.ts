@@ -8,6 +8,7 @@ import { persist } from "zustand/middleware";
 import { clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, loadAll, paymentRow, run, savePackageRows, tenantRow } from "./db";
 import { background, setReload, write } from "./queue";
 import { supabase } from "./supabase/client";
+import { useStaff } from "./staff";
 import { useSupply } from "./supply-store";
 import type {
   Client,
@@ -149,7 +150,7 @@ export const useStore = create<Store>()(
           }
           const { me, ...rest } = loaded;
           set({ ...rest, currentUserId: me.id, myRole: me.role, signedIn: true, hydrated: true });
-          await useSupply.getState().load();
+          await Promise.all([useSupply.getState().load(), useStaff.getState().load()]);
           return true;
         } catch (e) {
           toast.error("Could not load your data", { description: e instanceof Error ? e.message : undefined });

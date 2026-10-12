@@ -22,8 +22,9 @@ The full roadmap, including features added after the plan was written, is in `do
 | --- | --- | --- |
 | 1. Foundation | Design system (G), app shell, login, setup wizard, dashboard, settings, schema | Built |
 | 2. Sales | Menu master, packages, enquiries, quotation builder, orders, calendar, booking mode (B1 to B5) | Built |
-| 3. Supply | Recipes, stock, vendors, third-party food, cutlery (C) | Code written; run `supabase/migrations/0003_supply.sql`, then test |
-| 4. Staff and operations | Workers, tasks, kitchen, dispatch, on-site (D) | Planned |
+| 3. Supply | Recipes, stock, vendors, third-party food, cutlery (C) | Built |
+| 4A. Staff | Workers, priced tasks, attendance, payouts, payroll (D1, D2) | Code written; run `supabase/migrations/0004_staff.sql`, then test |
+| 4B. Operations | Kitchen, dispatch, on-site (D3 to D5) | Planned |
 | 5. Payments and documents | Schedules, invoices, server-side PDFs, Razorpay (E) | Planned |
 | 6. Reports and access | Reports, WhatsApp API, permissions (F) | Planned |
 | 7. Platform | Super admin, subscription billing, Excel import, AI add-ons (A1, A3, F4) | Planned |

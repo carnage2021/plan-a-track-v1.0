@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/input";
 import { Card, CardTitle, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { Modal, Sheet } from "@/components/ui/sheet";
+import { OrderTasks, StaffGate } from "@/components/staff/order-tasks";
 import { CutleryTab } from "@/components/supply/challan";
 import { SupplyGate } from "@/components/supply/common";
 import { AgenciesTab } from "@/components/supply/outsource";
@@ -25,7 +26,7 @@ import type { EventFunction, MenuItem, Order, Payment } from "@/lib/types";
 import { printLight, useUi } from "@/lib/ui";
 import { fmtDate, fmtTime, money, num, whatsappLink } from "@/lib/utils";
 
-const laterTabs = [{ id: "staff", label: "Staff and Tasks", phase: 4 }];
+const laterTabs: { id: string; label: string; phase: number }[] = [];
 
 function PaxChange({ order, fn, onClose }: { order: Order; fn: EventFunction; onClose: () => void }) {
   const { items, packages, tenant } = useStore();
@@ -239,6 +240,8 @@ function OrderView({ order }: { order: Order }) {
         <TabsContent value="agencies"><SupplyGate><AgenciesTab order={order} /></SupplyGate></TabsContent>
         <TabsContent value="raw"><SupplyGate><Requirement functions={order.functions} orderId={order.id} title={`${client?.name ?? ""} · ${order.number}`} /></SupplyGate></TabsContent>
         <TabsContent value="cutlery"><SupplyGate><CutleryTab order={order} /></SupplyGate></TabsContent>
+
+        <TabsContent value="staff"><StaffGate><OrderTasks order={order} /></StaffGate></TabsContent>
 
         {laterTabs.map((t) => (
           <TabsContent key={t.id} value={t.id}>

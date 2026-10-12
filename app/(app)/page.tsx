@@ -11,11 +11,40 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/primitives";
 import { paidAmount, priceQuote } from "@/lib/pricing";
 import { useStock } from "@/components/supply/common";
+import { useStaff } from "@/lib/staff";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { fmtQty } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import { useUi } from "@/lib/ui";
 import { cn, daysFromToday, fmtDate, isoDate, money, moneyShort, parseDate, relativeDay } from "@/lib/utils";
+
+function OpenTasks() {
+  const ready = useStaff((s) => s.ready);
+  const tasks = useStaff((s) => s.tasks);
+  const workers = useStaff((s) => s.workers);
+  const open = tasks.filter((t) => t.status !== "done" && t.status !== "verified");
+  if (!ready || tasks.length === 0) return null;
+  return (
+    <Card>
+      <CardTitle action={<Button variant="ghost" asChild><Link href="/staff">Staff and Tasks</Link></Button>}>Open tasks</CardTitle>
+      {open.length === 0 ? (
+        <p className="px-5 py-6 text-center text-sm text-text-muted">Every task is done.</p>
+      ) : (
+        <ul className="mt-2 divide-y">
+          {open.slice(0, 6).map((t) => (
+            <li key={t.id}>
+              <Link href={`/orders/${t.orderId}?tab=staff`} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-surface-muted/60 md:px-5">
+                <span className="truncate">{t.title}</span>
+                <span className={cn("shrink-0 text-xs", t.workerId ? "text-text-muted" : "text-warning")}>{workers.find((w) => w.id === t.workerId)?.name ?? "Not assigned"}</span>
+              </Link>
+            </li>
+          ))}
+          {open.length > 6 && <li className="px-4 py-2 text-xs text-text-muted md:px-5">and {open.length - 6} more</li>}
+        </ul>
+      )}
+    </Card>
+  );
+}
 
 function LowStock() {
   const ready = useSupply((s) => s.ready);
@@ -206,10 +235,7 @@ export default function DashboardPage() {
             </Card>
           )}
           <LowStock />
-          <Card className="p-4 text-sm text-text-muted md:p-5">
-            <p className="font-medium text-text">Open tasks</p>
-            <p className="mt-1">This panel fills in when staff tasks (phase 4) are built.</p>
-          </Card>
+          <OpenTasks />
         </div>
       </div>
     </>

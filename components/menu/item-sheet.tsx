@@ -11,7 +11,9 @@ import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { marginTone } from "@/lib/pricing";
+import { AgencyFields, RecipeEditor } from "@/components/supply/recipe";
 import { useStore } from "@/lib/store";
+import { useSupply } from "@/lib/supply-store";
 import type { MenuItem, MenuPackage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +32,7 @@ async function cropToWebp(file: File): Promise<Blob> {
 
 const blank: Omit<MenuItem, "id"> = {
   name: "", nameLocal: "", categoryId: "", diet: "veg", cuisine: "Gujarati", spice: 1, unit: "plate", pricingType: "plate",
-  cost: 0, price: 0, description: "", active: true, outsourced: false, seasonal: false, bestseller: false,
+  cost: 0, price: 0, description: "", active: true, outsourced: false, seasonal: false, bestseller: false, recipeBase: 100, bufferPct: 5, agencyRate: 0,
 };
 
 interface ItemSheetProps {
@@ -49,6 +51,7 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
   const categories = useStore((s) => s.categories);
   const saveItem = useStore((s) => s.saveItem);
   const [form, setForm] = React.useState<Omit<MenuItem, "id">>(() => (item ? { ...item } : { ...blank, categoryId: categoryId && categoryId !== "all" ? categoryId : (categories[0]?.id ?? "") }));
+  const supplyReady = useSupply((s) => s.ready);
   const [touched, setTouched] = React.useState(false);
   const [over, setOver] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -75,7 +78,10 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
   const save = () => {
     setTouched(true);
     if (errors.name || errors.price) return;
-    saveItem({ ...form, name: form.name.trim(), id: item?.id });
+    // The recipe editor saves on its own and sets the food cost, so keep what it wrote.
+    const latest = useStore.getState().items.find((i) => i.id === item?.id);
+    const fromRecipe = latest && useSupply.getState().recipes.some((r) => r.itemId === latest.id) ? { cost: latest.cost, recipeBase: latest.recipeBase, bufferPct: latest.bufferPct } : {};
+    saveItem({ ...form, ...fromRecipe, name: form.name.trim(), id: item?.id });
     onOpenChange(false);
     toast.success(item ? "Dish updated" : "Dish added to the menu");
   };
@@ -135,6 +141,9 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
             </div>
           ))}
         </div>
+        {supplyReady && form.outsourced && <AgencyFields agencyId={form.agencyId} agencyRate={form.agencyRate} onChange={(patch) => setForm((f) => ({ ...f, ...patch, ...(patch.agencyRate !== undefined ? { cost: patch.agencyRate } : {}) }))} />}
+        {supplyReady && item && !form.outsourced && <RecipeEditor item={item} />}
+        {supplyReady && !item && !form.outsourced && <p className="text-xs text-text-muted">Save the dish first, then open it again to add its recipe.</p>}
       </div>
     </Sheet>
   );

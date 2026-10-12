@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, loadAll, paymentRow, run, savePackageRows, tenantRow } from "./db";
+import { background, setReload, write } from "./queue";
 import { supabase } from "./supabase/client";
+import { useSupply } from "./supply-store";
 import type {
   Client,
   Enquiry,
@@ -82,7 +84,8 @@ interface Actions {
   convertToOrder: (quoteId: string) => Promise<string>;
   addPayment: (orderId: string, amount: number, mode: PaymentMode, note: string) => Promise<Payment>;
   setOrderStatus: (id: string, status: OrderStatus, cancelNote?: string) => void;
-  patchOrder: (id: string, patch: Pick<Order, "instructions">) => void;
+  patchOrder: (id: string, patch: Partial<Pick<Order, "instructions" | "commissionPct">>) => void;
+  addOrderExtra: (orderId: string, label: string, amount: number) => void;
   changePax: (orderId: string, functionId: string, pax: number, priceImpact: number) => void;
 }
 
@@ -101,21 +104,6 @@ const signedOut = {
 const today = () => isoDate(new Date());
 const docNo = (prefix: string, n: number) => `${prefix}/${financialYear()}/${String(n).padStart(4, "0")}`;
 
-// Writes run one after another, in the order the user made them, so a new client is always
-// saved before the enquiry or quotation that points at it.
-let chain: Promise<unknown> = Promise.resolve();
-function write<T>(job: (sb: SupabaseClient) => Promise<T>): Promise<T> {
-  const next = chain.then(() => job(supabase()));
-  chain = next.catch(() => undefined);
-  return next;
-}
-/** For optimistic changes: if the save fails, say so and go back to what the database has. */
-function background(job: (sb: SupabaseClient) => Promise<unknown>) {
-  write(job).catch((e: unknown) => {
-    toast.error("That change could not be saved", { description: e instanceof Error ? e.message : undefined });
-    void useStore.getState().reload();
-  });
-}
 async function nextNumber(sb: SupabaseClient, docType: "quote" | "order" | "receipt") {
   const res = await sb.rpc("next_doc_number", { p_doc_type: docType, p_financial_year: financialYear() });
   if (res.error) throw new Error(res.error.message);
@@ -161,6 +149,7 @@ export const useStore = create<Store>()(
           }
           const { me, ...rest } = loaded;
           set({ ...rest, currentUserId: me.id, myRole: me.role, signedIn: true, hydrated: true });
+          await useSupply.getState().load();
           return true;
         } catch (e) {
           toast.error("Could not load your data", { description: e instanceof Error ? e.message : undefined });
@@ -337,6 +326,7 @@ export const useStore = create<Store>()(
             changeLog: [],
             instructions: "",
             managerId: s.users.find((u) => u.role === "operations" && !u.invited)?.id ?? s.currentUserId,
+            commissionPct: 0,
             createdAt: today(),
           };
           await insertOrder(sb, o);
@@ -363,6 +353,8 @@ export const useStore = create<Store>()(
           return p;
         });
         set((st) => ({ orders: st.orders.map((o) => (o.id === orderId ? { ...o, payments: [...o.payments, payment], status: confirms ? "confirmed" : o.status } : o)) }));
+        // A confirmed order drafts its third-party food orders straight away.
+        if (confirms) void useSupply.getState().draftOutsource(orderId).catch(() => undefined);
         return payment;
       },
       setOrderStatus: (id, status, cancelNote) => {
@@ -371,7 +363,13 @@ export const useStore = create<Store>()(
       },
       patchOrder: (id, patch) => {
         set((s) => ({ orders: s.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
-        background((sb) => run(sb.from("orders").update({ instructions: patch.instructions }).eq("id", id), "Saving instructions"));
+        const row = { ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(patch.commissionPct !== undefined ? { commission_pct: patch.commissionPct } : {}) };
+        background((sb) => run(sb.from("orders").update(row).eq("id", id), "Saving the order"));
+      },
+      addOrderExtra: (orderId, label, amount) => {
+        const extra = { id: uid(), label, amount };
+        set((s) => ({ orders: s.orders.map((o) => (o.id === orderId ? { ...o, extras: [...o.extras, extra] } : o)) }));
+        background((sb) => run(sb.from("extra_charges").insert({ id: extra.id, order_id: orderId, label, amount }), "Adding the charge"));
       },
       changePax: (orderId, functionId, pax, priceImpact) => {
         const s = get();
@@ -395,6 +393,8 @@ export const useStore = create<Store>()(
     },
   ),
 );
+
+setReload(() => void useStore.getState().reload());
 
 const nobody: TeamUser = { id: "", name: "", phone: "", role: "owner" };
 

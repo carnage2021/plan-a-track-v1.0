@@ -123,6 +123,9 @@ export const items: MenuItem[] = rows.map(([id, name, nameLocal, categoryId, die
   outsourced: flags.includes("o"),
   seasonal: flags.includes("s"),
   bestseller: flags.includes("b"),
+  recipeBase: 100,
+  bufferPct: 5,
+  agencyRate: 0,
 }));
 
 const fixed = ["masala-chaas", "papad", "raita"];
@@ -272,7 +275,7 @@ export function createSeed(now: Date): SeedData {
     note,
     receiptNo: `RCT/${fy}/${String(rc).padStart(4, "0")}`,
   });
-  const base = { discount: { type: "amount" as const, value: 0 }, gstRate: 5, gstInclusive: false, changeLog: [], instructions: "" };
+  const base = { discount: { type: "amount" as const, value: 0 }, gstRate: 5, gstInclusive: false, changeLog: [], instructions: "", commissionPct: 0 };
   const extra = (label: string, amount: number) => ({ id: `x${label}${amount}`, label, amount });
 
   const shahFns = [

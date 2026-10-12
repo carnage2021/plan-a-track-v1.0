@@ -10,9 +10,38 @@ import { Avatar, EmptyState, EventCard, PageHeader, ProgressBar, StatCard } from
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/primitives";
 import { paidAmount, priceQuote } from "@/lib/pricing";
+import { useStock } from "@/components/supply/common";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { fmtQty } from "@/lib/supply";
+import { useSupply } from "@/lib/supply-store";
 import { useUi } from "@/lib/ui";
 import { cn, daysFromToday, fmtDate, isoDate, money, moneyShort, parseDate, relativeDay } from "@/lib/utils";
+
+function LowStock() {
+  const ready = useSupply((s) => s.ready);
+  const ingredients = useSupply((s) => s.ingredients);
+  const stock = useStock();
+  const low = ingredients.filter((i) => i.reorderLevel > 0 && (stock.get(i.id) ?? 0) < i.reorderLevel);
+  if (!ready || ingredients.length === 0) return null;
+  return (
+    <Card>
+      <CardTitle action={<Button variant="ghost" asChild><Link href="/purchase">Purchase and Stock</Link></Button>}>Low stock</CardTitle>
+      {low.length === 0 ? (
+        <p className="px-5 py-6 text-center text-sm text-text-muted">Everything is above its reorder level.</p>
+      ) : (
+        <ul className="tnum mt-2 divide-y">
+          {low.slice(0, 6).map((i) => (
+            <li key={i.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm md:px-5">
+              <span className="truncate">{i.name}</span>
+              <span className="shrink-0 text-warning">{fmtQty(stock.get(i.id) ?? 0)} of {fmtQty(i.reorderLevel)} {i.unit}</span>
+            </li>
+          ))}
+          {low.length > 6 && <li className="px-4 py-2 text-xs text-text-muted md:px-5">and {low.length - 6} more</li>}
+        </ul>
+      )}
+    </Card>
+  );
+}
 
 export default function DashboardPage() {
   const t = useTranslations("home");
@@ -176,9 +205,10 @@ export default function DashboardPage() {
               </ul>
             </Card>
           )}
+          <LowStock />
           <Card className="p-4 text-sm text-text-muted md:p-5">
-            <p className="font-medium text-text">Open tasks and low stock</p>
-            <p className="mt-1">These two panels fill in when staff tasks (phase 4) and stock (phase 3) are built.</p>
+            <p className="font-medium text-text">Open tasks</p>
+            <p className="mt-1">This panel fills in when staff tasks (phase 4) are built.</p>
           </Card>
         </div>
       </div>

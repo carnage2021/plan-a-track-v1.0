@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Ban, CalendarDays, CheckCircle2, Clock, FileQuestion, FileText, History, MapPin, Phone, Play, Printer, Receipt, Send, Users, UtensilsCrossed, Wallet } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { ReceiptPreview, modeLabel, receiptText } from "@/components/sales/payment-sheet";
@@ -14,18 +14,18 @@ import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/input";
 import { Card, CardTitle, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { Modal, Sheet } from "@/components/ui/sheet";
+import { CutleryTab } from "@/components/supply/challan";
+import { SupplyGate } from "@/components/supply/common";
+import { AgenciesTab } from "@/components/supply/outsource";
+import { Requirement } from "@/components/supply/requirement";
 import { priceFunction, priceQuote } from "@/lib/pricing";
+import { useSupply } from "@/lib/supply-store";
 import { useStore } from "@/lib/store";
 import type { EventFunction, MenuItem, Order, Payment } from "@/lib/types";
 import { printLight, useUi } from "@/lib/ui";
 import { fmtDate, fmtTime, money, num, whatsappLink } from "@/lib/utils";
 
-const laterTabs = [
-  { id: "agencies", label: "Agencies", phase: 3 },
-  { id: "raw", label: "Raw material", phase: 3 },
-  { id: "cutlery", label: "Cutlery", phase: 3 },
-  { id: "staff", label: "Staff and Tasks", phase: 4 },
-];
+const laterTabs = [{ id: "staff", label: "Staff and Tasks", phase: 4 }];
 
 function PaxChange({ order, fn, onClose }: { order: Order; fn: EventFunction; onClose: () => void }) {
   const { items, packages, tenant } = useStore();
@@ -74,6 +74,8 @@ function OrderView({ order }: { order: Order }) {
   const manager = users.find((u) => u.id === order.managerId);
   const quote = quotations.find((q) => q.id === order.quotationId);
   const functions = [...order.functions].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  const startTab = useSearchParams().get("tab") ?? "overview";
+  const agencyCount = useSupply((s) => s.outsourceOrders.filter((o) => o.orderId === order.id && o.status !== "cancelled").length);
   const [paxFn, setPaxFn] = React.useState<EventFunction | null>(null);
   const [cancel, setCancel] = React.useState(false);
   const [cancelNote, setCancelNote] = React.useState("");
@@ -127,11 +129,13 @@ function OrderView({ order }: { order: Order }) {
         {order.status === "cancelled" && order.cancelNote && <p className="mt-4 rounded-lg bg-danger/10 p-3 text-sm text-danger">Cancelled: {order.cancelNote}</p>}
       </Card>
 
-      <Tabs defaultValue="overview" className="mt-4">
+      <Tabs defaultValue={startTab} className="mt-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="menu">Menu</TabsTrigger>
-          {laterTabs.slice(0, 3).map((t) => <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>)}
+          <TabsTrigger value="agencies">Agencies{agencyCount > 0 && <Badge>{agencyCount}</Badge>}</TabsTrigger>
+          <TabsTrigger value="raw">Raw material</TabsTrigger>
+          <TabsTrigger value="cutlery">Cutlery</TabsTrigger>
           <TabsTrigger value="staff">Staff and Tasks</TabsTrigger>
           <TabsTrigger value="payments">Payments<Badge>{order.payments.length}</Badge></TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -231,6 +235,10 @@ function OrderView({ order }: { order: Order }) {
             </Card>
           ))}
         </TabsContent>
+
+        <TabsContent value="agencies"><SupplyGate><AgenciesTab order={order} /></SupplyGate></TabsContent>
+        <TabsContent value="raw"><SupplyGate><Requirement functions={order.functions} orderId={order.id} title={`${client?.name ?? ""} · ${order.number}`} /></SupplyGate></TabsContent>
+        <TabsContent value="cutlery"><SupplyGate><CutleryTab order={order} /></SupplyGate></TabsContent>
 
         {laterTabs.map((t) => (
           <TabsContent key={t.id} value={t.id}>

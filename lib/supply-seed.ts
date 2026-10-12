@@ -1,0 +1,168 @@
+import type { RuleBasis, Section, VendorType } from "./supply-types";
+
+// Starter supply data for a new caterer: ingredients, recipes for the starter menu,
+// a few vendors with rates, and the usual crockery. Everything here is editable in the app.
+
+// id, name, unit, section, rate, reorder level, opening stock
+export const starterIngredients: [string, string, string, Section, number, number, number][] = [
+  ["rice", "Basmati rice", "kg", "grocery", 110, 25, 60],
+  ["atta", "Wheat flour", "kg", "grocery", 42, 25, 80],
+  ["maida", "Maida", "kg", "grocery", 45, 10, 30],
+  ["besan", "Besan", "kg", "grocery", 95, 10, 25],
+  ["toor", "Toor dal", "kg", "grocery", 160, 10, 20],
+  ["urad", "Whole urad dal", "kg", "grocery", 150, 5, 12],
+  ["chana", "Kabuli chana", "kg", "grocery", 130, 5, 15],
+  ["moong", "Moong dal", "kg", "grocery", 135, 5, 10],
+  ["sugar", "Sugar", "kg", "grocery", 46, 25, 70],
+  ["salt", "Salt", "kg", "grocery", 22, 5, 15],
+  ["oil", "Groundnut oil", "l", "grocery", 190, 30, 75],
+  ["ghee", "Ghee", "kg", "grocery", 620, 10, 22],
+  ["masala", "Garam masala", "kg", "grocery", 780, 2, 5],
+  ["chilli", "Red chilli powder", "kg", "grocery", 340, 2, 6],
+  ["haldi", "Turmeric", "kg", "grocery", 260, 1, 4],
+  ["jeera", "Cumin", "kg", "grocery", 520, 2, 5],
+  ["tea", "Tea leaves", "kg", "grocery", 480, 2, 4],
+  ["sev", "Nylon sev", "kg", "grocery", 220, 5, 8],
+  ["papad", "Papad", "pcs", "grocery", 3, 200, 600],
+  ["golgappa", "Pani puri shells", "pcs", "grocery", 0.8, 500, 1000],
+  ["pav", "Pav", "pcs", "grocery", 4, 0, 0],
+  ["tamarind", "Tamarind", "kg", "grocery", 180, 2, 5],
+  ["dosabatter", "Dosa batter", "kg", "grocery", 70, 0, 0],
+  ["rollsheet", "Spring roll sheets", "pcs", "grocery", 3.5, 0, 0],
+  ["faloodasev", "Falooda sev", "kg", "grocery", 160, 1, 3],
+  ["rose", "Rose syrup", "l", "grocery", 240, 2, 5],
+  ["boondi", "Boondi", "kg", "grocery", 200, 2, 4],
+  ["puffed", "Puffed rice", "kg", "grocery", 80, 2, 6],
+  ["onion", "Onion", "kg", "vegetables", 32, 30, 40],
+  ["tomato", "Tomato", "kg", "vegetables", 38, 30, 35],
+  ["potato", "Potato", "kg", "vegetables", 26, 30, 50],
+  ["peas", "Green peas", "kg", "vegetables", 90, 5, 8],
+  ["cauli", "Cauliflower", "kg", "vegetables", 45, 0, 0],
+  ["spinach", "Spinach", "kg", "vegetables", 40, 0, 0],
+  ["carrot", "Carrot", "kg", "vegetables", 50, 0, 6],
+  ["undhiyuveg", "Undhiyu vegetable mix", "kg", "vegetables", 85, 0, 0],
+  ["coriander", "Coriander", "kg", "vegetables", 80, 2, 3],
+  ["gg", "Ginger garlic paste", "kg", "vegetables", 180, 3, 6],
+  ["gchilli", "Green chilli", "kg", "vegetables", 70, 1, 2],
+  ["lemon", "Lemon", "pcs", "vegetables", 4, 50, 120],
+  ["mint", "Mint", "kg", "vegetables", 100, 1, 1],
+  ["capsicum", "Capsicum", "kg", "vegetables", 70, 0, 4],
+  ["cabbage", "Cabbage", "kg", "vegetables", 30, 0, 5],
+  ["methi", "Fenugreek leaves", "kg", "vegetables", 60, 0, 0],
+  ["mango", "Mango pulp", "kg", "vegetables", 140, 5, 10],
+  ["milk", "Milk", "l", "dairy", 62, 20, 40],
+  ["curd", "Curd", "kg", "dairy", 75, 10, 20],
+  ["paneer", "Paneer", "kg", "dairy", 360, 5, 8],
+  ["butter", "Butter", "kg", "dairy", 520, 5, 10],
+  ["cream", "Fresh cream", "l", "dairy", 240, 3, 5],
+  ["khoya", "Khoya", "kg", "dairy", 420, 3, 6],
+  ["chicken", "Chicken", "kg", "other", 260, 0, 0],
+  ["mutton", "Mutton mince", "kg", "other", 780, 0, 0],
+  ["cashew", "Cashew", "kg", "dry_fruits", 880, 3, 6],
+  ["almond", "Almond", "kg", "dry_fruits", 820, 2, 4],
+  ["pista", "Pistachio", "kg", "dry_fruits", 1900, 1, 2],
+  ["saffron", "Saffron", "g", "dry_fruits", 280, 5, 10],
+  ["elaichi", "Cardamom", "kg", "dry_fruits", 2600, 0.5, 1],
+];
+
+/** Dish id (lib/seed.ts) -> "ingredient:quantity ..." for 100 guests. */
+export const starterRecipes: Record<string, string> = {
+  "masala-chaas": "curd:8 jeera:0.1 salt:0.2 coriander:0.3 mint:0.2",
+  "mango-lassi": "curd:10 mango:6 sugar:2 elaichi:0.02",
+  jaljeera: "jeera:0.3 mint:0.5 lemon:40 sugar:1 salt:0.2 tamarind:0.3",
+  thandai: "milk:15 sugar:2 almond:0.8 pista:0.2 saffron:2 elaichi:0.03",
+  "masala-chai": "milk:8 tea:0.4 sugar:1.5 elaichi:0.02",
+  "paneer-tikka": "paneer:9 curd:2 capsicum:3 onion:3 masala:0.2 chilli:0.15 oil:1",
+  "hara-bhara-kabab": "spinach:5 peas:3 potato:5 besan:1 gchilli:0.2 oil:3",
+  samosa: "maida:5 potato:8 peas:2 oil:5 masala:0.15 jeera:0.1",
+  dhokla: "besan:6 curd:2 sugar:0.5 oil:0.8 gchilli:0.2 coriander:0.3",
+  khandvi: "besan:4 curd:4 oil:0.5 coriander:0.3 haldi:0.03",
+  "aloo-tikki": "potato:12 peas:2 maida:1 oil:3 gchilli:0.2",
+  "dahi-vada": "urad:4 curd:10 sugar:0.5 oil:3 tamarind:0.5 chilli:0.05",
+  kachori: "maida:5 moong:2.5 oil:5 masala:0.15 chilli:0.1",
+  "spring-roll": "rollsheet:220 cabbage:5 carrot:3 capsicum:2 oil:4",
+  "chicken-tikka": "chicken:14 curd:3 gg:0.6 masala:0.25 chilli:0.2 oil:1 lemon:15",
+  "seekh-kebab": "mutton:12 onion:2 gg:0.6 masala:0.25 gchilli:0.2 oil:0.5",
+  "pani-puri": "golgappa:700 potato:6 chana:2 tamarind:1 mint:1 jeera:0.15",
+  "bhel-puri": "puffed:4 sev:2 onion:3 tomato:3 potato:3 tamarind:0.8 coriander:0.4",
+  "sev-puri": "golgappa:500 sev:2.5 potato:5 onion:3 tamarind:0.8 coriander:0.4",
+  "pav-bhaji": "pav:220 potato:10 tomato:8 peas:3 cauli:3 butter:3 onion:5 masala:0.3",
+  "masala-dosa": "dosabatter:20 potato:12 onion:4 oil:3 ghee:1",
+  dabeli: "pav:110 potato:8 tamarind:0.6 sev:1.5 masala:0.2 butter:1 onion:2",
+  "paneer-butter-masala": "paneer:10 tomato:10 butter:2 cream:2 cashew:1 gg:0.5 masala:0.25 onion:4",
+  "palak-paneer": "paneer:8 spinach:12 onion:4 gg:0.5 cream:1 oil:1.5 masala:0.2",
+  "dal-makhani": "urad:6 butter:2 cream:1.5 tomato:5 gg:0.5 masala:0.2",
+  undhiyu: "undhiyuveg:22 methi:2 besan:1.5 oil:4 coriander:1 gg:0.5 masala:0.25",
+  chole: "chana:9 onion:5 tomato:5 gg:0.5 oil:2 masala:0.3 tea:0.02",
+  "malai-kofta": "paneer:5 potato:6 cream:2.5 cashew:1.5 tomato:8 oil:3 masala:0.2",
+  "aloo-gobi": "potato:8 cauli:10 onion:3 tomato:3 oil:2 haldi:0.05 jeera:0.1",
+  "gujarati-kadhi": "curd:10 besan:1.2 sugar:0.6 ghee:0.4 gchilli:0.2 coriander:0.3",
+  "dal-tadka": "toor:7 tomato:3 onion:2 ghee:0.8 jeera:0.15 haldi:0.05",
+  "sev-tameta": "tomato:14 sev:3 oil:1.5 sugar:0.5 chilli:0.1 jeera:0.1",
+  "butter-chicken": "chicken:16 tomato:10 butter:2.5 cream:2.5 cashew:1 gg:0.6 masala:0.3",
+  naan: "maida:12 curd:1.5 butter:1.5 oil:0.5",
+  puri: "atta:12 oil:6 salt:0.1",
+  "phulka-roti": "atta:10 ghee:0.8",
+  thepla: "atta:9 methi:2 curd:1 oil:1.5 haldi:0.04 chilli:0.05",
+  paratha: "atta:6 maida:6 ghee:1.5",
+  bhakri: "atta:11 ghee:2",
+  "jeera-rice": "rice:10 jeera:0.2 ghee:0.6",
+  "veg-biryani": "rice:11 carrot:3 peas:2 onion:5 curd:2 ghee:1 masala:0.3 saffron:1.5 mint:0.4",
+  "veg-pulao": "rice:10 carrot:2.5 peas:2.5 onion:2 ghee:0.8 masala:0.15",
+  khichdi: "rice:6 moong:4 ghee:1 haldi:0.05 jeera:0.1 onion:2",
+  "gulab-jamun": "khoya:5 maida:1 sugar:8 ghee:3 elaichi:0.03",
+  jalebi: "maida:5 sugar:9 ghee:3 saffron:1.5",
+  rasmalai: "milk:30 sugar:4 pista:0.3 saffron:2 elaichi:0.03",
+  shrikhand: "curd:22 sugar:6 saffron:2 elaichi:0.03 pista:0.2",
+  "kaju-katli": "cashew:6 sugar:3.5 ghee:0.3",
+  mohanthal: "besan:5 ghee:4 sugar:5 khoya:1.5 almond:0.3 elaichi:0.03",
+  "gajar-halwa": "carrot:14 milk:10 sugar:4 ghee:1.5 khoya:1.5 cashew:0.5",
+  basundi: "milk:35 sugar:4 almond:0.4 pista:0.2 elaichi:0.03 saffron:1.5",
+  rasgulla: "milk:30 sugar:8",
+  falooda: "milk:15 faloodasev:2 rose:2 sugar:1",
+  papad: "papad:110",
+  raita: "curd:8 boondi:1.2 jeera:0.1 salt:0.15",
+};
+
+interface StarterVendor {
+  id: string;
+  name: string;
+  type: VendorType;
+  phone: string;
+  terms: string;
+  rating: number;
+  /** Sections this vendor supplies, with a rupee adjustment on the list rate */
+  supplies?: { section: Section; adjust: number; only?: string[] }[];
+  /** Outsourced dishes this agency makes: dish id -> agency rate */
+  dishes?: Record<string, number>;
+}
+
+export const starterVendors: StarterVendor[] = [
+  { id: "v-kirana", name: "Jalaram Kirana Stores", type: "raw_material", phone: "98250 81001", terms: "15 days credit", rating: 4, supplies: [{ section: "grocery", adjust: 0 }] },
+  { id: "v-veg1", name: "Laxmi Sabji Mandi", type: "raw_material", phone: "98250 81002", terms: "Cash on delivery", rating: 4, supplies: [{ section: "vegetables", adjust: 0 }] },
+  // Cheaper on the bulk three, dearer on the rest, so the cheapest-vendor hint has something to say.
+  { id: "v-veg2", name: "Green Basket Wholesale", type: "raw_material", phone: "98250 81003", terms: "Weekly billing", rating: 3, supplies: [{ section: "vegetables", adjust: -4, only: ["onion", "tomato", "potato"] }, { section: "vegetables", adjust: 6 }] },
+  { id: "v-dairy", name: "Amul Parlour, Satellite", type: "raw_material", phone: "98250 81004", terms: "Weekly billing", rating: 5, supplies: [{ section: "dairy", adjust: 0 }] },
+  { id: "v-dry", name: "Kesar Dry Fruits", type: "raw_material", phone: "98250 81005", terms: "Advance payment", rating: 4, supplies: [{ section: "dry_fruits", adjust: 0 }] },
+  { id: "v-meat", name: "Al-Kabir Meat Shop", type: "raw_material", phone: "98250 81006", terms: "Cash on delivery", rating: 4, supplies: [{ section: "other", adjust: 0 }] },
+  { id: "v-kulfi", name: "Shree Kulfi and Ice Cream", type: "food_agency", phone: "98250 81007", terms: "50% advance", rating: 5, dishes: { kulfi: 24, "ice-cream": 22 } },
+  { id: "v-paan", name: "Banarasi Paan House", type: "food_agency", phone: "98250 81008", terms: "Pay at event", rating: 4, dishes: { paan: 12 } },
+  { id: "v-rental", name: "Mahavir Tent and Crockery", type: "rental", phone: "98250 81009", terms: "Pay on return", rating: 4 },
+  { id: "v-tempo", name: "Shiv Tempo Service", type: "transport", phone: "98250 81010", terms: "Per trip", rating: 4 },
+  { id: "v-pro", name: "Atithi Hospitality Services", type: "hospitality", phone: "98250 81011", terms: "50% advance", rating: 4 },
+];
+
+// name, category, total quantity, replacement cost, rule, rule value, menu category the rule counts (seed category id)
+export const starterAssets: [string, string, number, number, RuleBasis, number, string?][] = [
+  ["Dinner plate", "Crockery", 1200, 85, "per_guest", 1.2],
+  ["Dessert bowl", "Crockery", 1000, 35, "per_guest", 1.1],
+  ["Spoon", "Cutlery", 1500, 12, "per_guest", 1.5],
+  ["Water glass", "Glassware", 1000, 28, "per_guest", 1.2],
+  ["Chafing dish", "Serving", 40, 4500, "per_dish", 1, "mains"],
+  ["Serving bowl with ladle", "Serving", 120, 650, "per_dish", 1],
+  ["Counter table", "Furniture", 30, 3200, "per_function", 6],
+  ["Gas burner", "Kitchen", 12, 5500, "per_function", 3],
+  ["Table linen", "Linen", 60, 450, "per_function", 8],
+  ["Water dispenser", "Serving", 10, 2800, "per_function", 2],
+  ["Staff uniform", "Linen", 50, 900, "manual", 0],
+];

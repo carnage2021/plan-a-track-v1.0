@@ -96,6 +96,13 @@ export interface MenuItem {
   outsourced: boolean;
   seasonal: boolean;
   bestseller: boolean;
+  /** Guests the recipe is written for */
+  recipeBase: number;
+  /** Wastage buffer added when the recipe is scaled, in percent */
+  bufferPct: number;
+  /** Third-party agency that makes an outsourced dish, and what they charge per unit */
+  agencyId?: string;
+  agencyRate: number;
 }
 
 export interface PackageRule {
@@ -197,6 +204,8 @@ export interface Order {
   changeLog: ChangeLogEntry[];
   instructions: string;
   managerId: string;
+  /** Commission owed to a partner agency that booked us, in percent */
+  commissionPct: number;
   cancelNote?: string;
   createdAt: string;
 }

@@ -28,6 +28,14 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
   return res.data;
 }
 
+/** Set when the phase 3 migration (0003_supply.sql) has been run, so its columns can be written. */
+export const schema = { supply: false };
+
+export async function probeSupply(sb: SB) {
+  schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
+  return schema.supply;
+}
+
 const tenanted = <T extends Row>(row: T, tenantId?: string) => (tenantId ? { ...row, tenant_id: tenantId } : row);
 const day = (value: string | null | undefined) => (value ? String(value).slice(0, 10) : "");
 
@@ -119,6 +127,7 @@ export const itemRow = (i: MenuItem): Row => ({
   outsourced: i.outsourced,
   seasonal: i.seasonal,
   bestseller: i.bestseller,
+  ...(schema.supply ? { recipe_base: i.recipeBase, buffer_pct: i.bufferPct, agency_id: i.agencyId ?? null, agency_rate: i.agencyRate } : {}),
 });
 
 export const packageRow = (p: MenuPackage): Row => ({
@@ -180,6 +189,7 @@ const orderRow = (o: Order): Row => ({
   instructions: o.instructions,
   manager_id: o.managerId || null,
   cancel_note: o.cancelNote ?? null,
+  ...(schema.supply ? { commission_pct: o.commissionPct } : {}),
 });
 
 export const paymentRow = (p: Payment, orderId: string, recordedBy?: string): Row => ({
@@ -260,6 +270,7 @@ export interface Loaded {
 }
 
 export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
+  await probeSupply(sb);
   const profile = (await sb.from("profiles").select("*").eq("id", userId).maybeSingle()).data as Row | null;
   if (!profile) return null;
 
@@ -336,6 +347,10 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       outsourced: i.outsourced,
       seasonal: i.seasonal,
       bestseller: i.bestseller,
+      recipeBase: i.recipe_base ?? 100,
+      bufferPct: Number(i.buffer_pct ?? 5),
+      agencyId: i.agency_id ?? undefined,
+      agencyRate: Number(i.agency_rate ?? 0),
     })),
     packages: rowsOf(packages, "Loading packages").map((p) => ({
       id: p.id,
@@ -399,6 +414,7 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       changeLog: changeRows.filter((c) => c.order_id === o.id).map((c) => ({ id: c.id, at: day(c.created_at), by: nameOf(c.changed_by), text: c.description, priceImpact: Number(c.price_impact) })),
       instructions: o.instructions,
       managerId: o.manager_id ?? "",
+      commissionPct: Number(o.commission_pct ?? 0),
       cancelNote: o.cancel_note ?? undefined,
       createdAt: day(o.created_at),
     })),

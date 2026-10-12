@@ -124,8 +124,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   for (const r of price.rules) if (!r.met) warnings.push(`${categories.find((c) => c.id === r.categoryId)?.name}: choose ${r.choose - r.chosen} more.`);
   for (const i of allItems) if (selected.has(i.id) && !i.active) warnings.push(`${i.name} is switched off in the menu.`);
   if (!booking || staff) {
-    const outsourced = allItems.filter((i) => selected.has(i.id) && i.outsourced).length;
-    if (outsourced) warnings.push(`${outsourced} outsourced ${outsourced === 1 ? "dish needs" : "dishes need"} a vendor (vendor mapping arrives in phase 3).`);
+    const unmapped = allItems.filter((i) => selected.has(i.id) && i.outsourced && !i.agencyId);
+    if (unmapped.length) warnings.push(`${unmapped.map((i) => i.name).join(", ")} ${unmapped.length === 1 ? "is" : "are"} outsourced with no agency chosen.`);
   }
 
   const summary = (

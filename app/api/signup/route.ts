@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { tenantRow } from "@/lib/db";
 import { defaultTenant } from "@/lib/seed";
-import { seedTenant } from "@/lib/starter";
+import { probeSupply, tenantRow } from "@/lib/db";
+import { seedSupply, seedTenant } from "@/lib/starter";
 import { adminClient } from "@/lib/supabase/admin";
 
 /**
@@ -36,7 +36,9 @@ export async function POST(request: Request) {
     tenantId = tenant.data.id as string;
     const profile = await sb.from("profiles").insert({ id: userId, tenant_id: tenantId, name, role: "owner" });
     if (profile.error) throw new Error(profile.error.message);
+    const supply = await probeSupply(sb);
     await seedTenant(sb, tenantId, userId, samples);
+    if (supply) await seedSupply(sb, tenantId);
     return NextResponse.json({ ok: true });
   } catch (e) {
     // Leave nothing half-made behind: the tenant delete cascades to everything seeded so far.

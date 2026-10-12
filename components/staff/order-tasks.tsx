@@ -117,7 +117,7 @@ function FunctionTasks({ fn, order }: { fn: EventFunction; order: Order }) {
       {mine.length === 0 && !plan && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed p-3">
           <p className="text-sm text-text-muted">No tasks yet. Start from the suggested crew for {num(fn.pax)} guests.</p>
-          <Button variant="primary" onClick={() => setPlan(suggestedHeadcount(fn.pax))}><Users strokeWidth={1.75} />Plan the crew</Button>
+          <Button onClick={() => setPlan(suggestedHeadcount(fn.pax))}><Users strokeWidth={1.75} />Plan the crew</Button>
         </div>
       )}
       {plan && (

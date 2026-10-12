@@ -173,3 +173,41 @@
     overflow: visible !important;
   }
 }
+
+/* Marketing page motion. All of it is switched off by the reduced-motion rule above. */
+@keyframes float-a {
+  50% { transform: translateY(-14px) rotate(-1deg); }
+}
+@keyframes float-b {
+  50% { transform: translateY(12px) rotate(1.5deg); }
+}
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(28px); }
+}
+@utility animate-float-a {
+  animation: float-a 7s ease-in-out infinite;
+}
+@utility animate-float-b {
+  animation: float-b 8s ease-in-out infinite;
+}
+@utility animate-marquee {
+  animation: marquee 48s linear infinite;
+}
+@utility animate-rise {
+  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 700ms cubic-bezier(0.2, 0.7, 0.2, 1), transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; }
+}

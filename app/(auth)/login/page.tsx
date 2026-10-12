@@ -2,7 +2,7 @@
 
 import { ArrowRight, Check, Languages } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,16 @@ const languages: { id: Locale; label: string }[] = [
 ];
 
 export default function LoginPage() {
+  return (
+    <React.Suspense>
+      <LoginForm />
+    </React.Suspense>
+  );
+}
+
+function LoginForm() {
+  // The marketing page links here with ?mode=signup for "Create your account".
+  const startMode = useSearchParams().get("mode") === "signup" ? "signup" : "signin";
   const t = useTranslations("login");
   const router = useRouter();
   const locale = useStore((s) => s.locale);
@@ -28,7 +38,7 @@ export default function LoginPage() {
   const signedIn = useStore((s) => s.signedIn);
   const setupDone = useStore((s) => s.setupDone);
   const reload = useStore((s) => s.reload);
-  const [mode, setMode] = React.useState<"signin" | "signup">("signin");
+  const [mode, setMode] = React.useState<"signin" | "signup">(startMode);
   const [name, setName] = React.useState("");
   const [business, setBusiness] = React.useState("");
   const [email, setEmail] = React.useState("");

@@ -63,7 +63,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (!hydrated) return;
-    if (!signedIn) router.replace("/login");
+    // A signed-out visitor to the site's front door sees the marketing page; deeper links ask them to log in.
+    if (!signedIn) router.replace(window.location.pathname === "/" ? "/welcome" : "/login");
     else if (!setupDone) router.replace("/setup");
   }, [hydrated, signedIn, setupDone, router]);
 

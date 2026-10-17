@@ -3,7 +3,7 @@
 The project plan PDF stays the base specification. This file tracks the phase split, what is
 built, and features added to the plan after it was written.
 
-Last updated: 11 Oct 2026.
+Last updated: 17 Oct 2026.
 
 ## Phases
 
@@ -13,8 +13,9 @@ Last updated: 11 Oct 2026.
 | 2. Sales | Menu master, packages, enquiries, quotation builder, orders, calendar, booking mode | B1 to B5 | Built on demo data |
 | 3. Supply | Recipes, stock, vendors, third-party food, cutlery | C | Built and tested against the database |
 | 4A. Staff | Workers, priced tasks, attendance, payouts, monthly payroll, chef per dish | D1, D2 | Built and tested against the database |
-| 4B. Operations | Kitchen production, dispatch and transport, on-site event screen | D3 to D5 | Planned |
-| 5. Payments, documents and public menus | Schedules, invoices, PDFs, Razorpay, QR and public menu pages | E | Planned |
+| 4B. Operations | Kitchen production (tested); dispatch with vehicles, trips, loading checklist and delivery photo; event-day screen with checklist, guest counter, issue log and client sign-off | D3 to D5 | Built and tested |
+| 5A. Client billing | Payment schedule with milestones and reminders, outstanding by age, proforma and GST tax invoices, credit notes and refunds, client ledger and statement | E1 | Built and tested |
+| 5B. Expenses, documents and public menus | Vendor bills, event expenses, petty cash, day book, Tally export, template editor, server PDFs, Razorpay, QR and public menu pages | E2, E3 | Planned |
 | 6. Reports, messaging and access | Reports, WhatsApp, email and SMS, permissions | F | Planned |
 | 7. Platform | Super admin, subscription billing, Excel import, AI add-ons | A1, A3, F4 | Planned |
 

@@ -1,11 +1,13 @@
 "use client";
 
-import { ArrowLeft, Ban, CalendarDays, CheckCircle2, Clock, FileQuestion, FileText, History, MapPin, Phone, Play, Printer, Receipt, Send, Users, UtensilsCrossed, Wallet } from "lucide-react";
+import { ArrowLeft, Ban, CalendarDays, CheckCircle2, Clock, FileQuestion, FileText, History, MapPin, Phone, Play, Printer, Receipt, Send, Users, ClipboardCheck, Tags, UtensilsCrossed, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { ReceiptPreview, modeLabel, receiptText } from "@/components/sales/payment-sheet";
+import { EventSheet } from "@/components/sales/event-sheet";
+import { NamePlates } from "@/components/sales/name-plates";
 import { QuoteDocument } from "@/components/sales/quote-document";
 import { Badge, StatusBadge, VegMark } from "@/components/shared/badges";
 import { Avatar, DateBlock, EmptyState, PaxInput, ProgressBar, useOrderMoney } from "@/components/shared/blocks";
@@ -14,12 +16,16 @@ import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/input";
 import { Card, CardTitle, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { Modal, Sheet } from "@/components/ui/sheet";
+import { BillingCard, BillingGate, LedgerTable, ScheduleCard, useLedger } from "@/components/billing/order-billing";
+import { OpsGate } from "@/components/ops/common";
+import { OrderOps } from "@/components/ops/order-ops";
 import { OrderTasks, StaffGate } from "@/components/staff/order-tasks";
 import { CutleryTab } from "@/components/supply/challan";
 import { SupplyGate } from "@/components/supply/common";
 import { AgenciesTab } from "@/components/supply/outsource";
 import { Requirement } from "@/components/supply/requirement";
 import { priceFunction, priceQuote } from "@/lib/pricing";
+import { useBilling } from "@/lib/billing";
 import { useSupply } from "@/lib/supply-store";
 import { useStore } from "@/lib/store";
 import type { EventFunction, MenuItem, Order, Payment } from "@/lib/types";
@@ -58,6 +64,18 @@ function PaxChange({ order, fn, onClose }: { order: Order; fn: EventFunction; on
   );
 }
 
+function OrderLedger({ order }: { order: Order }) {
+  const rows = useLedger(React.useMemo(() => [order], [order]));
+  const ready = useBilling((s) => s.ready);
+  if (!ready) return null;
+  return (
+    <Card>
+      <CardTitle>Ledger</CardTitle>
+      <LedgerTable rows={rows} />
+    </Card>
+  );
+}
+
 function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const order = useStore((s) => s.orders.find((o) => o.id === id));
@@ -70,7 +88,7 @@ function OrderView({ order }: { order: Order }) {
   const setOrderStatus = useStore((s) => s.setOrderStatus);
   const patchOrder = useStore((s) => s.patchOrder);
   const openPayment = useUi((s) => s.openPayment);
-  const { totals, paid, due, pct } = useOrderMoney(order);
+  const { totals, bill, paid, due, pct } = useOrderMoney(order);
   const client = clients.find((c) => c.id === order.clientId);
   const manager = users.find((u) => u.id === order.managerId);
   const quote = quotations.find((q) => q.id === order.quotationId);
@@ -82,6 +100,8 @@ function OrderView({ order }: { order: Order }) {
   const [cancelNote, setCancelNote] = React.useState("");
   const [receipt, setReceipt] = React.useState<Payment | null>(null);
   const [docView, setDocView] = React.useState<"confirmation" | "menu" | null>(null);
+  const [plates, setPlates] = React.useState(false);
+  const [eventSheet, setEventSheet] = React.useState(false);
   const locked = order.status === "cancelled" || order.status === "completed";
   const doc = { ...order, clientName: client?.name ?? "", clientPhone: client?.phone, date: order.createdAt, paid };
 
@@ -123,7 +143,7 @@ function OrderView({ order }: { order: Order }) {
             <ProgressBar value={pct} tone={pct >= 100 ? "success" : "warning"} className="h-2" label="Payment received" />
           </div>
           <dl className="tnum flex gap-6 text-sm">
-            <div><dt className="text-xs text-text-muted">Order total</dt><dd className="font-heading text-lg font-bold">{money(totals.grand)}</dd></div>
+            <div><dt className="text-xs text-text-muted">{bill !== totals.grand ? "Bill after credits" : "Order total"}</dt><dd className="font-heading text-lg font-bold">{money(bill)}</dd></div>
             <div><dt className="text-xs text-text-muted">Balance due</dt><dd className={`font-heading text-lg font-bold ${due > 0 ? "text-warning" : "text-success"}`}>{money(due)}</dd></div>
           </dl>
         </div>
@@ -138,6 +158,7 @@ function OrderView({ order }: { order: Order }) {
           <TabsTrigger value="raw">Raw material</TabsTrigger>
           <TabsTrigger value="cutlery">Cutlery</TabsTrigger>
           <TabsTrigger value="staff">Staff and Tasks</TabsTrigger>
+          <TabsTrigger value="dispatch">Dispatch and event day</TabsTrigger>
           <TabsTrigger value="payments">Payments<Badge>{order.payments.length}</Badge></TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
@@ -242,6 +263,7 @@ function OrderView({ order }: { order: Order }) {
         <TabsContent value="cutlery"><SupplyGate><CutleryTab order={order} /></SupplyGate></TabsContent>
 
         <TabsContent value="staff"><StaffGate><OrderTasks order={order} /></StaffGate></TabsContent>
+        <TabsContent value="dispatch"><OpsGate><OrderOps order={order} /></OpsGate></TabsContent>
 
         {laterTabs.map((t) => (
           <TabsContent key={t.id} value={t.id}>
@@ -249,7 +271,8 @@ function OrderView({ order }: { order: Order }) {
           </TabsContent>
         ))}
 
-        <TabsContent value="payments" className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
+        <TabsContent value="payments" className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px] lg:items-start">
+          <div className="min-w-0 space-y-4">
           <Card>
             <CardTitle action={due > 0 && !locked ? <Button onClick={() => openPayment(order.id)}><Wallet strokeWidth={1.75} />Record payment</Button> : undefined}>Payments received</CardTitle>
             {order.payments.length === 0 ? (
@@ -268,21 +291,14 @@ function OrderView({ order }: { order: Order }) {
               </ul>
             )}
           </Card>
-          <Card className="p-4">
-            <h2 className="font-heading text-base font-semibold">Payment schedule</h2>
-            <ul className="tnum mt-3 space-y-3 text-sm">
-              {[{ label: "Booking advance (50%)", amount: Math.round(totals.grand / 2), when: "On booking" }, { label: "Balance", amount: totals.grand - Math.round(totals.grand / 2), when: `By ${fmtDate(functions[0].date, { day: "numeric", month: "short" })}` }].map((m, i) => {
-                const covered = i === 0 ? paid >= m.amount : due === 0;
-                return (
-                  <li key={m.label} className="flex items-center justify-between gap-3">
-                    <span><span className="block">{m.label}</span><span className="block text-xs text-text-muted">{m.when}</span></span>
-                    <span className="text-right"><span className="block font-medium">{money(m.amount)}</span><StatusBadge status={covered ? "paid" : "due"} /></span>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="mt-3 border-t pt-3 text-xs text-text-muted">Custom milestones and automatic reminders come with phase 5.</p>
-          </Card>
+          <OrderLedger order={order} />
+          </div>
+          <BillingGate>
+            <div className="space-y-4">
+              <ScheduleCard order={order} locked={locked} />
+              <BillingCard order={order} />
+            </div>
+          </BillingGate>
         </TabsContent>
 
         <TabsContent value="documents">
@@ -291,10 +307,12 @@ function OrderView({ order }: { order: Order }) {
               {quote && <li><Link href={`/quotations/${quote.id}`} className="flex h-14 items-center gap-3 px-4 text-sm hover:bg-surface-muted/60 md:px-5"><FileText className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Quotation</span><span className="tnum text-xs text-text-muted">{quote.number}</span></Link></li>}
               <li><button type="button" onClick={() => setDocView("confirmation")} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><FileText className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Booking confirmation</span><span className="tnum text-xs text-text-muted">{order.number}</span></button></li>
               <li><button type="button" onClick={() => setDocView("menu")} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><UtensilsCrossed className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Menu card</span></button></li>
+              <li><button type="button" onClick={() => setEventSheet(true)} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><ClipboardCheck className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Event sheet</span><span className="text-xs text-text-muted">For the event manager</span></button></li>
+              <li><button type="button" onClick={() => setPlates(true)} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><Tags className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Counter name plates</span><span className="text-xs text-text-muted">English and Gujarati</span></button></li>
               {order.payments.map((p) => <li key={p.id}><button type="button" onClick={() => setReceipt(p)} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><Receipt className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Payment receipt</span><span className="tnum text-xs text-text-muted">{p.receiptNo}</span></button></li>)}
             </ul>
           </Card>
-          <p className="mt-3 text-xs text-text-muted">Proforma, GST invoice, event sheet and the other documents are part of phase 5.</p>
+          <p className="mt-3 text-xs text-text-muted">Proforma and tax invoices and credit notes are on the Payments tab.</p>
         </TabsContent>
       </Tabs>
 
@@ -304,7 +322,7 @@ function OrderView({ order }: { order: Order }) {
         open={cancel}
         onOpenChange={setCancel}
         title="Cancel this order?"
-        description={paid > 0 ? `${money(paid)} has been received. Refunds are handled by the accountant as per your cancellation terms.` : "No payment has been received yet."}
+        description={paid > 0 ? `${money(paid)} has been received. After cancelling, give back any refund with a credit note on the Payments tab.` : "No payment has been received yet."}
         footer={
           <>
             <Button variant="ghost" onClick={() => setCancel(false)}>Keep order</Button>
@@ -323,6 +341,9 @@ function OrderView({ order }: { order: Order }) {
           </div>
         )}
       </Sheet>
+
+      <NamePlates order={order} open={plates} onOpenChange={setPlates} />
+      <EventSheet order={order} open={eventSheet} onOpenChange={setEventSheet} />
 
       <Sheet open={!!docView} onOpenChange={(o) => !o && setDocView(null)} title={docView === "menu" ? "Menu card" : "Booking confirmation"} wide footer={<Button onClick={printLight}><Printer strokeWidth={1.75} />Print or PDF</Button>}>
         {docView && <QuoteDocument data={doc} variant={docView} />}

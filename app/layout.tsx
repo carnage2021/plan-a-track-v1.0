@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
 // Runs before first paint so the saved theme never flashes.
-const themeScript = `try{var t=localStorage.getItem("theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem("theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t;if(sessionStorage.getItem("splash-seen"))document.documentElement.dataset.splashSeen=""}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

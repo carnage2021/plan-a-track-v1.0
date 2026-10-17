@@ -19,7 +19,7 @@ import {
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { AuthButtons, CountUp, Reveal } from "@/components/landing/motion";
+import { AuthButtons, CountUp, Reveal, Splash, WordCycle } from "@/components/landing/motion";
 import { cn } from "@/lib/utils";
 
 // The product name is still an open decision in the plan; change it here and it changes everywhere on this page.
@@ -106,6 +106,8 @@ function Shot({ src, alt, crop, priority }: { src: string; alt: string; crop?: b
 export default function WelcomePage() {
   return (
     <div className="overflow-x-clip">
+      <Splash name={PRODUCT} tagline="Catering management software" />
+      <div aria-hidden className="scroll-progress fixed inset-x-0 top-0 z-40 h-1 bg-primary" style={{ transform: "scaleX(0)" }} />
       <header className="sticky top-0 z-30 border-b bg-bg/90 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center gap-6 px-4 md:px-6">
           <Link href="/welcome" className="flex items-center gap-2.5 font-heading text-lg font-bold">
@@ -122,10 +124,14 @@ export default function WelcomePage() {
 
       <main>
         {/* Hero */}
-        <section className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-12 px-4 pb-16 pt-12 md:px-6 md:pt-20 lg:grid-cols-[1fr_1.1fr]">
+        <section className="relative mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-12 px-4 pb-16 pt-12 md:px-6 md:pt-20 lg:grid-cols-[1.1fr_1fr]">
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden">
+            <div className="animate-blob absolute -left-24 top-10 size-[420px] rounded-full bg-primary/15 blur-3xl" />
+            <div className="animate-blob absolute -right-20 top-40 size-[380px] rounded-full bg-accent-gold/20 blur-3xl [animation-delay:-6s]" />
+          </div>
           <div className="animate-rise">
             <p className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-primary"><span className="size-1.5 rounded-full bg-primary" />Catering management software</p>
-            <h1 className="mt-5 font-heading text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">Run every event from one <span className="text-primary">calm screen</span>.</h1>
+            <h1 className="mt-5 font-heading text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3rem]">Run every <WordCycle className="grid text-primary" words={["wedding", "sangeet", "reception", "corporate lunch", "birthday"]} />from one calm screen.</h1>
             <p className="mt-5 max-w-xl text-lg text-text-muted">{PRODUCT} is the management platform for catering agencies. Enquiries, photo-led menus, quotations, orders, raw material, cutlery and staff, all from the same order.</p>
             <AuthButtons size="lg" className="mt-8 flex-wrap" />
             <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-text-muted">
@@ -133,7 +139,7 @@ export default function WelcomePage() {
             </ul>
           </div>
           <div className="relative animate-rise [animation-delay:150ms]">
-            <Shot src="/landing/booking.png" alt="Booking mode in Plan A Track" priority />
+            <div className="hero-tilt"><Shot src="/landing/booking.png" alt="Booking mode in Plan A Track" priority /></div>
             <div className="animate-float-a absolute -left-3 top-[18%] hidden w-52 rounded-2xl border bg-surface p-2 shadow-sheet sm:block lg:-left-10">
               <Image src="/dishes/paneer-butter-masala.jpg" alt="" width={400} height={300} className="aspect-[4/3] w-full rounded-xl object-cover" />
               <p className="mt-2 px-1 font-heading text-sm font-semibold">Paneer Butter Masala</p>
@@ -144,16 +150,24 @@ export default function WelcomePage() {
               <p className="font-heading text-3xl font-bold"><CountUp to={650} prefix="₹" /></p>
               <p className="tnum text-xs text-success">200 guests · <CountUp to={136500} prefix="₹" /> with GST</p>
             </div>
+            <div className="animate-float-a absolute -top-5 right-8 hidden items-center gap-2.5 rounded-full border bg-surface py-2 pl-2 pr-4 shadow-sheet [animation-delay:-3s] md:flex">
+              <span className="grid size-8 place-items-center rounded-full bg-success/15 text-success"><Check className="size-4" strokeWidth={3} /></span>
+              <span className="text-sm"><span className="block font-medium leading-tight">Booking confirmed</span><span className="tnum block text-xs text-text-muted">Advance received</span></span>
+            </div>
           </div>
         </section>
 
         {/* Dish photo marquee */}
-        <div className="border-y bg-surface-muted/60 py-6" aria-hidden>
-          <div className="animate-marquee flex w-max gap-4">
-            {[...dishes, ...dishes].map((d, i) => (
-              <Image key={i} src={`/dishes/${d}.jpg`} alt="" width={320} height={240} className="h-28 w-40 rounded-2xl object-cover md:h-36 md:w-52" />
-            ))}
-          </div>
+        <div className="space-y-4 border-y bg-surface-muted/60 py-6" aria-hidden>
+          {[dishes, [...dishes].reverse()].map((row, r) => (
+            <div key={r} className="marquee-row">
+              <div className={cn("flex w-max gap-4", r ? "animate-marquee-reverse" : "animate-marquee")}>
+                {[...row, ...row].map((d, i) => (
+                  <Image key={i} src={`/dishes/${d}.jpg`} alt="" width={320} height={240} className="h-24 w-36 rounded-2xl object-cover transition-transform duration-300 hover:scale-105 md:h-32 md:w-48" />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* The chain */}
@@ -163,10 +177,11 @@ export default function WelcomePage() {
             <h2 className="mt-3 font-heading text-3xl font-bold sm:text-4xl">One chain. Nothing typed twice.</h2>
             <p className="mt-4 text-lg text-text-muted">The menu and guest count you agree with the client drive everything after it: what to buy, what to outsource, what to carry, and who works the event.</p>
           </Reveal>
+          <div aria-hidden className="draw-line mt-10 h-1 rounded-full bg-gradient-to-r from-primary via-accent-gold to-success" />
           <ol className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {chain.map((s, i) => (
               <li key={s.title}>
-                <Reveal delay={i * 80} className="h-full rounded-2xl border bg-surface p-5 shadow-card">
+                <Reveal from="scale" delay={i * 90} className="h-full rounded-2xl border bg-surface p-5 shadow-card transition-shadow duration-300 hover:shadow-sheet">
                   <div className="flex items-center gap-3">
                     <span className="grid size-11 place-items-center rounded-xl bg-primary-soft text-primary"><s.icon className="size-5" strokeWidth={1.75} /></span>
                     <span className="tnum text-xs font-medium text-accent-gold">Step {i + 1}</span>
@@ -184,7 +199,7 @@ export default function WelcomePage() {
           <div className="mx-auto max-w-[1200px] space-y-24 px-4 md:px-6">
             {features.map((f, i) => (
               <div key={f.title} className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
-                <Reveal className={cn(i % 2 === 1 && "lg:order-2")}>
+                <Reveal from={i % 2 ? "right" : "left"} className={cn(i % 2 === 1 && "lg:order-2")}>
                   <p className="text-xs font-medium uppercase tracking-[0.14em] text-primary">{f.eyebrow}</p>
                   <h2 className="mt-3 font-heading text-3xl font-bold sm:text-4xl">{f.title}</h2>
                   <p className="mt-4 text-base text-text-muted">{f.text}</p>
@@ -192,7 +207,7 @@ export default function WelcomePage() {
                     {f.points.map((p) => <li key={p} className="flex items-start gap-3 text-sm"><span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-success/10 text-success"><Check className="size-3" strokeWidth={3} /></span>{p}</li>)}
                   </ul>
                 </Reveal>
-                <Reveal delay={120}><Shot src={f.image} alt={f.alt} crop={f.crop} /></Reveal>
+                <Reveal from="scale" delay={150}><div className="parallax transition-transform duration-500 hover:-translate-y-1"><Shot src={f.image} alt={f.alt} crop={f.crop} /></div></Reveal>
               </div>
             ))}
           </div>
@@ -226,8 +241,9 @@ export default function WelcomePage() {
         </section>
 
         {/* Closing band: always dark, whatever the visitor's theme */}
-        <section data-theme="dark" className="bg-bg text-text">
-          <Reveal className="mx-auto flex max-w-[1200px] flex-col items-center px-4 py-20 text-center md:px-6">
+        <section data-theme="dark" className="relative overflow-hidden bg-bg text-text">
+          <div aria-hidden className="animate-blob pointer-events-none absolute left-1/2 top-1/2 size-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/25 blur-3xl" />
+          <Reveal from="scale" className="relative mx-auto flex max-w-[1200px] flex-col items-center px-4 py-24 text-center md:px-6">
             <h2 className="max-w-2xl font-heading text-3xl font-bold sm:text-5xl">From the first enquiry to the last plate back in the store.</h2>
             <p className="mt-5 max-w-xl text-lg text-text-muted">Create an account, start with the sample menu and orders, and try a full booking in a few minutes.</p>
             <AuthButtons size="lg" className="mt-8 flex-wrap justify-center" />

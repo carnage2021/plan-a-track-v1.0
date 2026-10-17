@@ -7,6 +7,7 @@ import { MoneyInput, useOrderMoney } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
+import { balanceOf, useBilling } from "@/lib/billing";
 import { paidAmount, priceQuote } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
 import type { Order, Payment, PaymentMode } from "@/lib/types";
@@ -126,7 +127,7 @@ function PaymentForm({ order, onDone }: { order: Order; onDone: () => void }) {
           <span className="grid size-16 shrink-0 place-items-center rounded-lg bg-surface-muted text-text"><QrCode className="size-10" strokeWidth={1.25} /></span>
           <div className="min-w-0 text-sm">
             <p className="font-medium">Pay to {tenant.upiId}</p>
-            <p className="text-xs text-text-muted">A scannable QR for the exact amount appears here once Razorpay is connected in phase 5.</p>
+            <p className="text-xs text-text-muted">A scannable QR for the exact amount comes with online payments in phase 5B.</p>
           </div>
         </div>
       )}
@@ -157,10 +158,11 @@ function PaymentSheetBody() {
   const items = useStore((s) => s.items);
   const packages = useStore((s) => s.packages);
   const slabs = useStore((s) => s.tenant.slabs);
+  const credits = useBilling((s) => s.credits);
   const [picked, setPicked] = React.useState("");
   const outstanding = React.useMemo(
-    () => orders.filter((o) => o.status !== "cancelled").map((o) => ({ o, due: priceQuote(o, items, packages, slabs).grand - paidAmount(o.payments) })).filter((x) => x.due > 0),
-    [orders, items, packages, slabs],
+    () => orders.filter((o) => o.status !== "cancelled").map((o) => ({ o, due: balanceOf(o, priceQuote(o, items, packages, slabs).grand, credits).due })).filter((x) => x.due > 0),
+    [orders, items, packages, slabs, credits],
   );
   const currentId = orderId ?? picked;
   const order = orders.find((o) => o.id === currentId);

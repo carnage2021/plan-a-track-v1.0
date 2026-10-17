@@ -3,7 +3,8 @@
 import { Check, Minus, Plus, Users, MapPin, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-import { paidAmount, priceQuote } from "@/lib/pricing";
+import { balanceOf, useBilling } from "@/lib/billing";
+import { priceQuote } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
 import type { Order } from "@/lib/types";
 import { cn, fmtTime, initials, money, num, parseDate } from "@/lib/utils";
@@ -176,17 +177,19 @@ export function useOrderMoney(order: Order) {
   const items = useStore((s) => s.items);
   const packages = useStore((s) => s.packages);
   const slabs = useStore((s) => s.tenant.slabs);
+  const credits = useBilling((s) => s.credits);
   return React.useMemo(() => {
     const totals = priceQuote(order, items, packages, slabs);
-    const paid = paidAmount(order.payments);
-    return { totals, paid, due: Math.max(0, totals.grand - paid), pct: totals.grand ? (paid / totals.grand) * 100 : 0 };
-  }, [order, items, packages, slabs]);
+    // Credit notes lower the bill and refunds lower what was received; `paid` is the net received.
+    const { bill, received, due, credited, refunded } = balanceOf(order, totals.grand, credits);
+    return { totals, bill, paid: received, due, credited, refunded, pct: bill ? Math.min(100, (received / bill) * 100) : 100 };
+  }, [order, items, packages, slabs, credits]);
 }
 
-/** One function of an order: date block, client and function, pax, venue, status and payment progress. */
-export function EventCard({ order, functionId }: { order: Order; functionId?: string }) {
+/** One function of an order: date block, client and function, pax, venue, status and (unless hidden) payment progress. */
+export function EventCard({ order, functionId, showMoney = true }: { order: Order; functionId?: string; showMoney?: boolean }) {
   const client = useStore((s) => s.clients.find((c) => c.id === order.clientId));
-  const { paid, totals, pct } = useOrderMoney(order);
+  const { paid, bill, pct } = useOrderMoney(order);
   const fn = order.functions.find((f) => f.id === functionId) ?? order.functions[0];
   if (!fn) return null;
   return (
@@ -212,12 +215,12 @@ export function EventCard({ order, functionId }: { order: Order; functionId?: st
             <span className="truncate">{fn.venue}</span>
           </span>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        {showMoney && <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
           <ProgressBar value={pct} tone={pct >= 100 ? "success" : "warning"} className="min-w-24 flex-1" label="Payment received" />
           <span className="tnum shrink-0 text-xs text-text-muted">
-            {money(paid)} of {money(totals.grand)}
+            {money(paid)} of {money(bill)}
           </span>
-        </div>
+        </div>}
       </div>
     </Link>
   );

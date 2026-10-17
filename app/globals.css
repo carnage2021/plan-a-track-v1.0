@@ -211,3 +211,64 @@
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; }
 }
+
+/* Landing page: splash screen. Plays once per visit; CSS alone hides it, so the page never stays covered. */
+@keyframes splash-out {
+  0%, 72% { transform: translateY(0); }
+  100% { transform: translateY(-100%); visibility: hidden; }
+}
+@keyframes splash-mark {
+  from { transform: scale(0.55) rotate(-8deg); opacity: 0; }
+}
+@keyframes splash-name {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes splash-line {
+  from { transform: scaleX(0); }
+}
+.splash { animation: splash-out 2.1s cubic-bezier(0.7, 0, 0.2, 1) forwards; }
+.splash-mark { animation: splash-mark 600ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.splash-name { animation: splash-name 700ms 250ms cubic-bezier(0.6, 0, 0.2, 1) both; }
+.splash-line { transform-origin: left; animation: splash-line 900ms 450ms cubic-bezier(0.6, 0, 0.2, 1) both; }
+.splash-sub { animation: rise 600ms 650ms ease-out both; }
+:root[data-splash-seen] .splash { display: none; }
+
+/* Landing page: ambient hero motion. */
+@keyframes blob {
+  33% { transform: translate(40px, -30px) scale(1.08); }
+  66% { transform: translate(-30px, 20px) scale(0.95); }
+}
+@keyframes marquee-reverse {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+@keyframes word-in {
+  from { opacity: 0; transform: translateY(0.45em); filter: blur(4px); }
+}
+@utility animate-blob { animation: blob 18s ease-in-out infinite; }
+@utility animate-marquee-reverse { animation: marquee-reverse 56s linear infinite; }
+.word-in { animation: word-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.marquee-row:hover > * { animation-play-state: paused; }
+
+/* Reveal variants on top of the base .reveal (fade and lift). */
+.reveal[data-from="left"] { transform: translateX(-48px); }
+.reveal[data-from="right"] { transform: translateX(48px); }
+.reveal[data-from="scale"] { transform: scale(0.94) translateY(24px); }
+.reveal.is-in[data-from] { transform: none; }
+
+/* Scroll-driven extras where the browser supports them; elsewhere the page simply stays still. */
+@supports (animation-timeline: scroll()) {
+  @keyframes progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .scroll-progress { animation: progress linear both; animation-timeline: scroll(root); transform-origin: left; }
+  @keyframes hero-tilt { from { transform: perspective(1400px) rotateX(10deg) scale(0.96); } to { transform: none; } }
+  .hero-tilt { animation: hero-tilt linear both; animation-timeline: view(); animation-range: entry 0% cover 45%; }
+  @keyframes draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .draw-line { animation: draw linear both; animation-timeline: view(); animation-range: entry 20% cover 55%; transform-origin: left; }
+  @keyframes drift-up { from { transform: translateY(60px); } to { transform: translateY(-60px); } }
+  .parallax { animation: drift-up linear both; animation-timeline: view(); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash { display: none; }
+  .reveal[data-from] { transform: none; }
+}

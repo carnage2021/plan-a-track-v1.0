@@ -94,7 +94,7 @@ export function CommandPalette() {
               )}
               <Command.Group heading="Clients" className={group}>
                 {clients.map((c) => (
-                  <Command.Item key={c.id} value={`${c.name} ${c.phone}`} className={row} onSelect={go(() => router.push(`/orders?client=${c.id}`))}>
+                  <Command.Item key={c.id} value={`${c.name} ${c.phone}`} className={row} onSelect={go(() => router.push(`/clients?id=${c.id}`))}>
                     <User strokeWidth={1.75} />
                     <span className="flex-1 truncate">{c.name}</span>
                     <span className="tnum text-xs text-text-muted">{c.phone}</span>

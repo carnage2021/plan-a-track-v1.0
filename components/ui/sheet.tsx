@@ -32,7 +32,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
           )}
         >
           <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border md:hidden" aria-hidden />
-          <div className="flex shrink-0 items-start justify-between gap-4 px-4 pb-3 pt-3 md:px-6 md:pt-5">
+          <div className="flex shrink-0 items-start justify-between gap-4 px-4 pb-3 pt-3 md:px-6 md:pt-5 print:hidden">
             <div className="min-w-0">
               <Dialog.Title className="font-heading text-lg font-semibold">{title}</Dialog.Title>
               {description && <p className="mt-0.5 text-sm text-text-muted">{description}</p>}
@@ -42,7 +42,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
             </Dialog.Close>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-6">{children}</div>
-          {footer && <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-surface px-4 py-3 md:px-6">{footer}</div>}
+          {footer && <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-surface px-4 py-3 md:px-6 print:hidden">{footer}</div>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

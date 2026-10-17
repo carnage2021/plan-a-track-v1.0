@@ -8,6 +8,9 @@ import { persist } from "zustand/middleware";
 import { clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, loadAll, paymentRow, run, savePackageRows, tenantRow } from "./db";
 import { background, setReload, write } from "./queue";
 import { supabase } from "./supabase/client";
+import { useKitchen } from "./kitchen";
+import { useOps } from "./operations";
+import { useBilling } from "./billing";
 import { useStaff } from "./staff";
 import { useSupply } from "./supply-store";
 import type {
@@ -71,6 +74,7 @@ interface Actions {
   addUser: (user: Omit<TeamUser, "id">) => void;
   removeUser: (id: string) => void;
   ensureClient: (name: string, phone: string, id?: string) => string;
+  saveClient: (client: Client) => void;
   saveEnquiry: (enquiry: Omit<Enquiry, "id" | "createdAt"> & { id?: string }) => string;
   moveEnquiry: (id: string, stage: EnquiryStage, lostReason?: string) => void;
   saveItem: (item: Omit<MenuItem, "id"> & { id?: string }) => void;
@@ -150,7 +154,7 @@ export const useStore = create<Store>()(
           }
           const { me, ...rest } = loaded;
           set({ ...rest, currentUserId: me.id, myRole: me.role, signedIn: true, hydrated: true });
-          await Promise.all([useSupply.getState().load(), useStaff.getState().load()]);
+          await Promise.all([useSupply.getState().load(), useStaff.getState().load(), useKitchen.getState().load(), useOps.getState().load(), useBilling.getState().load()]);
           return true;
         } catch (e) {
           toast.error("Could not load your data", { description: e instanceof Error ? e.message : undefined });
@@ -209,6 +213,11 @@ export const useStore = create<Store>()(
         set({ clients: [...s.clients, client] });
         background((sb) => run(sb.from("clients").insert(clientRow(client)), "Saving the client"));
         return client.id;
+      },
+
+      saveClient: (client) => {
+        set((s) => ({ clients: s.clients.map((c) => (c.id === client.id ? client : c)) }));
+        background((sb) => run(sb.from("clients").update(clientRow(client)).eq("id", client.id), "Saving the client"));
       },
 
       saveEnquiry: (enquiry) => {

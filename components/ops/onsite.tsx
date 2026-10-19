@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, CheckCircle2, Clock, MapPin, MessageCircle, Minus, Navigation, Phone, Plus, Signature, Trash2, Users } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Clock, MapPin, MessageCircle, Minus, Navigation, Phone, Plus, Receipt, Signature, Trash2, Users } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { Badge, VegMark } from "@/components/shared/badges";
@@ -15,7 +15,9 @@ import { priceQuote } from "@/lib/pricing";
 import { useStaff } from "@/lib/staff";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { EventFunction, Order } from "@/lib/types";
-import { cn, fmtDate, fmtTime, money, num, whatsappLink } from "@/lib/utils";
+import { cn, fmtDate, fmtTime, money, num, whatsappLink, localDay } from "@/lib/utils";
+import { ExpenseSheet } from "@/components/expenses/expense-sheet";
+import { useExpenses } from "@/lib/expenses";
 import { PhotoButton, SignaturePad } from "./common";
 import { FunctionTrips } from "./dispatch";
 
@@ -194,7 +196,7 @@ function SignOff({ order, fn }: { order: Order; fn: EventFunction }) {
     return (
       <Card className="p-5">
         <p className="flex items-center gap-2 font-heading text-lg font-semibold text-success"><CheckCircle2 className="size-5" strokeWidth={1.75} />Signed off</p>
-        <p className="tnum mt-1 text-sm text-text-muted">{record.signoffName}, {fmtDate(record.signedAt.slice(0, 10), { day: "numeric", month: "short" })} at {at(record.signedAt)} · {num(record.guests)} guests</p>
+        <p className="tnum mt-1 text-sm text-text-muted">{record.signoffName}, {fmtDate(localDay(record.signedAt), { day: "numeric", month: "short" })} at {at(record.signedAt)} · {num(record.guests)} guests</p>
         {record.signoffPath && <img src={mediaUrl(record.signoffPath)} alt={`Signature of ${record.signoffName}`} className="mt-4 h-32 rounded-xl border bg-white object-contain p-2" />}
       </Card>
     );
@@ -248,6 +250,19 @@ function SignOff({ order, fn }: { order: Order; fn: EventFunction }) {
   );
 }
 
+/** Ice, gas top-ups and tips paid at the venue, with the bill photo, straight onto the event's cost. */
+function LogExpense({ orderId }: { orderId: string }) {
+  const ready = useExpenses((s) => s.ready);
+  const [open, setOpen] = React.useState(false);
+  if (!ready) return null;
+  return (
+    <>
+      <Button variant="ghost" className="w-full" onClick={() => setOpen(true)}><Receipt strokeWidth={1.75} />Add an expense paid at the venue</Button>
+      <ExpenseSheet open={open} onOpenChange={setOpen} orderId={orderId} />
+    </>
+  );
+}
+
 /** The supervisor's phone screen for one function, from setup to the client's signature. */
 export function OnsiteView({ order, fn }: { order: Order; fn: EventFunction }) {
   const client = useStore((s) => s.clients.find((c) => c.id === order.clientId));
@@ -281,6 +296,7 @@ export function OnsiteView({ order, fn }: { order: Order; fn: EventFunction }) {
           <GuestCounter order={order} fn={fn} locked={signed} />
           <Checklist order={order} fn={fn} locked={signed} />
           <Issues order={order} fn={fn} />
+          <LogExpense orderId={order.id} />
         </TabsContent>
         <TabsContent value="details" className="space-y-4"><MenuAndStaff fn={fn} /></TabsContent>
         <TabsContent value="trips"><FunctionTrips order={order} fn={fn} showHead={false} /></TabsContent>

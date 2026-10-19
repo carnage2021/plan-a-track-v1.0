@@ -9,6 +9,7 @@ import { navFor } from "@/lib/nav";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { useUi } from "@/lib/ui";
 import { useTranslations } from "next-intl";
+import { usePlan } from "@/lib/platform";
 
 const group = "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-text-muted";
 const row = "flex h-10 cursor-pointer items-center gap-3 rounded-lg px-2 text-sm data-[selected=true]:bg-surface-muted [&_svg]:size-5 [&_svg]:shrink-0 [&_svg]:text-text-muted";
@@ -22,6 +23,8 @@ export function CommandPalette() {
   const openEnquiry = useUi((s) => s.openEnquiry);
   const openPayment = useUi((s) => s.openPayment);
   const user = useCurrentUser();
+  const access = useStore((s) => s.tenant.access);
+  const planModules = usePlan().plan?.modules;
   const clients = useStore((s) => s.clients);
   const orders = useStore((s) => s.orders);
   const quotations = useStore((s) => s.quotations);
@@ -68,7 +71,7 @@ export function CommandPalette() {
                 </Command.Group>
               )}
               <Command.Group heading="Go to" className={group}>
-                {navFor(user.role).map((n) => (
+                {navFor(user.role, access, planModules).map((n) => (
                   <Command.Item key={n.key} className={row} onSelect={go(() => router.push(n.href))}><n.icon strokeWidth={1.75} />{t(`nav.${n.key}`)}</Command.Item>
                 ))}
               </Command.Group>

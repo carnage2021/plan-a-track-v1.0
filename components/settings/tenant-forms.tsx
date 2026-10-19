@@ -10,6 +10,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/primitives";
 import { brandColours } from "@/lib/brand";
 import { mediaUrl } from "@/lib/db";
+import { usePlan } from "@/lib/platform";
 import { useStore } from "@/lib/store";
 import type { Role, Tenant } from "@/lib/types";
 import { cn, financialYear, initials } from "@/lib/utils";
@@ -188,6 +189,7 @@ export function TeamForm() {
   const tr = useTranslations("roles");
   const users = useStore((s) => s.users);
   const addUser = useStore((s) => s.addUser);
+  const { seats } = usePlan();
   const removeUser = useStore((s) => s.removeUser);
   const [name, setName] = React.useState("");
   const [phone, setPhone] = React.useState("");
@@ -214,7 +216,7 @@ export function TeamForm() {
       </ul>
       <form
         className="grid gap-3 rounded-xl bg-surface-muted p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
-        onSubmit={(e) => { e.preventDefault(); if (!ok) return; addUser({ name: name.trim(), phone, role, invited: true }); toast.success(`${name.trim()} added to the invite list`); setName(""); setPhone(""); }}
+        onSubmit={(e) => { e.preventDefault(); if (!ok) return; if (seats !== undefined && users.length >= seats) return void toast.error(`Your plan includes ${seats} team members`, { description: "Add extra users from Settings, Plan and billing." }); addUser({ name: name.trim(), phone, role, invited: true }); toast.success(`${name.trim()} added to the invite list`); setName(""); setPhone(""); }}
       >
         <Field label="Name"><Input className="bg-surface" value={name} onChange={(e) => setName(e.target.value)} placeholder="Team member" /></Field>
         <Field label="Mobile number"><Input className="bg-surface" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98980 12345" /></Field>

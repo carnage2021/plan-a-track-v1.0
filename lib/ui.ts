@@ -73,3 +73,14 @@ export function printLight() {
   window.print();
   root.dataset.theme = previous;
 }
+
+/** Prints the open receipt on an 80 mm thermal roll instead of A4. */
+export function printThermal() {
+  const page = document.createElement("style");
+  page.textContent = "@page { size: 80mm auto; margin: 3mm; }";
+  document.head.append(page);
+  document.documentElement.classList.add("print-thermal");
+  printLight();
+  document.documentElement.classList.remove("print-thermal");
+  page.remove();
+}

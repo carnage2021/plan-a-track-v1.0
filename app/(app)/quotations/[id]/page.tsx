@@ -15,6 +15,7 @@ import { useCurrentUser, useStore } from "@/lib/store";
 import type { QuoteStatus, Quotation } from "@/lib/types";
 import { printLight } from "@/lib/ui";
 import { cn, daysFromToday, fmtDate, money, whatsappLink } from "@/lib/utils";
+import { logWhatsApp } from "@/lib/messages";
 
 function QuotationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -43,6 +44,7 @@ function QuotationDetail() {
     toast(message, { action: { label: "Undo", onClick: () => setQuoteStatus(quote.id, before) } });
   };
   const send = () => {
+    logWhatsApp("quotation", client?.name ?? "", client?.phone ?? "", quoteShareText(tenant.name, doc, totals.grand))();
     window.open(whatsappLink(client?.phone ?? "", quoteShareText(tenant.name, doc, totals.grand)), "_blank", "noopener");
     if (quote.status === "draft" || quote.status === "changes") setStatus("sent", "Marked as sent");
   };

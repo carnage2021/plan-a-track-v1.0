@@ -40,6 +40,11 @@ export function isoDate(d: Date) {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
+/** The local calendar day of a database timestamp; slicing the UTC text would give yesterday after midnight in India. */
+export function localDay(timestamp: string) {
+  return isoDate(new Date(timestamp));
+}
+
 export function parseDate(iso: string) {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   return new Date(y, m - 1, d);

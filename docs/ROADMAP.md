@@ -15,9 +15,9 @@ Last updated: 17 Oct 2026.
 | 4A. Staff | Workers, priced tasks, attendance, payouts, monthly payroll, chef per dish | D1, D2 | Built and tested against the database |
 | 4B. Operations | Kitchen production (tested); dispatch with vehicles, trips, loading checklist and delivery photo; event-day screen with checklist, guest counter, issue log and client sign-off | D3 to D5 | Built and tested |
 | 5A. Client billing | Payment schedule with milestones and reminders, outstanding by age, proforma and GST tax invoices, credit notes and refunds, client ledger and statement | E1 | Built and tested |
-| 5B. Expenses, documents and public menus | Vendor bills, event expenses, petty cash, day book, Tally export, template editor, server PDFs, Razorpay, QR and public menu pages | E2, E3 | Planned |
-| 6. Reports, messaging and access | Reports, WhatsApp, email and SMS, permissions | F | Planned |
-| 7. Platform | Super admin, subscription billing, Excel import, AI add-ons | A1, A3, F4 | Planned |
+| 5B. Expenses, documents and public menus | Event and business expenses with bill photos, petty cash per team member, day book with cash and bank summary and CSV export, six document designs with footer, signature and UPI QR, thermal receipts, QR table menu, public menu page, Razorpay payment links with webhook (not switched on) | E2, E3 | Built and tested (Razorpay links written but switched off until keys are added) |
+| 6. Reports, messaging and access | Event P&L, sales, receivables and payables, menu, purchase and stock, staff, cutlery loss and GST reports with Excel export; messages with templates, log, greetings, event updates, duty reminders and team alerts; role access, price hiding, approval limits, activity log and full data export | F1 to F3 | Built and tested |
+| 7. Platform | Super admin panel (accounts, plans with limits, add-ons and first-year pricing, trial and suspension, subscription invoices, support inbox, announcements, changelog, sign-in as caterer, audit log); Excel and CSV import with preview, error check, undo and export, bulk dish photos; smart assist (menu suggestion, cooking quantities from leftovers, enquiry from a WhatsApp message) | A1, A3, F4 | Built and tested |
 
 Before phase 3 starts: connect Supabase (project URL and anon key), run the two migrations,
 replace the stand-in login with real OTP, and move data out of the browser store.

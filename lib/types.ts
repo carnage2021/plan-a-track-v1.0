@@ -29,6 +29,37 @@ export interface Tenant {
   dailyCapacityPax: number;
   /** Per-plate discount by guest count; the last slab has no upper limit */
   slabs: { upTo?: number; pct: number }[];
+  /** Document design; absent until 0008_expenses_documents.sql has been run */
+  docs?: DocSettings;
+  /** Address of the public menu page, /m/<slug> */
+  publicSlug?: string;
+  publicMenu?: boolean;
+  publicPrices?: boolean;
+  /** Role access and approval limits; absent until 0009 has been run */
+  access?: import("./access").TenantAccess;
+  /** The platform subscription, set by the platform team; absent until 0010 has been run */
+  subscription?: Subscription;
+}
+
+export interface Subscription {
+  status: "trial" | "active" | "overdue" | "suspended";
+  planId?: string;
+  trialEndsAt?: string;
+  paidUntil?: string;
+  cycle: "monthly" | "annual";
+  addons: string[];
+  extraUsers: number;
+}
+
+export type DocTheme = "classic" | "minimal" | "royal" | "festive" | "modern" | "mono";
+export interface DocSettings {
+  theme: DocTheme;
+  /** Printed above the terms on every document */
+  footer: string;
+  showBank: boolean;
+  showUpiQr: boolean;
+  /** Storage path of the authorised signatory's signature */
+  signaturePath?: string;
 }
 
 export interface TeamUser {
@@ -49,6 +80,9 @@ export interface Client {
   type: "retail" | "corporate" | "agency";
   tags: ("repeat" | "vip")[];
   language: Locale;
+  /** ISO dates; the year is ignored for greetings */
+  birthday?: string;
+  anniversary?: string;
 }
 
 export type EnquiryStage = "new" | "contacted" | "quoted" | "followup" | "booked" | "lost";

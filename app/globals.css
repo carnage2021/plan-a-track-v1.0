@@ -174,6 +174,22 @@
   }
 }
 
+/* Thermal receipts: one narrow column, no shadows or rounded corners, receipt only. */
+@media print {
+  .print-thermal [role="dialog"] {
+    width: 74mm !important;
+    padding: 0 !important;
+  }
+  .print-thermal [data-thermal-hide] {
+    display: none !important;
+  }
+  .print-thermal [data-receipt] {
+    border: 0 !important;
+    border-radius: 0 !important;
+    font-size: 11px;
+  }
+}
+
 /* Marketing page motion. All of it is switched off by the reduced-motion rule above. */
 @keyframes float-a {
   50% { transform: translateY(-14px) rotate(-1deg); }

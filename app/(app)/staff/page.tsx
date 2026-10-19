@@ -19,6 +19,7 @@ import { useSupply } from "@/lib/supply-store";
 import type { PaymentMode } from "@/lib/types";
 import { printLight } from "@/lib/ui";
 import { cn, fmtDate, isoDate, money } from "@/lib/utils";
+import { useAccess } from "@/lib/access";
 
 function WorkerSheet({ worker, onClose }: { worker?: Worker; onClose: () => void }) {
   const saveWorker = useStaff((s) => s.saveWorker);
@@ -156,6 +157,7 @@ function Payouts() {
   const vendors = useSupply((s) => s.vendors);
   const canPay = ["owner", "accountant"].includes(useCurrentUser().role);
   const [pay, setPay] = React.useState<{ worker?: Worker; contractorId?: string; kind: "advance" | "payout"; max: number } | null>(null);
+  const { needsOwner, limit } = useAccess();
   const [amount, setAmount] = React.useState(0);
   const [mode, setMode] = React.useState<PaymentMode>("cash");
   const rows = workers.filter((w) => w.type !== "salaried").map((w) => ({ w, b: workerBalance(w.id, tasks, payments, workers) })).filter((r) => r.b.earned || r.b.advance || r.b.paid);
@@ -198,8 +200,8 @@ function Payouts() {
         open={!!pay}
         onOpenChange={(o) => !o && setPay(null)}
         title={pay?.kind === "advance" ? `Advance to ${pay.worker?.name}` : `Pay ${pay?.worker?.name ?? "contractor"}`}
-        description={pay?.kind === "advance" ? "Taken off the next payout." : "Recorded against finished tasks."}
-        footer={<><Button variant="ghost" onClick={() => setPay(null)}>Cancel</Button><Button variant="primary" disabled={amount <= 0} onClick={() => { if (!pay) return; addPayment({ workerId: pay.worker?.id, contractorId: pay.contractorId, kind: pay.kind, amount, mode, note: "" }); toast.success(`${money(amount)} recorded`); setPay(null); }}>Save</Button></>}
+        description={needsOwner("payout", amount) ? `Above ${money(limit("payout"))}, only the owner can record this payment.` : pay?.kind === "advance" ? "Taken off the next payout." : "Recorded against finished tasks."}
+        footer={<><Button variant="ghost" onClick={() => setPay(null)}>Cancel</Button><Button variant="primary" disabled={amount <= 0 || needsOwner("payout", amount)} onClick={() => { if (!pay) return; addPayment({ workerId: pay.worker?.id, contractorId: pay.contractorId, kind: pay.kind, amount, mode, note: "" }); toast.success(`${money(amount)} recorded`); setPay(null); }}>Save</Button></>}
       >
         <div className="grid grid-cols-2 gap-3">
           <Field label="Amount"><MoneyInput autoFocus value={amount} onChange={setAmount} /></Field>

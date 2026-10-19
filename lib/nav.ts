@@ -6,10 +6,14 @@ import {
   ClipboardCheck,
   Truck,
   ClipboardList,
+  FileSpreadsheet,
   FileText,
+  HandCoins,
   Home,
+  MessageCircle,
   MessagesSquare,
   Settings,
+  Sparkles,
   ShoppingBasket,
   Store,
   Users,
@@ -18,6 +22,7 @@ import {
   Wine,
   type LucideIcon,
 } from "lucide-react";
+import type { TenantAccess } from "./access";
 import type { Role } from "./types";
 
 export interface NavItem {
@@ -45,14 +50,24 @@ export const navItems: NavItem[] = [
   { key: "cutlery", href: "/cutlery", icon: Wine, roles: ["owner", "operations", "store"] },
   { key: "staff", href: "/staff", icon: Users, roles: ["owner", "operations", "accountant"] },
   { key: "payments", href: "/payments", icon: Wallet, roles: ["owner", "sales", "accountant"] },
-  { key: "reports", href: "/reports", icon: BarChart3, roles: ["owner", "accountant"], phase: 6 },
+  { key: "expenses", href: "/expenses", icon: HandCoins, roles: ["owner", "operations", "accountant"] },
+  { key: "messages", href: "/messages", icon: MessageCircle, roles: ["owner", "sales"] },
+  { key: "reports", href: "/reports", icon: BarChart3, roles: ["owner", "accountant"] },
+  { key: "import", href: "/import", icon: FileSpreadsheet, roles: ["owner"] },
+  { key: "assist", href: "/assist", icon: Sparkles, roles: ["owner", "sales", "kitchen"] },
   { key: "settings", href: "/settings", icon: Settings, roles: ["owner"] },
 ];
 
-/** Items a role cannot use are hidden, not greyed. */
-export function navFor(role: Role) {
-  return navItems.filter((n) => n.roles === "all" || n.roles.includes(role));
+/** Items a role cannot use are hidden, not greyed. The owner's role settings can narrow this further. */
+export function navFor(role: Role, access?: TenantAccess, planModules?: string[]) {
+  const narrowed = role === "owner" ? undefined : access?.roles[role];
+  // The subscription plan can switch modules off for everyone; an empty list means all are included.
+  const inPlan = (key: string) => !planModules?.length || key === "home" || key === "settings" || planModules.includes(key);
+  return navItems.filter((n) => (n.roles === "all" || n.roles.includes(role)) && inPlan(n.key) && (!narrowed || n.key === "home" || narrowed.modules.includes(n.key)));
 }
+
+/** The nav item a path belongs to, if any. */
+export const navItemFor = (pathname: string) => [...navItems].sort((a, b) => b.href.length - a.href.length).find((n) => isActive(pathname, n.href));
 
 export function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);

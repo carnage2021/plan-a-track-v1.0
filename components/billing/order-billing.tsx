@@ -16,8 +16,9 @@ import { priceQuote } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
 import type { Order, PaymentMode } from "@/lib/types";
 import { printLight } from "@/lib/ui";
-import { cn, fmtDate, money, relativeDay, uid, whatsappLink } from "@/lib/utils";
+import { cn, fmtDate, money, relativeDay, uid, whatsappLink, localDay } from "@/lib/utils";
 import { CreditNoteDocument, InvoiceDocument } from "./documents";
+import { logWhatsApp } from "@/lib/messages";
 
 export function BillingGate({ children }: { children: React.ReactNode }) {
   const ready = useBilling((s) => s.ready);
@@ -57,7 +58,7 @@ export function RemindButton({ order, row, compact }: { order: Order; row: Sched
   const markReminded = useBilling((s) => s.markReminded);
   return (
     <Button variant={compact ? "ghost" : "secondary"} asChild>
-      <a href={whatsappLink(client?.phone ?? "", reminderText(tenant.name, tenant.upiId, client?.name ?? "", order, row))} target="_blank" rel="noreferrer" onClick={() => markReminded(order, row.id)}>
+      <a href={whatsappLink(client?.phone ?? "", reminderText(tenant.name, tenant.upiId, client?.name ?? "", order, row))} target="_blank" rel="noreferrer" onClick={() => { markReminded(order, row.id); logWhatsApp("reminder", client?.name ?? "", client?.phone ?? "", reminderText(tenant.name, tenant.upiId, client?.name ?? "", order, row), order.id)(); }}>
         <BellRing strokeWidth={1.75} />{row.remindedAt ? "Remind again" : "Remind"}
       </a>
     </Button>
@@ -112,7 +113,7 @@ export function ScheduleCard({ order, locked }: { order: Order; locked: boolean 
           {rows.map((r) => (
             <li key={r.id} className="px-4 py-3 md:px-5">
               <div className="flex items-start justify-between gap-3 text-sm">
-                <span className="min-w-0"><span className="block font-medium">{r.label}{r.kind === "percent" ? ` (${r.value}%)` : ""}</span><span className="block text-xs text-text-muted">Due {fmtDate(r.dueDate, { day: "numeric", month: "short" })}{r.remindedAt && ` · reminded ${relativeDay(r.remindedAt.slice(0, 10)).toLowerCase()}`}</span></span>
+                <span className="min-w-0"><span className="block font-medium">{r.label}{r.kind === "percent" ? ` (${r.value}%)` : ""}</span><span className="block text-xs text-text-muted">Due {fmtDate(r.dueDate, { day: "numeric", month: "short" })}{r.remindedAt && ` · reminded ${relativeDay(localDay(r.remindedAt)).toLowerCase()}`}</span></span>
                 <span className="shrink-0 text-right"><span className="block font-medium">{money(r.amount)}</span><MilestoneBadge row={r} /></span>
               </div>
               {!locked && r.remind && <div className="mt-2"><RemindButton order={order} row={r} compact /></div>}

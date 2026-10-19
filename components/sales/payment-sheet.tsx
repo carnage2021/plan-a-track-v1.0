@@ -1,6 +1,7 @@
 "use client";
 
-import { Banknote, Building2, CheckCircle2, CreditCard, QrCode, ScrollText, Send } from "lucide-react";
+import { Banknote, Building2, CheckCircle2, CreditCard, Printer, QrCode, ScrollText, Send } from "lucide-react";
+import { QrCode as ScanQr, upiLink } from "@/components/documents/theme";
 import * as React from "react";
 import { toast } from "sonner";
 import { MoneyInput, useOrderMoney } from "@/components/shared/blocks";
@@ -11,8 +12,9 @@ import { balanceOf, useBilling } from "@/lib/billing";
 import { paidAmount, priceQuote } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
 import type { Order, Payment, PaymentMode } from "@/lib/types";
-import { useUi } from "@/lib/ui";
+import { printThermal, useUi } from "@/lib/ui";
 import { cn, fmtDate, money, whatsappLink } from "@/lib/utils";
+import { logWhatsApp } from "@/lib/messages";
 
 export const paymentModes: { id: PaymentMode; label: string; icon: typeof Banknote }[] = [
   { id: "upi", label: "UPI", icon: QrCode },
@@ -32,7 +34,7 @@ export function ReceiptPreview({ order, amount, mode, receiptNo, date, balance }
   const tenant = useStore((s) => s.tenant);
   const client = useStore((s) => s.clients.find((c) => c.id === order.clientId));
   return (
-    <div className="overflow-hidden rounded-xl border bg-surface" style={{ "--brand": tenant.brandColor } as React.CSSProperties}>
+    <div data-receipt className="overflow-hidden rounded-xl border bg-surface" style={{ "--brand": tenant.brandColor } as React.CSSProperties}>
       <div className="flex items-center justify-between gap-3 bg-brand px-4 py-3 text-brand-fg">
         <div className="min-w-0">
           <p className="truncate font-heading text-base font-semibold">{tenant.name}</p>
@@ -80,12 +82,13 @@ function PaymentForm({ order, onDone }: { order: Order; onDone: () => void }) {
     const text = receiptText(tenant.name, client?.name ?? "", order, saved, due);
     return (
       <div className="space-y-4">
-        <p className="flex items-center gap-2 text-sm font-medium text-success"><CheckCircle2 className="size-5" strokeWidth={1.75} />Payment recorded</p>
+        <p data-thermal-hide className="flex items-center gap-2 text-sm font-medium text-success"><CheckCircle2 className="size-5" strokeWidth={1.75} />Payment recorded</p>
         <ReceiptPreview order={order} amount={saved.amount} mode={saved.mode} receiptNo={saved.receiptNo} date={saved.date} balance={due} />
-        <div className="flex gap-2">
+        <div data-thermal-hide className="flex flex-wrap gap-2">
           <Button variant="primary" size="lg" className="flex-1" asChild>
-            <a href={whatsappLink(client?.phone ?? "", text)} target="_blank" rel="noreferrer"><Send strokeWidth={1.75} />Send receipt on WhatsApp</a>
+            <a href={whatsappLink(client?.phone ?? "", text)} target="_blank" rel="noreferrer" onClick={logWhatsApp("receipt", client?.name ?? "", client?.phone ?? "", text, order.id)}><Send strokeWidth={1.75} />Send receipt on WhatsApp</a>
           </Button>
+          <Button size="lg" onClick={printThermal}><Printer strokeWidth={1.75} />Print 80 mm</Button>
           <Button size="lg" onClick={onDone}>Done</Button>
         </div>
       </div>
@@ -124,10 +127,10 @@ function PaymentForm({ order, onDone }: { order: Order; onDone: () => void }) {
       </div>
       {mode === "upi" && (
         <div className="flex items-center gap-3 rounded-xl border p-3">
-          <span className="grid size-16 shrink-0 place-items-center rounded-lg bg-surface-muted text-text"><QrCode className="size-10" strokeWidth={1.25} /></span>
+          {tenant.upiId && amount > 0 ? <ScanQr value={upiLink(tenant, amount, order.number)} label={`UPI QR for ${money(amount)}`} className="size-24 shrink-0 rounded-lg border p-1" /> : <span className="grid size-16 shrink-0 place-items-center rounded-lg bg-surface-muted text-text"><QrCode className="size-10" strokeWidth={1.25} /></span>}
           <div className="min-w-0 text-sm">
-            <p className="font-medium">Pay to {tenant.upiId}</p>
-            <p className="text-xs text-text-muted">A scannable QR for the exact amount comes with online payments in phase 5B.</p>
+            <p className="font-medium">{tenant.upiId ? `Pay to ${tenant.upiId}` : "No UPI ID yet"}</p>
+            <p className="text-xs text-text-muted">{tenant.upiId ? "The client scans this with any UPI app; the amount is filled in. Record the payment once it shows in your account." : "Add your UPI ID in Settings, GST and bank, to show a QR here."}</p>
           </div>
         </div>
       )}

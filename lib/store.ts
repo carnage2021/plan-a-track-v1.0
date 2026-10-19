@@ -11,6 +11,9 @@ import { supabase } from "./supabase/client";
 import { useKitchen } from "./kitchen";
 import { useOps } from "./operations";
 import { useBilling } from "./billing";
+import { useExpenses } from "./expenses";
+import { useMessages } from "./messages";
+import { eventsThisMonth, usePlatform } from "./platform";
 import { useStaff } from "./staff";
 import { useSupply } from "./supply-store";
 import type {
@@ -154,7 +157,7 @@ export const useStore = create<Store>()(
           }
           const { me, ...rest } = loaded;
           set({ ...rest, currentUserId: me.id, myRole: me.role, signedIn: true, hydrated: true });
-          await Promise.all([useSupply.getState().load(), useStaff.getState().load(), useKitchen.getState().load(), useOps.getState().load(), useBilling.getState().load()]);
+          await Promise.all([useSupply.getState().load(), useStaff.getState().load(), useKitchen.getState().load(), useOps.getState().load(), useBilling.getState().load(), useExpenses.getState().load(), useMessages.getState().load(), usePlatform.getState().load()]);
           return true;
         } catch (e) {
           toast.error("Could not load your data", { description: e instanceof Error ? e.message : undefined });
@@ -319,6 +322,9 @@ export const useStore = create<Store>()(
         const q = s.quotations.find((x) => x.id === quoteId)!;
         const existing = s.orders.find((o) => o.quotationId === quoteId);
         if (existing) return existing.id;
+        // The plan's monthly event limit; 0 or no plan means no limit.
+        const plan = usePlatform.getState().plans.find((p) => p.id === s.tenant.subscription?.planId);
+        if (plan?.eventsPerMonth && eventsThisMonth() >= plan.eventsPerMonth) throw new Error(`Your ${plan.name} plan includes ${plan.eventsPerMonth} bookings a month and they are used up. Upgrade from Settings, Plan and billing.`);
         const order = await write(async (sb) => {
           const o: Order = {
             id: uid(),

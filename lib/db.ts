@@ -13,7 +13,9 @@ import type {
   Role,
   TeamUser,
   Tenant,
+  DocSettings,
 } from "./types";
+import { localDay } from "./utils";
 
 // Maps between the app's objects (lib/types.ts) and the Postgres rows (supabase/migrations).
 // Used by the browser store, where row-level security fills in tenant_id, and by the signup
@@ -41,6 +43,8 @@ const day = (value: string | null | undefined) => (value ? String(value).slice(0
 
 /* ---------- row mappers ---------- */
 
+export const defaultDocs: DocSettings = { theme: "classic", footer: "", showBank: true, showUpiQr: true };
+
 export function tenantRow(t: Tenant): Row {
   return {
     name: t.name,
@@ -65,6 +69,9 @@ export function tenantRow(t: Tenant): Row {
     discount_approval_pct: t.discountApprovalPct,
     daily_capacity_pax: t.dailyCapacityPax,
     pax_slabs: t.slabs,
+    // Only sent once the 0008 columns exist, so older databases keep saving settings.
+    ...(t.access ? { role_access: t.access } : {}),
+    ...(t.docs ? { doc_settings: t.docs, public_slug: t.publicSlug || null, public_menu: !!t.publicMenu, public_prices: !!t.publicPrices } : {}),
   };
 }
 
@@ -92,8 +99,14 @@ function tenantFrom(r: Row): Tenant {
     discountApprovalPct: Number(r.discount_approval_pct),
     dailyCapacityPax: r.daily_capacity_pax,
     slabs: Array.isArray(r.pax_slabs) && r.pax_slabs.length ? r.pax_slabs : [{ pct: 0 }],
+    ...("plan_id" in r ? { subscription: { status: r.status, planId: r.plan_id ?? undefined, trialEndsAt: r.trial_ends_at ?? undefined, paidUntil: r.paid_until ?? undefined, cycle: r.billing_cycle, addons: r.addons ?? [], extraUsers: r.extra_users ?? 0 } } : {}),
+    ...("role_access" in r ? { access: { roles: {}, poLimit: 0, payoutLimit: 0, ...r.role_access } } : {}),
+    ...("doc_settings" in r ? { docs: { ...defaultDocs, ...r.doc_settings }, publicSlug: r.public_slug ?? "", publicMenu: r.public_menu, publicPrices: r.public_prices } : {}),
   };
 }
+
+/** True once 0009 has added the birthday and anniversary columns; until then they are not sent. */
+let clientDates = false;
 
 export const clientRow = (c: Client): Row => ({
   id: c.id,
@@ -105,6 +118,7 @@ export const clientRow = (c: Client): Row => ({
   client_type: c.type,
   tags: c.tags,
   language: c.language,
+  ...(clientDates ? { birthday: c.birthday || null, anniversary: c.anniversary || null } : {}),
 });
 
 export const categoryRow = (c: MenuCategory, sort: number): Row => ({ id: c.id, name: c.name, icon: c.icon, sort_order: sort });
@@ -327,7 +341,10 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       ...profileRows.map((p) => ({ id: p.id, name: p.name, phone: p.phone, role: p.role as Role })),
       ...rowsOf(invites, "Loading invites").filter((i) => !i.accepted_at).map((i) => ({ id: i.id, name: i.name, phone: i.phone, role: i.role as Role, invited: true })),
     ],
-    clients: rowsOf(clients, "Loading clients").map((c) => ({ id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language })),
+    clients: rowsOf(clients, "Loading clients").map((c) => {
+      if ("birthday" in c) clientDates = true;
+      return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined };
+    }),
     categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
     items: rowsOf(items, "Loading the menu").map((i) => ({
       id: i.id,
@@ -377,7 +394,7 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       assignedTo: e.assigned_to ?? "",
       followUpAt: e.follow_up_at ? day(e.follow_up_at) : undefined,
       lostReason: e.lost_reason ?? undefined,
-      createdAt: day(e.created_at),
+      createdAt: localDay(e.created_at),
     })),
     quotations: rowsOf(quotations, "Loading quotations").map((q) => ({
       id: q.id,
@@ -396,7 +413,7 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       validUntil: day(q.valid_until),
       notes: q.notes,
       createdBy: q.created_by ?? "",
-      createdAt: day(q.created_at),
+      createdAt: localDay(q.created_at),
     })),
     orders: rowsOf(orders, "Loading orders").map((o) => ({
       id: o.id,
@@ -416,7 +433,7 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       managerId: o.manager_id ?? "",
       commissionPct: Number(o.commission_pct ?? 0),
       cancelNote: o.cancel_note ?? undefined,
-      createdAt: day(o.created_at),
+      createdAt: localDay(o.created_at),
     })),
   };
 }

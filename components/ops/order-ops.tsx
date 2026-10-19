@@ -1,6 +1,9 @@
 "use client";
 
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, Plus } from "lucide-react";
+import * as React from "react";
+import { ExpenseSheet } from "@/components/expenses/expense-sheet";
+import { categoryLabel, useExpenses } from "@/lib/expenses";
 import Link from "next/link";
 import { Badge } from "@/components/shared/badges";
 import { ProgressBar } from "@/components/shared/blocks";
@@ -11,6 +14,28 @@ import type { Order } from "@/lib/types";
 import { fmtDate, fmtTime, money, num } from "@/lib/utils";
 import { FunctionTrips } from "./dispatch";
 
+/** Running costs of an event that are not vendor bills: transport and the expenses logged against it. */
+function EventCosts({ order, transport }: { order: Order; transport: number }) {
+  const ready = useExpenses((s) => s.ready);
+  const mine = useExpenses((s) => s.expenses).filter((e) => e.orderId === order.id);
+  const [add, setAdd] = React.useState(false);
+  const spent = mine.reduce((s, e) => s + e.amount, 0);
+  return (
+    <Card className="p-4 md:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <dl className="tnum flex flex-wrap gap-x-8 gap-y-2 text-sm">
+          <div><dt className="text-xs text-text-muted">Transport</dt><dd className="font-heading text-lg font-bold">{money(transport)}</dd></div>
+          {ready && <div><dt className="text-xs text-text-muted">Expenses</dt><dd className="font-heading text-lg font-bold">{money(spent)}</dd></div>}
+          {ready && <div><dt className="text-xs text-text-muted">Total running cost</dt><dd className="font-heading text-lg font-bold">{money(transport + spent)}</dd></div>}
+        </dl>
+        {ready && <Button onClick={() => setAdd(true)}><Plus strokeWidth={1.75} />Add expense</Button>}
+      </div>
+      {mine.length > 0 && <ul className="tnum mt-3 divide-y border-t text-sm">{mine.map((e) => <li key={e.id} className="flex justify-between gap-3 py-2"><span className="min-w-0 truncate">{categoryLabel(e.category)}{e.paidTo && ` · ${e.paidTo}`}<span className="block text-xs text-text-muted">{e.number} · {fmtDate(e.date, { day: "numeric", month: "short" })}{e.photoPath ? " · bill attached" : ""}</span></span><span className="shrink-0 font-medium">{money(e.amount)}</span></li>)}</ul>}
+      <ExpenseSheet open={add} onOpenChange={setAdd} orderId={order.id} />
+    </Card>
+  );
+}
+
 /** Order tab: trips and transport cost per function, and how each function went on the day. */
 export function OrderOps({ order }: { order: Order }) {
   const trips = useOps((s) => s.trips);
@@ -20,7 +45,7 @@ export function OrderOps({ order }: { order: Order }) {
   const cost = transportCost(trips, order.id);
   return (
     <div className="space-y-6">
-      <p className="tnum rounded-xl border bg-surface px-4 py-3 text-sm">Transport cost for this order <span className="float-right font-heading font-bold">{money(cost)}</span></p>
+      <EventCosts order={order} transport={cost} />
       {functions.map((fn) => {
         const rec = onsite[fn.id];
         const done = checkSteps.filter((s) => rec?.checklist[s.id]).length;

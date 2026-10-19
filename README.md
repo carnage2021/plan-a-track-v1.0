@@ -26,9 +26,9 @@ The full roadmap, including features added after the plan was written, is in `do
 | 4A. Staff | Workers, priced tasks, attendance, payouts, payroll (D1, D2) | Built |
 | 4B. Operations | Kitchen, dispatch, on-site (D3 to D5) | Built |
 | 5A. Client billing | Schedules, reminders, invoices, credit notes, ledgers (E1) | Built |
-| 5B. Expenses and documents | Vendor bills, expenses, templates, PDFs, Razorpay, QR menus (E2, E3) | Planned |
-| 6. Reports and access | Reports, WhatsApp API, permissions (F) | Planned |
-| 7. Platform | Super admin, subscription billing, Excel import, AI add-ons (A1, A3, F4) | Planned |
+| 5B. Expenses and documents | Expenses, petty cash, day book, document designs, UPI QR, QR and public menus, Razorpay links (E2, E3) | Built (Razorpay off for now) |
+| 6. Reports, messages and access | Reports, messages and greetings, role access, activity log, data export (F) | Built |
+| 7. Platform | Super admin, plans, support, Excel import, smart assist (A1, A3, F4) | Built |
 
 ## Where the data lives
 

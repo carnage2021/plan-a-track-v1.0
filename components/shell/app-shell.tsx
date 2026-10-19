@@ -1,7 +1,16 @@
 "use client";
 
+import { useStock } from "@/components/supply/common";
+import { balanceOf, scheduleRows, useBilling } from "@/lib/billing";
+import { useOps } from "@/lib/operations";
+import { priceQuote } from "@/lib/pricing";
+import { useStaff } from "@/lib/staff";
+import { useSupply } from "@/lib/supply-store";
 import {
   Bell,
+  LifeBuoy,
+  Lock,
+  Sparkles,
   Check,
   FileText,
   Languages,
@@ -22,6 +31,9 @@ import {
   Home,
 } from "lucide-react";
 import Link from "next/link";
+import { EmptyState } from "@/components/shared/blocks";
+import { HelpSheet, PlatformBanner, PlatformGate, WhatsNewSheet } from "@/components/shell/platform-ui";
+import { usePlan } from "@/lib/platform";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import * as React from "react";
@@ -39,11 +51,11 @@ import {
   Skeleton,
 } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
-import { isActive, navFor } from "@/lib/nav";
+import { isActive, navFor, navItemFor } from "@/lib/nav";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { Locale, Role } from "@/lib/types";
 import { useTheme, useUi } from "@/lib/ui";
-import { cn, daysFromToday, initials, relativeDay } from "@/lib/utils";
+import { cn, daysFromToday, initials, isoDate, money, relativeDay } from "@/lib/utils";
 import { CommandPalette } from "./command-palette";
 
 const languages: { id: Locale; label: string }[] = [
@@ -75,7 +87,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 pb-28 pt-4 md:px-6 md:pb-10 md:pt-6">{children}</main>
+        <PlatformBanner />
+        <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 pb-28 pt-4 md:px-6 md:pb-10 md:pt-6">
+          <PlatformGate><React.Suspense fallback={null}><AccessGuard>{children}</AccessGuard></React.Suspense></PlatformGate>
+        </main>
       </div>
       <MobileTabs />
       <CommandPalette />
@@ -83,6 +98,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <PaymentSheet />
     </div>
   );
+}
+
+/** Stops a role opening a page the owner has switched off for it, even from a typed or old link. */
+function AccessGuard({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const user = useCurrentUser();
+  const access = useStore((s) => s.tenant.access);
+  const planModules = usePlan().plan?.modules;
+  const item = navItemFor(pathname);
+  const allowed = !item || navFor(user.role, access, planModules).some((n) => n.key === item.key);
+  if (allowed) return <>{children}</>;
+  return <EmptyState icon={Lock} title="You do not have access to this page" help="Your role cannot open it. Ask the owner if you need it." action={<Button variant="primary" asChild><Link href="/">Go to home</Link></Button>} />;
 }
 
 function ShellSkeleton() {
@@ -106,6 +133,8 @@ function Sidebar() {
   const t = useTranslations("nav");
   const pathname = usePathname();
   const user = useCurrentUser();
+  const access = useStore((s) => s.tenant.access);
+  const planModules = usePlan().plan?.modules;
   const tenant = useStore((s) => s.tenant);
   const collapsed = useStore((s) => s.sidebarCollapsed);
   const toggle = useStore((s) => s.toggleSidebar);
@@ -121,7 +150,7 @@ function Sidebar() {
         </div>
       </div>
       <nav className="no-scrollbar flex-1 space-y-0.5 overflow-y-auto px-2.5 py-2" aria-label="Main">
-        {navFor(user.role).map((item) => {
+        {navFor(user.role, access, planModules).map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <Link
@@ -170,6 +199,17 @@ function useAlerts() {
   const enquiries = useStore((s) => s.enquiries);
   const orders = useStore((s) => s.orders);
   const clients = useStore((s) => s.clients);
+  const items = useStore((s) => s.items);
+  const packages = useStore((s) => s.packages);
+  const slabs = useStore((s) => s.tenant.slabs);
+  const credits = useBilling((s) => s.credits);
+  // Read so that edited schedules refresh the alerts; scheduleFor reads them.
+  useBilling((s) => s.milestones);
+  const scheduleFor = useBilling((s) => s.scheduleFor);
+  const tasks = useStaff((s) => s.tasks);
+  const ingredients = useSupply((s) => s.ingredients);
+  const stock = useStock();
+  const issues = useOps((s) => s.issues);
   return React.useMemo(() => {
     const name = (id: string) => clients.find((c) => c.id === id)?.name ?? "";
     const followUps = enquiries
@@ -178,8 +218,27 @@ function useAlerts() {
     const tentative = orders
       .filter((o) => o.status === "tentative")
       .map((o) => ({ id: o.id, href: `/orders/${o.id}`, title: `${name(o.clientId)} has not paid the advance`, sub: `${o.number} is still tentative`, tone: "warning" }));
-    return [...followUps, ...tentative];
-  }, [enquiries, orders, clients]);
+    const today = isoDate(new Date());
+    const fresh = enquiries
+      .filter((e) => e.createdAt?.slice(0, 10) === today && e.stage === "new")
+      .map((e) => ({ id: `new-${e.id}`, href: "/enquiries", title: `New enquiry from ${name(e.clientId)}`, sub: `${e.eventType} · ${e.pax} guests`, tone: "info" }));
+    const received = orders.flatMap((o) => o.payments.filter((p) => p.date === today).map((p) => ({ id: `paid-${p.id}`, href: `/orders/${o.id}?tab=payments`, title: `${money(p.amount)} received from ${name(o.clientId)}`, sub: p.receiptNo, tone: "success" })));
+    const live = orders.filter((o) => o.status !== "cancelled");
+    const late = live.flatMap((o) => {
+      const grand = priceQuote(o, items, packages, slabs).grand;
+      const { bill, received: got } = balanceOf(o, grand, credits);
+      return scheduleRows(scheduleFor(o), bill, got).filter((r) => r.state === "overdue").map((r) => ({ id: `due-${r.id}`, href: `/orders/${o.id}?tab=payments`, title: `${money(r.amount - r.covered)} overdue from ${name(o.clientId)}`, sub: `${r.label} · ${r.daysLate} ${r.daysLate === 1 ? "day" : "days"} late`, tone: "danger" }));
+    });
+    const fnDate = new Map(live.flatMap((o) => o.functions.map((f) => [f.id, f.date] as const)));
+    const overdueTasks = tasks.filter((t) => t.status !== "done" && t.status !== "verified" && (fnDate.get(t.functionId) ?? "9999") < today);
+    const taskAlert = overdueTasks.length ? [{ id: "tasks", href: "/staff", title: `${overdueTasks.length} ${overdueTasks.length === 1 ? "task is" : "tasks are"} overdue`, sub: "Their event date has passed but they are not marked done", tone: "warning" }] : [];
+    const low = ingredients.filter((i) => i.reorderLevel > 0 && (stock.get(i.id) ?? 0) < i.reorderLevel);
+    const stockAlert = low.length ? [{ id: "stock", href: "/purchase", title: `${low.length} ${low.length === 1 ? "item is" : "items are"} low on stock`, sub: low.slice(0, 3).map((i) => i.name).join(", "), tone: "warning" }] : [];
+    const issueAlerts = issues.filter((i) => !i.resolved).map((i) => ({ id: `issue-${i.id}`, href: `/onsite?fn=${i.functionId}`, title: "Open issue at an event", sub: i.note, tone: "danger" }));
+    const md = today.slice(5);
+    const days = clients.flatMap((c) => [c.birthday?.slice(5) === md ? { id: `bd-${c.id}`, href: "/messages", title: `${c.name}'s birthday today`, sub: "Send a greeting", tone: "info" } : null, c.anniversary?.slice(5) === md ? { id: `an-${c.id}`, href: "/messages", title: `${c.name}'s anniversary today`, sub: "Send a greeting", tone: "info" } : null]).filter((x) => x !== null);
+    return [...issueAlerts, ...late, ...fresh, ...received, ...followUps, ...tentative, ...taskAlert, ...stockAlert, ...days];
+  }, [enquiries, orders, clients, items, packages, slabs, credits, scheduleFor, tasks, ingredients, stock, issues]);
 }
 
 function Topbar() {
@@ -192,12 +251,15 @@ function Topbar() {
   const setLocale = useStore((s) => s.setLocale);
   const setViewAs = useStore((s) => s.setViewAs);
   const signOut = useStore((s) => s.signOut);
+  const [help, setHelp] = React.useState(false);
+  const [news, setNews] = React.useState(false);
   const setSearch = useUi((s) => s.setSearch);
   const { theme, toggle } = useTheme();
   const actions = useQuickActions();
   const alerts = useAlerts();
 
   return (
+    <>
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-bg/95 px-4 md:px-6 print:hidden">
       <button
         type="button"
@@ -236,18 +298,19 @@ function Topbar() {
             {alerts.length > 0 && <span className="tnum absolute -right-0.5 -top-0.5 grid size-5 place-items-center rounded-full bg-danger text-xs font-semibold text-surface">{alerts.length}</span>}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-80">
+        <DropdownMenuContent className="max-h-[70vh] w-80 overflow-y-auto">
           <DropdownMenuLabel>{t("notifications")}</DropdownMenuLabel>
           {alerts.length === 0 && <p className="px-2 py-4 text-center text-sm text-text-muted">You are all caught up.</p>}
-          {alerts.map((a) => (
+          {alerts.slice(0, 12).map((a) => (
             <DropdownMenuItem key={a.id} className="h-auto items-start py-2" onSelect={() => router.push(a.href)}>
-              <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", a.tone === "danger" ? "bg-danger" : "bg-warning")} aria-hidden />
+              <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", a.tone === "danger" ? "bg-danger" : a.tone === "success" ? "bg-success" : a.tone === "info" ? "bg-info" : "bg-warning")} aria-hidden />
               <span className="min-w-0">
                 <span className="block truncate font-medium">{a.title}</span>
                 <span className="block truncate text-xs text-text-muted">{a.sub}</span>
               </span>
             </DropdownMenuItem>
           ))}
+          {alerts.length > 12 && <p className="px-2 py-2 text-center text-xs text-text-muted">and {alerts.length - 12} more</p>}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -294,6 +357,15 @@ function Topbar() {
               <DropdownMenuSeparator />
             </>
           )}
+          <DropdownMenuItem onSelect={() => setHelp(true)}>
+            <LifeBuoy strokeWidth={1.75} />
+            Help and support
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setNews(true)}>
+            <Sparkles strokeWidth={1.75} />
+            What&apos;s new
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => void signOut().then(() => router.replace("/login"))}>
             <LogOut strokeWidth={1.75} />
             {t("signOut")}
@@ -301,6 +373,9 @@ function Topbar() {
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
+    <HelpSheet open={help} onOpenChange={setHelp} />
+    <WhatsNewSheet open={news} onOpenChange={setNews} />
+    </>
   );
 }
 
@@ -309,6 +384,8 @@ function MobileTabs() {
   const tc = useTranslations("common");
   const pathname = usePathname();
   const user = useCurrentUser();
+  const access = useStore((s) => s.tenant.access);
+  const planModules = usePlan().plan?.modules;
   const actions = useQuickActions();
   const [more, setMore] = React.useState(false);
   const [add, setAdd] = React.useState(false);
@@ -361,7 +438,7 @@ function MobileTabs() {
 
       <Sheet open={more} onOpenChange={setMore} title={t("more")}>
         <div className="grid grid-cols-3 gap-2">
-          {navFor(user.role).map((item) => (
+          {navFor(user.role, access, planModules).map((item) => (
             <Link key={item.key} href={item.href} onClick={() => setMore(false)} className={cn("flex h-20 flex-col items-center justify-center gap-1.5 rounded-xl border px-1 text-center text-xs font-medium", isActive(pathname, item.href) ? "border-primary bg-primary-soft text-primary" : "bg-surface text-text-muted")}>
               <item.icon className="size-5" strokeWidth={1.75} />
               <span className="line-clamp-2 leading-tight">{t(item.key)}</span>

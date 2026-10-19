@@ -16,6 +16,8 @@ import type { PoStatus, PurchaseOrder } from "@/lib/supply-types";
 import { printLight } from "@/lib/ui";
 import { cn, fmtDate, fmtTime, isoDate, money, whatsappLink } from "@/lib/utils";
 import { Num } from "./common";
+import { logWhatsApp } from "@/lib/messages";
+import { useAccess } from "@/lib/access";
 
 const tone: Record<PoStatus, "neutral" | "info" | "warning" | "success" | "danger"> = { draft: "neutral", sent: "info", partial: "warning", received: "success", cancelled: "danger" };
 const label: Record<PoStatus, string> = { draft: "Draft", sent: "Sent", partial: "Part received", received: "Received", cancelled: "Cancelled" };
@@ -46,6 +48,8 @@ function PoSheet({ po, onClose }: { po: PurchaseOrder; onClose: () => void }) {
     setGot(Object.fromEntries(open.map((l) => [l.id, { qty: l.qty - (l.receivedQty ?? 0), rate: l.rate }])));
     setReceiving(true);
   };
+  const { needsOwner, limit } = useAccess();
+  const blocked = po.status === "draft" && needsOwner("po", total);
   const text = `Purchase order ${po.number} from ${tenant.name}\n\n${po.lines.map((l) => `• ${ing(l.ingredientId)?.name}: ${fmtQty(l.qty)} ${ing(l.ingredientId)?.unit} @ ₹${l.rate}`).join("\n")}\n\nTotal: ${money(total)}\nDeliver by ${fmtDate(po.expectedOn)}${po.deliverTime ? `, ${fmtTime(po.deliverTime)}` : ""} at ${po.deliverPlace}.\nPlease confirm.`;
 
   return (
@@ -65,9 +69,10 @@ function PoSheet({ po, onClose }: { po: PurchaseOrder; onClose: () => void }) {
           <>
             <Button onClick={printLight}><Printer strokeWidth={1.75} />Print</Button>
             {po.status === "draft" && <Button variant="ghost" onClick={() => { setPoStatus(po.id, "cancelled"); toast("Purchase order cancelled", { action: { label: "Undo", onClick: () => setPoStatus(po.id, "draft") } }); }}>Cancel order</Button>}
-            {(po.status === "draft" || po.status === "sent") && (
+            {blocked && <span className="text-sm text-warning">Above {money(limit("po"))}: the owner sends this one</span>}
+            {(po.status === "draft" || po.status === "sent") && !blocked && (
               <Button variant={po.status === "draft" ? "primary" : "secondary"} asChild>
-                <a href={whatsappLink(vendor?.phone ?? "", text)} target="_blank" rel="noreferrer" onClick={() => po.status === "draft" && setPoStatus(po.id, "sent")}><Send strokeWidth={1.75} />{po.status === "draft" ? "Send on WhatsApp" : "Send again"}</a>
+                <a href={whatsappLink(vendor?.phone ?? "", text)} target="_blank" rel="noreferrer" onClick={() => { if (po.status === "draft") setPoStatus(po.id, "sent"); logWhatsApp("purchase_order", vendor?.name ?? "", vendor?.phone ?? "", text, po.orderId)(); }}><Send strokeWidth={1.75} />{po.status === "draft" ? "Send on WhatsApp" : "Send again"}</a>
               </Button>
             )}
             {(po.status === "sent" || po.status === "partial") && <Button variant="primary" onClick={startReceiving}><PackageCheck strokeWidth={1.75} />Receive goods</Button>}

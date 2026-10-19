@@ -17,7 +17,7 @@ import { priceQuote } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
 import type { Client, Order } from "@/lib/types";
 import { printLight, useUi } from "@/lib/ui";
-import { cn, fmtDate, isoDate, money, moneyShort, parseDate } from "@/lib/utils";
+import { cn, fmtDate, isoDate, money, moneyShort, parseDate, localDay } from "@/lib/utils";
 
 interface OrderDue { order: Order; client?: Client; due: number; overdue: number; rows: ScheduleRow[] }
 
@@ -122,7 +122,7 @@ function Reminders({ book }: { book: OrderDue[] }) {
           <li key={row.id} className="flex flex-wrap items-center gap-3 px-4 py-3 md:px-5">
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-2 font-medium"><Link href={`/orders/${order.id}?tab=payments`} className="hover:underline">{client?.name}</Link><MilestoneBadge row={row} /></p>
-              <p className="text-sm text-text-muted">{row.label} · {order.eventType} · due {fmtDate(row.dueDate, { day: "numeric", month: "short" })}{row.remindedAt && ` · last reminded ${fmtDate(row.remindedAt.slice(0, 10), { day: "numeric", month: "short" })}`}</p>
+              <p className="text-sm text-text-muted">{row.label} · {order.eventType} · due {fmtDate(row.dueDate, { day: "numeric", month: "short" })}{row.remindedAt && ` · last reminded ${fmtDate(localDay(row.remindedAt), { day: "numeric", month: "short" })}`}</p>
             </div>
             <p className="font-heading text-lg font-bold">{money(row.amount - row.covered)}</p>
             <RemindButton order={order} row={row} />

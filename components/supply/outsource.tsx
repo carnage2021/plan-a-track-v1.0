@@ -17,6 +17,7 @@ import type { OutsourceOrder, OutsourceStatus } from "@/lib/supply-types";
 import type { Order } from "@/lib/types";
 import { cn, fmtDate, fmtTime, isoDate, money, num, whatsappLink } from "@/lib/utils";
 import { Num } from "./common";
+import { logWhatsApp } from "@/lib/messages";
 
 const flow: OutsourceStatus[] = ["draft", "sent", "accepted", "preparing", "dispatched", "delivered"];
 const label: Record<OutsourceStatus, string> = { draft: "Draft", sent: "Sent", accepted: "Accepted", preparing: "In preparation", dispatched: "Dispatched", delivered: "Delivered", cancelled: "Cancelled" };
@@ -90,7 +91,7 @@ function OutsourceCard({ o, order }: { o: OutsourceOrder; order: Order }) {
         {editable && <Button variant="ghost" onClick={() => { patch(o.id, { status: "cancelled" }); toast("Agency order cancelled", { action: { label: "Undo", onClick: () => patch(o.id, { status: o.status }) } }); }}>Cancel</Button>}
         {editable && (
           <Button variant={o.status === "draft" ? "primary" : "secondary"} asChild>
-            <a href={whatsappLink(vendor?.phone ?? "", text)} target="_blank" rel="noreferrer" onClick={() => o.status === "draft" && patch(o.id, { status: "sent" })}><Send strokeWidth={1.75} />{o.status === "draft" ? "Send on WhatsApp" : "Send again"}</a>
+            <a href={whatsappLink(vendor?.phone ?? "", text)} target="_blank" rel="noreferrer" onClick={() => { if (o.status === "draft") patch(o.id, { status: "sent" }); logWhatsApp("outsource_order", vendor?.name ?? "", vendor?.phone ?? "", text, o.orderId)(); }}><Send strokeWidth={1.75} />{o.status === "draft" ? "Send on WhatsApp" : "Send again"}</a>
           </Button>
         )}
         {next[o.status] && <Button variant={o.status === "sent" ? "secondary" : "primary"} onClick={advance}><Truck strokeWidth={1.75} />{next[o.status]}</Button>}

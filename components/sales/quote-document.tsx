@@ -2,7 +2,7 @@
 
 import { CalendarDays, Clock, MapPin, Users } from "lucide-react";
 import * as React from "react";
-import { BrandMark } from "@/components/settings/tenant-forms";
+import { DocHeader, DocPayBlock, docFrame, docStyle, useDocs } from "@/components/documents/theme";
 import { VegMark } from "@/components/shared/badges";
 import { priceFunction, priceQuote } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
@@ -38,22 +38,11 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
   const packages = useStore((s) => s.packages);
   const totals = priceQuote(data, items, packages, tenant.slabs);
   const showPrices = variant !== "menu";
+  const docs = useDocs();
 
   return (
-    <article className="overflow-hidden rounded-xl border bg-surface text-sm shadow-card print:rounded-none print:border-0 print:shadow-none" style={{ "--brand": tenant.brandColor } as React.CSSProperties}>
-      <header className="flex flex-wrap items-center justify-between gap-4 bg-brand px-5 py-5 text-brand-fg md:px-8">
-        <div className="flex min-w-0 items-center gap-3">
-          <BrandMark className="size-12" />
-          <div className="min-w-0">
-            <p className="truncate font-heading text-xl font-bold">{tenant.name}</p>
-            <p className="truncate text-xs opacity-80">{tenant.tagline}</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="font-heading text-base font-semibold">{titles[variant]}</p>
-          {data.number && <p className="tnum text-xs opacity-80">{data.number}{data.version && data.version > 1 ? ` · v${data.version}` : ""}</p>}
-        </div>
-      </header>
+    <article className={docFrame(docs.theme)} style={docStyle(tenant.brandColor, docs.theme)}>
+      <DocHeader title={titles[variant]} lines={[data.number ? `${data.number}${data.version && data.version > 1 ? ` · v${data.version}` : ""}` : ""]} />
 
       <div className="space-y-6 px-5 py-6 md:px-8">
         <div className="flex flex-wrap justify-between gap-4">
@@ -151,9 +140,10 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
             <p className="font-medium text-text">{tenant.name}</p>
             <p>{tenant.address}</p>
             <p className="tnum">{tenant.phone} · {tenant.email}</p>
-            {tenant.gstin && showPrices && <p className="tnum">GSTIN {tenant.gstin} · UPI {tenant.upiId}</p>}
+            {tenant.gstin && showPrices && <p className="tnum">GSTIN {tenant.gstin}</p>}
           </div>
         </footer>
+        {showPrices && variant !== "quotation" && <DocPayBlock due={data.paid !== undefined ? Math.max(0, totals.grand - data.paid) : totals.grand} note={data.number} />}
       </div>
     </article>
   );

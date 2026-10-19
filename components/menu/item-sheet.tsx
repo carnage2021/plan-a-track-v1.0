@@ -16,6 +16,7 @@ import { useStore } from "@/lib/store";
 import { useSupply } from "@/lib/supply-store";
 import type { MenuItem, MenuPackage } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAccess } from "@/lib/access";
 
 /** Centre-crops to 4:3 and compresses to WebP at 800 x 600, in the browser. */
 async function cropToWebp(file: File): Promise<Blob> {
@@ -61,6 +62,7 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const margin = form.price ? ((form.price - form.cost) / form.price) * 100 : 0;
+  const { hidePrices } = useAccess();
   const errors = { name: form.name.trim() ? "" : "Give the dish a name", price: form.price > 0 ? "" : "Enter the selling price" };
 
   const addPhoto = async (f?: File) => {
@@ -128,10 +130,10 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
           <Field label="Unit">
             <Select value={form.unit} onChange={(e) => set("unit", e.target.value as MenuItem["unit"])}>{["plate", "glass", "piece", "kg"].map((u) => <option key={u}>{u}</option>)}</Select>
           </Field>
-          <Field label="Cost price"><MoneyInput value={form.cost} onChange={(v) => set("cost", v)} /></Field>
-          <Field label="Selling price" error={touched ? errors.price : ""}><MoneyInput value={form.price} onChange={(v) => set("price", v)} /></Field>
+          {!hidePrices && <Field label="Cost price"><MoneyInput value={form.cost} onChange={(v) => set("cost", v)} /></Field>}
+          {!hidePrices && <Field label="Selling price" error={touched ? errors.price : ""}><MoneyInput value={form.price} onChange={(v) => set("price", v)} /></Field>}
         </div>
-        {form.price > 0 && <p className="flex items-center justify-between rounded-lg bg-surface-muted px-3 py-2 text-xs text-text-muted">Margin on this dish<Badge tone={marginTone(margin)}>{Math.round(margin)}%</Badge></p>}
+        {form.price > 0 && !hidePrices && <p className="flex items-center justify-between rounded-lg bg-surface-muted px-3 py-2 text-xs text-text-muted">Margin on this dish<Badge tone={marginTone(margin)}>{Math.round(margin)}%</Badge></p>}
         <Field label="Description"><Textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="How it is made and served" /></Field>
         <div className="divide-y rounded-xl border">
           {([["active", "Available on the menu", "Switch off to hide it from new quotations."], ["bestseller", "Bestseller", "Shown with a gold tag."], ["seasonal", "Seasonal", "Only available part of the year."], ["outsourced", "Outsourced", "Made by a third-party vendor, not in-house."]] as const).map(([key, label, help]) => (

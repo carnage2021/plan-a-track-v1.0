@@ -130,6 +130,8 @@ function ClientSheet({ row, onClose }: { row: Row; onClose: () => void }) {
             <Field label="GSTIN" hint="For corporate invoices."><Input className="uppercase" maxLength={15} value={form.gstin ?? ""} onChange={(e) => set("gstin", e.target.value || undefined)} /></Field>
             <Field label="Client type"><Select value={form.type} onChange={(e) => set("type", e.target.value as Client["type"])}>{(Object.keys(typeLabel) as Client["type"][]).map((t) => <option key={t} value={t}>{typeLabel[t]}</option>)}</Select></Field>
             <Field label="Documents in"><Select value={form.language} onChange={(e) => set("language", e.target.value as Locale)}>{(Object.keys(langLabel) as Locale[]).map((l) => <option key={l} value={l}>{langLabel[l]}</option>)}</Select></Field>
+            <Field label="Birthday" hint="For an automatic greeting each year."><Input type="date" value={form.birthday ?? ""} onChange={(e) => set("birthday", e.target.value || undefined)} /></Field>
+            <Field label="Anniversary"><Input type="date" value={form.anniversary ?? ""} onChange={(e) => set("anniversary", e.target.value || undefined)} /></Field>
             <Field label="Address" className="sm:col-span-2"><Textarea value={form.address ?? ""} onChange={(e) => set("address", e.target.value || undefined)} /></Field>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -18,6 +18,7 @@ import { marginTone } from "@/lib/pricing";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { MenuItem, MenuPackage } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
+import { useAccess } from "@/lib/access";
 
 function Menu() {
   const params = useSearchParams();
@@ -27,7 +28,8 @@ function Menu() {
   const raisePrices = useStore((s) => s.raisePrices);
   const restoreItems = useStore((s) => s.restoreItems);
   const canEdit = role === "owner" || role === "sales";
-  const seesCost = role === "owner" || role === "sales";
+  const { hidePrices } = useAccess();
+  const seesCost = (role === "owner" || role === "sales") && !hidePrices;
 
   const [category, setCategory] = React.useState("all");
   const [query, setQuery] = React.useState(params.get("q") ?? "");
@@ -116,7 +118,7 @@ function Menu() {
                           <p className="truncate text-xs text-text-muted">{i.nameLocal || "No local name"}</p>
                           <div className="mt-2 flex items-end justify-between gap-2">
                             <div className="tnum min-w-0">
-                              <p className="truncate text-sm font-medium">{priceLabel(i)}</p>
+                              {!hidePrices && <p className="truncate text-sm font-medium">{priceLabel(i)}</p>}
                               {seesCost && <p className="flex items-center gap-1.5 text-xs text-text-muted">Cost {money(i.cost)}<Badge tone={marginTone(margin)} className="h-5 px-1.5">{Math.round(margin)}%</Badge></p>}
                             </div>
                             {canEdit && <Switch checked={i.active} label={`${i.name} available`} onCheckedChange={(v) => { patchItems([i.id], { active: v }); toast(`${i.name} switched ${v ? "on" : "off"}`, { action: { label: "Undo", onClick: () => patchItems([i.id], { active: !v }) } }); }} />}

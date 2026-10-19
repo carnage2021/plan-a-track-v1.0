@@ -34,6 +34,16 @@ export function Switch({ checked, onCheckedChange, label }: { checked: boolean; 
   );
 }
 
+/** A switch with its label shown beside it; Switch alone only names itself for screen readers. */
+export function ToggleRow({ checked, onCheckedChange, label, help }: { checked: boolean; onCheckedChange: (v: boolean) => void; label: string; help?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0"><p className="text-sm font-medium">{label}</p>{help && <p className="text-xs text-text-muted">{help}</p>}</div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} label={label} />
+    </div>
+  );
+}
+
 export const Tabs = RTabs.Root;
 
 export function TabsList({ className, ...props }: React.ComponentProps<typeof RTabs.List>) {

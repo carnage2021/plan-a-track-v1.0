@@ -7,7 +7,7 @@ import { Badge } from "@/components/shared/badges";
 import { EmptyState, MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
-import { Card, Switch } from "@/components/ui/primitives";
+import { Card, ToggleRow } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { mediaUrl } from "@/lib/db";
 import { portions } from "@/lib/kitchen";
@@ -17,6 +17,7 @@ import { useSupply } from "@/lib/supply-store";
 import type { EventFunction, Order } from "@/lib/types";
 import { cn, fmtDate, fmtTime, money, num, whatsappLink } from "@/lib/utils";
 import { PhotoButton } from "./common";
+import { logWhatsApp } from "@/lib/messages";
 
 const tripTone: Record<TripStatus, "neutral" | "warning" | "primary" | "success"> = { planned: "neutral", loading: "warning", dispatched: "primary", delivered: "success" };
 export const TripBadge = ({ status }: { status: TripStatus }) => <Badge tone={tripTone[status]}><span className="size-1.5 rounded-full bg-current" aria-hidden />{tripLabel[status]}</Badge>;
@@ -76,7 +77,7 @@ export function VehicleSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             <Field label="Registration number"><Input value={edit.regNumber} placeholder="GJ 01 AB 1234" onChange={(e) => set({ regNumber: e.target.value.toUpperCase() })} /></Field>
             <Field label="Capacity"><Input value={edit.capacity} placeholder="1 tonne, 40 crates" onChange={(e) => set({ capacity: e.target.value })} /></Field>
           </div>
-          <Switch checked={edit.hired} onCheckedChange={(hired) => set({ hired, vendorId: hired ? edit.vendorId : undefined })} label="Hired, not our own" />
+          <ToggleRow checked={edit.hired} onCheckedChange={(hired) => set({ hired, vendorId: hired ? edit.vendorId : undefined })} label="Hired, not our own" />
           {edit.hired && (
             <Field label="Transport vendor" hint={transport.length ? undefined : "Add a vendor of type Transport on the Vendors page to pick it here."}>
               <Select value={edit.vendorId ?? ""} onChange={(e) => set({ vendorId: e.target.value || undefined })}>
@@ -90,7 +91,7 @@ export function VehicleSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             <Field label="Usual driver"><Input value={edit.driverName} onChange={(e) => set({ driverName: e.target.value })} /></Field>
             <Field label="Driver phone"><Input inputMode="tel" value={edit.driverPhone} onChange={(e) => set({ driverPhone: e.target.value })} /></Field>
           </div>
-          {edit.id && <Switch checked={edit.active} onCheckedChange={(active) => set({ active })} label="In use (switch off to hide it from new trips)" />}
+          {edit.id && <ToggleRow checked={edit.active} onCheckedChange={(active) => set({ active })} label="In use" help="Switch off to hide it from new trips" />}
         </div>
       ) : vehicles.length === 0 ? (
         <EmptyState icon={Truck} title="No vehicles yet" help="Add the vans and trucks that carry food to venues, your own and hired, so trips can be planned on them." />
@@ -216,7 +217,7 @@ function TripCard({ trip, fn, venue, onEdit }: { trip: Trip; fn: EventFunction; 
         </div>
         <div className="flex gap-1">
           {trip.driverPhone && <Button variant="ghost" size="icon" asChild aria-label="Call the driver"><a href={`tel:${trip.driverPhone}`}><Phone strokeWidth={1.75} /></a></Button>}
-          {trip.driverPhone && <Button variant="ghost" size="icon" asChild aria-label="Send the driver the trip on WhatsApp"><a href={whatsappLink(trip.driverPhone, brief)} target="_blank" rel="noreferrer"><MessageCircle strokeWidth={1.75} /></a></Button>}
+          {trip.driverPhone && <Button variant="ghost" size="icon" asChild aria-label="Send the driver the trip on WhatsApp"><a href={whatsappLink(trip.driverPhone, brief)} target="_blank" rel="noreferrer" onClick={logWhatsApp("trip", trip.driverName || "Driver", trip.driverPhone, brief, trip.orderId)}><MessageCircle strokeWidth={1.75} /></a></Button>}
           {!delivered && <Button variant="ghost" size="icon" aria-label="Edit trip" onClick={onEdit}><Pencil strokeWidth={1.75} /></Button>}
           {trip.status === "planned" && <Button variant="ghost" size="icon" aria-label="Remove trip" onClick={() => { removeTrip(trip.id); toast("Trip removed"); }}><Trash2 strokeWidth={1.75} /></Button>}
         </div>

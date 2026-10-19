@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { BrandMark } from "@/components/settings/tenant-forms";
+import { DocHeader, DocPayBlock, docFrame, docStyle, useDocs } from "@/components/documents/theme";
 import { modeLabel } from "@/components/sales/payment-sheet";
 import { cateringSac, rupeesInWords, type CreditNote, type Invoice } from "@/lib/billing";
 import { useStore } from "@/lib/store";
@@ -10,36 +10,16 @@ import { fmtDate, money, num } from "@/lib/utils";
 
 const rupees = (n: number) => money(Math.round(n * 100) / 100);
 
-function DocHeader({ title, number, date }: { title: string; number: string; date: string }) {
-  const tenant = useStore((s) => s.tenant);
-  return (
-    <header className="flex flex-wrap items-center justify-between gap-4 bg-brand px-5 py-5 text-brand-fg md:px-8">
-      <div className="flex min-w-0 items-center gap-3">
-        <BrandMark className="size-12" />
-        <div className="min-w-0">
-          <p className="truncate font-heading text-xl font-bold">{tenant.name}</p>
-          <p className="text-xs opacity-80">{[tenant.address, tenant.phone].filter(Boolean).join(" · ")}</p>
-          {tenant.gstin && <p className="tnum text-xs opacity-80">GSTIN {tenant.gstin}</p>}
-        </div>
-      </div>
-      <div className="text-right">
-        <p className="font-heading text-base font-semibold">{title}</p>
-        <p className="tnum text-xs opacity-80">{number}</p>
-        <p className="tnum text-xs opacity-80">{fmtDate(date)}</p>
-      </div>
-    </header>
-  );
-}
-
 /** Proforma or GST tax invoice, printed from the frozen copy taken when it was issued. */
 export function InvoiceDocument({ invoice, order }: { invoice: Invoice; order: Order }) {
   const tenant = useStore((s) => s.tenant);
+  const docs = useDocs();
   const s = invoice.snapshot;
   const tax = invoice.kind === "tax";
   const half = s.gst / 2;
   return (
-    <article className="overflow-hidden rounded-xl border bg-surface text-sm shadow-card print:rounded-none print:border-0 print:shadow-none" style={{ "--brand": tenant.brandColor } as React.CSSProperties}>
-      <DocHeader title={tax ? "Tax invoice" : "Proforma invoice"} number={invoice.number} date={invoice.issuedOn} />
+    <article className={docFrame(docs.theme)} style={docStyle(tenant.brandColor, docs.theme)}>
+      <DocHeader contact title={tax ? "Tax invoice" : "Proforma invoice"} lines={[invoice.number, fmtDate(invoice.issuedOn)]} />
       <div className="space-y-6 px-5 py-6 md:px-8">
         <div className="flex flex-wrap justify-between gap-4">
           <div>
@@ -84,17 +64,8 @@ export function InvoiceDocument({ invoice, order }: { invoice: Invoice; order: O
         </dl>
         <p className="text-xs"><span className="text-text-muted">Amount in words: </span>{rupeesInWords(s.total)}</p>
 
-        <footer className="grid gap-4 border-t pt-4 text-xs text-text-muted sm:grid-cols-2">
-          <div>
-            {tenant.bankAccount && <p className="tnum">Bank: {tenant.bankName} · A/c {tenant.bankAccount} · IFSC {tenant.ifsc}</p>}
-            {tenant.upiId && <p className="tnum">UPI: {tenant.upiId}</p>}
-            {!tax && <p className="mt-1">This is a proforma for payment and is not a tax invoice.</p>}
-          </div>
-          <div className="text-right">
-            <p className="mt-8 border-t border-dashed pt-1">For {tenant.name}</p>
-            <p>Authorised signatory</p>
-          </div>
-        </footer>
+        {!tax && <p className="text-xs text-text-muted">This is a proforma for payment and is not a tax invoice.</p>}
+        <DocPayBlock due={Math.max(0, s.total - s.paid)} note={invoice.number} />
       </div>
     </article>
   );
@@ -102,10 +73,11 @@ export function InvoiceDocument({ invoice, order }: { invoice: Invoice; order: O
 
 export function CreditNoteDocument({ note, order }: { note: CreditNote; order: Order }) {
   const tenant = useStore((s) => s.tenant);
+  const docs = useDocs();
   const client = useStore((s) => s.clients.find((c) => c.id === order.clientId));
   return (
-    <article className="overflow-hidden rounded-xl border bg-surface text-sm shadow-card print:rounded-none print:border-0 print:shadow-none" style={{ "--brand": tenant.brandColor } as React.CSSProperties}>
-      <DocHeader title={note.refundAmount ? "Credit note and refund receipt" : "Credit note"} number={note.number} date={note.issuedOn} />
+    <article className={docFrame(docs.theme)} style={docStyle(tenant.brandColor, docs.theme)}>
+      <DocHeader contact title={note.refundAmount ? "Credit note and refund receipt" : "Credit note"} lines={[note.number, fmtDate(note.issuedOn)]} />
       <div className="space-y-5 px-5 py-6 md:px-8">
         <div className="flex flex-wrap justify-between gap-4">
           <div><p className="text-xs text-text-muted">Issued to</p><p className="font-heading text-lg font-semibold">{client?.name}</p></div>
@@ -118,7 +90,7 @@ export function CreditNoteDocument({ note, order }: { note: CreditNote; order: O
           {note.amount > note.refundAmount && <div className="flex justify-between"><dt className="text-text-muted">Adjusted against the bill</dt><dd>{money(note.amount - note.refundAmount)}</dd></div>}
         </dl>
         <p className="text-xs"><span className="text-text-muted">Amount in words: </span>{rupeesInWords(note.amount)}</p>
-        <p className="pt-6 text-right text-xs text-text-muted"><span className="inline-block border-t border-dashed pt-1">For {tenant.name}, authorised signatory</span></p>
+        <DocPayBlock due={0} />
       </div>
     </article>
   );

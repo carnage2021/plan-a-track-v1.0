@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowLeft, Ban, CalendarDays, CheckCircle2, Clock, FileQuestion, FileText, History, MapPin, Phone, Play, Printer, Receipt, Send, Users, ClipboardCheck, Tags, UtensilsCrossed, Wallet } from "lucide-react";
+import { ArrowLeft, Ban, CalendarDays, CheckCircle2, Clock, FileQuestion, FileText, History, MapPin, Phone, Play, Printer, QrCode, Receipt, Send, Users, ClipboardCheck, Tags, UtensilsCrossed, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { ReceiptPreview, modeLabel, receiptText } from "@/components/sales/payment-sheet";
+import { TableQr } from "@/components/documents/table-qr";
 import { EventSheet } from "@/components/sales/event-sheet";
 import { NamePlates } from "@/components/sales/name-plates";
 import { QuoteDocument } from "@/components/sales/quote-document";
@@ -29,8 +30,9 @@ import { useBilling } from "@/lib/billing";
 import { useSupply } from "@/lib/supply-store";
 import { useStore } from "@/lib/store";
 import type { EventFunction, MenuItem, Order, Payment } from "@/lib/types";
-import { printLight, useUi } from "@/lib/ui";
+import { printLight, printThermal, useUi } from "@/lib/ui";
 import { fmtDate, fmtTime, money, num, whatsappLink } from "@/lib/utils";
+import { logWhatsApp } from "@/lib/messages";
 
 const laterTabs: { id: string; label: string; phase: number }[] = [];
 
@@ -102,6 +104,7 @@ function OrderView({ order }: { order: Order }) {
   const [docView, setDocView] = React.useState<"confirmation" | "menu" | null>(null);
   const [plates, setPlates] = React.useState(false);
   const [eventSheet, setEventSheet] = React.useState(false);
+  const [tableQr, setTableQr] = React.useState(false);
   const locked = order.status === "cancelled" || order.status === "completed";
   const doc = { ...order, clientName: client?.name ?? "", clientPhone: client?.phone, date: order.createdAt, paid };
 
@@ -309,6 +312,7 @@ function OrderView({ order }: { order: Order }) {
               <li><button type="button" onClick={() => setDocView("menu")} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><UtensilsCrossed className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Menu card</span></button></li>
               <li><button type="button" onClick={() => setEventSheet(true)} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><ClipboardCheck className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Event sheet</span><span className="text-xs text-text-muted">For the event manager</span></button></li>
               <li><button type="button" onClick={() => setPlates(true)} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><Tags className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Counter name plates</span><span className="text-xs text-text-muted">English and Gujarati</span></button></li>
+              <li><button type="button" onClick={() => setTableQr(true)} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><QrCode className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Table menu QR</span><span className="text-xs text-text-muted">For guests to scan</span></button></li>
               {order.payments.map((p) => <li key={p.id}><button type="button" onClick={() => setReceipt(p)} className="flex h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-muted/60 md:px-5"><Receipt className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Payment receipt</span><span className="tnum text-xs text-text-muted">{p.receiptNo}</span></button></li>)}
             </ul>
           </Card>
@@ -337,13 +341,18 @@ function OrderView({ order }: { order: Order }) {
         {receipt && (
           <div className="space-y-4">
             <ReceiptPreview order={order} amount={receipt.amount} mode={receipt.mode} receiptNo={receipt.receiptNo} date={receipt.date} balance={due} />
-            <Button variant="primary" size="lg" className="w-full" asChild><a href={whatsappLink(client?.phone ?? "", receiptText(tenant.name, client?.name ?? "", order, receipt, due))} target="_blank" rel="noreferrer"><Send strokeWidth={1.75} />Send on WhatsApp</a></Button>
+            <div data-thermal-hide className="flex flex-wrap gap-2">
+              <Button variant="primary" size="lg" className="flex-1" asChild><a href={whatsappLink(client?.phone ?? "", receiptText(tenant.name, client?.name ?? "", order, receipt, due))} target="_blank" rel="noreferrer" onClick={logWhatsApp("receipt", client?.name ?? "", client?.phone ?? "", receiptText(tenant.name, client?.name ?? "", order, receipt, due), order.id)}><Send strokeWidth={1.75} />Send on WhatsApp</a></Button>
+              <Button size="lg" onClick={printThermal}><Printer strokeWidth={1.75} />Print 80 mm</Button>
+              <Button size="lg" variant="ghost" onClick={printLight}><Printer strokeWidth={1.75} />A4</Button>
+            </div>
           </div>
         )}
       </Sheet>
 
       <NamePlates order={order} open={plates} onOpenChange={setPlates} />
       <EventSheet order={order} open={eventSheet} onOpenChange={setEventSheet} />
+      <TableQr order={order} open={tableQr} onOpenChange={setTableQr} />
 
       <Sheet open={!!docView} onOpenChange={(o) => !o && setDocView(null)} title={docView === "menu" ? "Menu card" : "Booking confirmation"} wide footer={<Button onClick={printLight}><Printer strokeWidth={1.75} />Print or PDF</Button>}>
         {docView && <QuoteDocument data={doc} variant={docView} />}

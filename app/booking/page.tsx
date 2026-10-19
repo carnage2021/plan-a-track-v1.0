@@ -18,6 +18,7 @@ import { useCurrentUser, useStore } from "@/lib/store";
 import type { Order } from "@/lib/types";
 import { useUi } from "@/lib/ui";
 import { fmtDate, money, num, whatsappLink } from "@/lib/utils";
+import { logWhatsApp } from "@/lib/messages";
 
 const steps = ["Client and event", "Menu", "Extras and total", "Confirm"];
 
@@ -42,7 +43,7 @@ function Booked({ order, onNew }: { order: Order; onNew: () => void }) {
       </Card>
       <div className="mt-6 flex flex-col gap-2">
         {due > 0 && <Button variant={paid === 0 ? "primary" : "secondary"} size="lg" onClick={() => openPayment(order.id)}><Wallet strokeWidth={1.75} />{paid === 0 ? "Record the advance" : "Record another payment"}</Button>}
-        <Button variant={paid > 0 ? "primary" : "secondary"} size="lg" asChild><a href={whatsappLink(client?.phone ?? "", text)} target="_blank" rel="noreferrer"><Send strokeWidth={1.75} />Send confirmation on WhatsApp</a></Button>
+        <Button variant={paid > 0 ? "primary" : "secondary"} size="lg" asChild><a href={whatsappLink(client?.phone ?? "", text)} target="_blank" rel="noreferrer" onClick={logWhatsApp("confirmation", client?.name ?? "", client?.phone ?? "", text)}><Send strokeWidth={1.75} />Send confirmation on WhatsApp</a></Button>
         <div className="grid grid-cols-2 gap-2">
           <Button size="lg" asChild><Link href={`/orders/${order.id}`}><ClipboardList strokeWidth={1.75} />Open order</Link></Button>
           <Button size="lg" onClick={onNew}><Plus strokeWidth={1.75} />New booking</Button>

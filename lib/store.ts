@@ -14,6 +14,8 @@ import { useBilling } from "./billing";
 import { useExpenses } from "./expenses";
 import { useMessages } from "./messages";
 import { eventsThisMonth, usePlatform } from "./platform";
+import { useLabels } from "./labels";
+import { withBranch } from "./branch";
 import { useStaff } from "./staff";
 import { useSupply } from "./supply-store";
 import type {
@@ -41,6 +43,11 @@ import { addDays, financialYear, isoDate, uid } from "./utils";
 // after sign-in; every action updates it at once and writes the change to the database behind it.
 
 interface Data {
+  /** Branch picked in the top bar, kept between visits; "" for all branches */
+  branchPref: string;
+  branches: { id: string; name: string; address: string }[];
+  branchesEnabled: boolean;
+  myBranch: string;
   tenantId: string;
   tenant: Tenant;
   users: TeamUser[];
@@ -72,6 +79,8 @@ interface Actions {
   updateTenant: (patch: Partial<Tenant>) => void;
   uploadMedia: (file: Blob, name: string) => Promise<string>;
   setLocale: (locale: Locale) => void;
+  /** Shows one branch (or all, with "") and reloads the data for it. */
+  setBranch: (branchId: string) => Promise<void>;
   setViewAs: (role?: Role) => void;
   toggleSidebar: () => void;
   addUser: (user: Omit<TeamUser, "id">) => void;
@@ -105,7 +114,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [],
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "",
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -129,6 +138,7 @@ export const useStore = create<Store>()(
       locale: "en",
       sidebarCollapsed: false,
       drafts: {},
+      branchPref: "",
 
       init: async () => {
         const sb = supabase();
@@ -150,14 +160,14 @@ export const useStore = create<Store>()(
         const sb = supabase();
         try {
           const { data } = await sb.auth.getSession();
-          const loaded = data.session ? await loadAll(sb, data.session.user.id) : null;
+          const loaded = data.session ? await loadAll(sb, data.session.user.id, get().branchPref) : null;
           if (!loaded) {
             set({ ...signedOut, hydrated: true });
             return false;
           }
           const { me, ...rest } = loaded;
           set({ ...rest, currentUserId: me.id, myRole: me.role, signedIn: true, hydrated: true });
-          await Promise.all([useSupply.getState().load(), useStaff.getState().load(), useKitchen.getState().load(), useOps.getState().load(), useBilling.getState().load(), useExpenses.getState().load(), useMessages.getState().load(), usePlatform.getState().load()]);
+          await Promise.all([useSupply.getState().load(), useStaff.getState().load(), useKitchen.getState().load(), useOps.getState().load(), useBilling.getState().load(), useExpenses.getState().load(), useMessages.getState().load(), usePlatform.getState().load(), useLabels.getState().load()]);
           return true;
         } catch (e) {
           toast.error("Could not load your data", { description: e instanceof Error ? e.message : undefined });
@@ -195,6 +205,10 @@ export const useStore = create<Store>()(
       },
 
       setLocale: (locale) => set({ locale }),
+      setBranch: async (branchId) => {
+        set({ branchPref: branchId });
+        await get().reload();
+      },
       setViewAs: (viewAs) => set({ viewAs }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
@@ -227,7 +241,8 @@ export const useStore = create<Store>()(
         const id = enquiry.id ?? uid();
         const saved: Enquiry = { ...enquiry, id, createdAt: get().enquiries.find((e) => e.id === id)?.createdAt ?? today() };
         set((s) => ({ enquiries: enquiry.id ? s.enquiries.map((e) => (e.id === id ? saved : e)) : [saved, ...s.enquiries] }));
-        background((sb) => run(sb.from("enquiries").upsert(enquiryRow(saved)), "Saving the enquiry"));
+        // A new enquiry is filed under the branch being shown; editing one never moves it.
+        background((sb) => run(sb.from("enquiries").upsert(enquiry.id ? enquiryRow(saved) : withBranch(enquiryRow(saved))), "Saving the enquiry"));
         return id;
       },
       moveEnquiry: (id, stage, lostReason) => {
@@ -405,7 +420,7 @@ export const useStore = create<Store>()(
       name: "catering-prefs-v1",
       skipHydration: true,
       // Only preferences and unfinished drafts live in the browser; everything else is in Supabase.
-      partialize: (s) => ({ locale: s.locale, sidebarCollapsed: s.sidebarCollapsed, drafts: s.drafts }),
+      partialize: (s) => ({ locale: s.locale, sidebarCollapsed: s.sidebarCollapsed, drafts: s.drafts, branchPref: s.branchPref }),
     },
   ),
 );

@@ -1,3 +1,4 @@
+import { inBranch } from "./branch";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Asset,
@@ -100,8 +101,9 @@ export async function loadSupply(sb: SB): Promise<SupplyData> {
   return {
     ingredients: ingredients.map((i) => ({ id: i.id, name: i.name, unit: i.unit, section: i.section, reorderLevel: Number(i.reorder_level), lastRate: Number(i.last_rate), location: i.location, expiresOn: i.expires_on ? day(i.expires_on) : undefined })),
     recipes: recipes.map((r) => ({ itemId: r.item_id, ingredientId: r.ingredient_id, qty: Number(r.qty) })),
-    stores: stores.map((s) => ({ id: s.id, name: s.name })),
-    movements: movements.map((m) => ({ id: m.id, ingredientId: m.ingredient_id, storeId: m.store_id, type: m.movement, qty: Number(m.qty), rate: m.rate === null ? undefined : Number(m.rate), note: m.note, orderId: m.order_id ?? undefined, poId: m.po_id ?? undefined, at: day(m.created_at) })),
+    // A branch sees its own stores (and those with no branch), and only the stock movements in them.
+    stores: stores.filter(inBranch).map((s) => ({ id: s.id, name: s.name })),
+    movements: movements.filter((m) => stores.some((s) => s.id === m.store_id && inBranch(s))).map((m) => ({ id: m.id, ingredientId: m.ingredient_id, storeId: m.store_id, type: m.movement, qty: Number(m.qty), rate: m.rate === null ? undefined : Number(m.rate), note: m.note, orderId: m.order_id ?? undefined, poId: m.po_id ?? undefined, at: day(m.created_at) })),
     vendors: vendors.map((v) => ({ id: v.id, name: v.name, type: v.vendor_type, phone: v.phone, gstin: v.gstin, terms: v.payment_terms, rating: v.rating, notes: v.notes })),
     vendorRates: rates.map((r) => ({ vendorId: r.vendor_id, ingredientId: r.ingredient_id, rate: Number(r.rate) })),
     purchaseOrders: pos.map((p) => ({

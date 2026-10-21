@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronUp, Copy, Eye, EyeOff, LayoutGrid, List, Package, Plus, Search, Star, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronUp, Copy, Eye, EyeOff, LayoutGrid, List, Package, Plus, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import * as React from "react";
 import { Badge, VegMark, dietLabel } from "@/components/shared/badges";
 import { PaxInput } from "@/components/shared/blocks";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Select, Textarea } from "@/components/ui/input";
 import { Chip, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
+import { useAccess } from "@/lib/access";
 import { categoryIcon } from "@/lib/icons";
 import { marginTone, priceFunction, priceQuote } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
@@ -26,7 +27,7 @@ interface Props {
   clientId?: string;
   /** Presentation mode used with the client: larger photos, no internal information unless toggled */
   booking?: boolean;
-  /** Sticky offset of the summary panel below the page header */
+  /** Sticky offset of the category bar and summary panel below the page header */
   top?: number;
   /** Buttons shown under the totals */
   actions: React.ReactNode;
@@ -38,17 +39,21 @@ const priceBands = [
   { label: "Up to ₹30", max: 30 },
   { label: "Up to ₹50", max: 50 },
   { label: "Up to ₹80", max: 80 },
+  { label: "Up to ₹120", max: 120 },
 ];
 
-/** The showpiece screen (G6): photo grid of dishes with a live plate summary. */
+/**
+ * The showpiece screen (G6), laid out like a showroom: sticky category tabs over one long, sectioned
+ * photo menu, and the plate building up on the right. Tabs jump to a section and follow the scroll.
+ */
 export function MenuSelector({ functions, onChange, activeId, onActive, extras, discount, clientId, booking, top = 72, actions }: Props) {
   const allItems = useStore((s) => s.items);
   const categories = useStore((s) => s.categories);
   const packages = useStore((s) => s.packages);
   const orders = useStore((s) => s.orders);
   const tenant = useStore((s) => s.tenant);
+  const { hidePrices } = useAccess();
 
-  const [category, setCategory] = React.useState("all");
   const [query, setQuery] = React.useState("");
   const [diets, setDiets] = React.useState<Diet[]>([]);
   const [bestsellers, setBestsellers] = React.useState(false);
@@ -56,11 +61,25 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const [cuisine, setCuisine] = React.useState("");
   const [priceMax, setPriceMax] = React.useState(0);
   const [sort, setSort] = React.useState<"popular" | "price" | "name">("popular");
+  const [more, setMore] = React.useState(false);
   const [view, setView] = React.useState<"grid" | "list">("grid");
   const [detail, setDetail] = React.useState<MenuItem | null>(null);
   const [pickPackage, setPickPackage] = React.useState(false);
   const [summaryOpen, setSummaryOpen] = React.useState(false);
   const [staff, setStaff] = React.useState(!booking);
+  const [current, setCurrent] = React.useState("");
+  const sections = React.useRef(new Map<string, HTMLElement>());
+  const tabsRef = React.useRef<HTMLDivElement>(null);
+
+  // The app's sidebar folds away while the menu is open, for room; it comes back as it was afterwards.
+  React.useEffect(() => {
+    if (booking) return;
+    const before = useStore.getState().sidebarCollapsed;
+    useStore.setState({ sidebarCollapsed: true });
+    return () => {
+      useStore.setState({ sidebarCollapsed: before });
+    };
+  }, [booking]);
 
   const fn = functions.find((f) => f.id === activeId) ?? functions[0];
   const pkg = packages.find((p) => p.id === fn.packageId);
@@ -89,15 +108,16 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
     return { popularity: counts, clientBefore: before };
   }, [orders, clientId]);
 
-  const cuisines = React.useMemo(() => [...new Set(allItems.map((i) => i.cuisine))].sort(), [allItems]);
+  const cuisines = React.useMemo(() => [...new Set(allItems.map((i) => i.cuisine).filter(Boolean))].sort(), [allItems]);
   const selected = new Set(fn.itemIds);
-  const filtering = !!query || diets.length > 0 || bestsellers || source !== "all" || !!cuisine || priceMax > 0;
+  const extraFilters = (source !== "all" ? 1 : 0) + (cuisine ? 1 : 0) + (priceMax ? 1 : 0) + (sort !== "popular" ? 1 : 0);
+  const filtering = !!query || diets.length > 0 || bestsellers || extraFilters > 0;
+  const clearFilters = () => { setQuery(""); setDiets([]); setBestsellers(false); setSource("all"); setCuisine(""); setPriceMax(0); setSort("popular"); };
 
   const visible = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     return allItems
       .filter((i) => i.active || fn.itemIds.includes(i.id))
-      .filter((i) => category === "all" || i.categoryId === category)
       .filter((i) => !q || i.name.toLowerCase().includes(q) || i.nameLocal.includes(query.trim()))
       .filter((i) => diets.length === 0 || diets.some((d) => (d === "veg" ? i.diet !== "nonveg" : i.diet === d)))
       .filter((i) => !bestsellers || i.bestseller)
@@ -105,19 +125,41 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
       .filter((i) => !cuisine || i.cuisine === cuisine)
       .filter((i) => !priceMax || (i.pricingType === "plate" && i.price <= priceMax))
       .sort((a, b) => (sort === "price" ? a.price - b.price : sort === "name" ? a.name.localeCompare(b.name) : (popularity.get(b.id) ?? 0) - (popularity.get(a.id) ?? 0) || Number(b.bestseller) - Number(a.bestseller)));
-  }, [allItems, fn.itemIds, category, query, diets, bestsellers, source, cuisine, priceMax, sort, popularity]);
+  }, [allItems, fn.itemIds, query, diets, bestsellers, source, cuisine, priceMax, sort, popularity]);
 
-  const plateDishes = visible.filter((i) => i.pricingType === "plate");
-  const addOns = visible.filter((i) => i.pricingType !== "plate");
-  const beforeRow = !filtering && category === "all" ? allItems.filter((i) => clientBefore.has(i.id) && i.active).slice(0, 8) : [];
+  // One section per category, in the menu's own order, holding only the dishes that pass the filters.
+  const grouped = React.useMemo(() => categories.map((c) => ({ c, dishes: visible.filter((i) => i.categoryId === c.id) })).filter((g) => g.dishes.length), [categories, visible]);
+  const beforeRow = !filtering ? allItems.filter((i) => clientBefore.has(i.id) && i.active).slice(0, 10) : [];
+
+  // The tab for whichever section is at the top of the screen lights up as the menu scrolls.
+  React.useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (top) setCurrent(top.target.getAttribute("data-section") ?? "");
+      },
+      { rootMargin: `-${top + 60}px 0px -60% 0px` },
+    );
+    for (const el of sections.current.values()) io.observe(el);
+    return () => io.disconnect();
+  }, [grouped, top]);
+  React.useEffect(() => {
+    tabsRef.current?.querySelector(`[data-tab="${current}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [current]);
+  const jump = (id: string) => {
+    const el = sections.current.get(id);
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - top - 64, behavior: "smooth" });
+  };
 
   /** What picking this dish would add on top of the package price. */
   const noteFor = (item: MenuItem) => {
-    if (!pkg || item.pricingType !== "plate" || pkg.fixedItemIds.includes(item.id)) return undefined;
+    if (hidePrices || !pkg || item.pricingType !== "plate" || pkg.fixedItemIds.includes(item.id)) return undefined;
     if (selected.has(item.id)) return price.extraIds.includes(item.id) ? `+${money(item.price)} per plate, beyond package` : undefined;
     const rule = price.rules.find((r) => r.categoryId === item.categoryId);
     return !rule || rule.chosen >= rule.choose ? `+${money(item.price)} per plate` : undefined;
   };
+  const ruleFor = (categoryId: string) => price.rules.find((r) => r.categoryId === categoryId);
+  const countIn = (categoryId: string) => allItems.filter((i) => i.categoryId === categoryId && selected.has(i.id)).length;
 
   const warnings: string[] = [];
   if (pkg && fn.pax < pkg.minPax) warnings.push(`${pkg.name} needs at least ${pkg.minPax} guests.`);
@@ -132,34 +174,40 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 space-y-3 border-b p-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-heading text-base font-semibold">{fn.name} plate</h2>
-          <Button variant="ghost" className="-mr-2" onClick={() => setPickPackage(true)}>
-            <Package strokeWidth={1.75} />{pkg ? pkg.name : "Custom"}
-          </Button>
+          <h2 className="min-w-0 truncate font-heading text-base font-semibold" title={`${fn.name} plate`}>{fn.name}</h2>
+          <Button variant="ghost" className="-mr-2 shrink-0" onClick={() => setPickPackage(true)}><Package strokeWidth={1.75} />{pkg ? pkg.name : "Choose package"}</Button>
         </div>
         <PaxInput value={fn.pax} onChange={(pax) => patch({ pax })} compact />
+        {pkg && price.rules.length > 0 && (
+          <div className="grid grid-cols-2 gap-1.5">
+            {price.rules.map((r) => (
+              <button key={r.categoryId} type="button" onClick={() => jump(r.categoryId)} className={cn("flex items-center justify-between gap-1 rounded-lg px-2 py-1 text-xs", r.met ? "bg-success/10 text-success" : "bg-warning/10 text-warning")}>
+                <span className="truncate">{categories.find((c) => c.id === r.categoryId)?.name}</span>
+                <span className="tnum flex shrink-0 items-center gap-0.5 font-semibold">{r.met && <Check className="size-3" strokeWidth={3} />}{Math.min(r.chosen, r.choose)}/{r.choose}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {fn.itemIds.length === 0 && <p className="py-8 text-center text-sm text-text-muted">Tap dishes to build the plate.</p>}
+        {fn.itemIds.length === 0 && <p className="py-8 text-center text-sm text-text-muted">Tap a dish to add it to the plate.</p>}
         {categories.map((c) => {
           const picked = fn.itemIds.map((id) => allItems.find((i) => i.id === id)).filter((i): i is MenuItem => !!i && i.categoryId === c.id);
           if (picked.length === 0) return null;
           return (
-            <div key={c.id} className="mb-4">
-              <p className="mb-1.5 flex items-center justify-between text-xs font-medium text-text-muted">{c.name}<span className="tnum">{picked.length}</span></p>
+            <div key={c.id} className="mb-3">
+              <p className="mb-1 flex items-center justify-between text-xs font-medium uppercase tracking-wide text-text-muted">{c.name}<span className="tnum">{picked.length}</span></p>
               <ul className="space-y-1">
                 {picked.map((i) => (
-                  <li key={i.id} className="group flex items-center gap-2">
-                    <DishImage item={i} sizes="48px" className="w-12 shrink-0 rounded-lg" />
+                  <li key={i.id} className="flex items-center gap-2">
+                    <DishImage item={i} sizes="40px" className="w-10 shrink-0 rounded-md" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm">{i.name}</span>
-                      {price.extraIds.includes(i.id) && <span className="tnum block text-xs text-warning">+{money(i.price)} extra</span>}
-                      {i.pricingType !== "plate" && <span className="tnum block text-xs text-text-muted">{priceLabel(i)}</span>}
+                      <span className="flex items-center gap-1.5 text-sm"><VegMark diet={i.diet} /><span className="truncate">{i.name}</span></span>
+                      {!hidePrices && price.extraIds.includes(i.id) && <span className="tnum block text-xs text-warning">+{money(i.price)} extra</span>}
+                      {!hidePrices && i.pricingType !== "plate" && <span className="tnum block text-xs text-text-muted">{priceLabel(i)}</span>}
                     </span>
-                    <button type="button" onClick={() => toggle(i.id)} className="grid size-9 shrink-0 place-items-center rounded-lg text-text-muted hover:bg-surface-muted hover:text-danger" aria-label={`Remove ${i.name}`}>
-                      <X className="size-4" strokeWidth={1.75} />
-                    </button>
+                    <button type="button" onClick={() => toggle(i.id)} className="grid size-8 shrink-0 place-items-center rounded-lg text-text-muted hover:bg-surface-muted hover:text-danger" aria-label={`Remove ${i.name}`}><X className="size-4" strokeWidth={1.75} /></button>
                   </li>
                 ))}
               </ul>
@@ -171,21 +219,23 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
       <div className="shrink-0 space-y-3 border-t p-4">
         {warnings.length > 0 && (
           <ul className="space-y-1 rounded-lg bg-warning/10 p-2 text-xs text-warning">
-            {warnings.slice(0, 4).map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />{w}</li>)}
+            {warnings.slice(0, 3).map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />{w}</li>)}
           </ul>
         )}
-        <dl className="tnum space-y-1 text-sm">
-          <div className="flex items-baseline justify-between"><dt className="text-text-muted">Per plate{price.slabPct ? ` (${price.slabPct}% off for ${num(fn.pax)}+)` : ""}</dt><dd className="font-heading text-xl font-bold">{money(price.perPlate)}</dd></div>
-          <div className="flex justify-between text-text-muted"><dt>{fn.name} · {num(fn.pax)} guests</dt><dd>{money(price.total)}</dd></div>
-          {functions.length > 1 && <div className="flex justify-between text-text-muted"><dt>All {functions.length} functions</dt><dd>{money(totals.food)}</dd></div>}
-          {totals.extras > 0 && <div className="flex justify-between text-text-muted"><dt>Extras</dt><dd>{money(totals.extras)}</dd></div>}
-          {totals.discount > 0 && <div className="flex justify-between text-text-muted"><dt>Discount</dt><dd>-{money(totals.discount)}</dd></div>}
-          <div className="flex justify-between text-text-muted"><dt>GST {tenant.gstRate}%{tenant.gstInclusive ? " (included)" : ""}</dt><dd>{money(totals.gst)}</dd></div>
-          <div className="flex items-baseline justify-between border-t pt-2 font-medium"><dt>Grand total</dt><dd className="font-heading text-lg font-bold">{money(totals.grand)}</dd></div>
-        </dl>
-        {staff && fn.itemIds.length > 0 && (
+        {!hidePrices && (
+          <dl className="tnum space-y-1 text-sm">
+            <div className="flex items-baseline justify-between"><dt className="text-text-muted">Per plate{price.slabPct ? ` (${price.slabPct}% off for ${num(fn.pax)}+)` : ""}</dt><dd className="font-heading text-2xl font-bold">{money(price.perPlate)}</dd></div>
+            <div className="flex justify-between text-text-muted"><dt>{fn.name} · {num(fn.pax)} guests</dt><dd>{money(price.total)}</dd></div>
+            {functions.length > 1 && <div className="flex justify-between text-text-muted"><dt>All {functions.length} functions</dt><dd>{money(totals.food)}</dd></div>}
+            {totals.extras > 0 && <div className="flex justify-between text-text-muted"><dt>Extras</dt><dd>{money(totals.extras)}</dd></div>}
+            {totals.discount > 0 && <div className="flex justify-between text-text-muted"><dt>Discount</dt><dd>-{money(totals.discount)}</dd></div>}
+            <div className="flex justify-between text-text-muted"><dt>GST {tenant.gstRate}%{tenant.gstInclusive ? " (included)" : ""}</dt><dd>{money(totals.gst)}</dd></div>
+            <div className="flex items-baseline justify-between border-t pt-2 font-medium"><dt>Grand total</dt><dd className="font-heading text-lg font-bold">{money(totals.grand)}</dd></div>
+          </dl>
+        )}
+        {staff && !hidePrices && fn.itemIds.length > 0 && (
           <div className="tnum flex items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2 text-xs">
-            <span className="text-text-muted">Staff only · food cost {money(price.costPerPlate)} per plate</span>
+            <span className="text-text-muted">Staff only · food cost {money(price.costPerPlate)} a plate</span>
             <Badge tone={marginTone(totals.marginPct)}>{Math.round(totals.marginPct)}% margin</Badge>
           </div>
         )}
@@ -194,105 +244,115 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
     </div>
   );
 
+  const dishGrid = (dishes: MenuItem[]) =>
+    view === "grid" ? (
+      <div className={cn("grid gap-3", booking ? "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))]" : "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]")}>
+        {dishes.map((i) => <DishCard key={i.id} item={i} selected={selected.has(i.id)} note={noteFor(i)} hideInternal={booking} large={booking} onToggle={() => toggle(i.id)} onOpen={() => setDetail(i)} />)}
+      </div>
+    ) : (
+      <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
+        {dishes.map((i) => (
+          <li key={i.id} className={cn("flex items-center gap-3 px-3 py-2", selected.has(i.id) && "bg-primary-soft")}>
+            <DishImage item={i} sizes="44px" className="w-11 shrink-0 rounded-md" />
+            <button type="button" onClick={() => setDetail(i)} className="min-w-0 flex-1 text-left">
+              <span className="flex items-center gap-1.5 text-sm font-medium"><VegMark diet={i.diet} /><span className="truncate">{i.name}</span>{i.bestseller && <Star className="size-3.5 shrink-0 fill-accent-gold text-accent-gold" strokeWidth={1.5} />}</span>
+              <span className="block truncate text-xs text-text-muted">{i.nameLocal}{noteFor(i) ? ` · ${noteFor(i)}` : ""}</span>
+            </button>
+            {!hidePrices && <span className="tnum shrink-0 text-sm text-text-muted">{priceLabel(i)}</span>}
+            <Button size="icon" variant={selected.has(i.id) ? "secondary" : "ghost"} onClick={() => toggle(i.id)} aria-label={selected.has(i.id) ? `Remove ${i.name}` : `Add ${i.name}`} className={cn(selected.has(i.id) && "border-primary text-primary")}>
+              {selected.has(i.id) ? <Check strokeWidth={2.5} /> : <Plus strokeWidth={1.75} />}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    );
+
   return (
     <div>
-      {/* Function tabs */}
-      <div className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:px-0">
-        {functions.map((f) => (
-          <Chip key={f.id} active={f.id === fn.id} onClick={() => onActive(f.id)} className="h-11 px-4">
-            {f.name}<span className="tnum rounded-full bg-surface-muted px-1.5 text-xs text-text-muted">{f.itemIds.length}</span>
-          </Chip>
-        ))}
-        {functions.length > 1 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" className="shrink-0"><Copy strokeWidth={1.75} />Copy menu from</Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {functions.filter((f) => f.id !== fn.id).map((f) => (
-                <DropdownMenuItem key={f.id} onSelect={() => patch({ packageId: f.packageId, itemIds: [...f.itemIds] })}>{f.name}<span className="tnum ml-auto text-xs text-text-muted">{f.itemIds.length} dishes</span></DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        <span className="flex-1" />
-        {booking && (
-          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setStaff(!staff)} aria-pressed={staff} aria-label={staff ? "Hide staff panel" : "Show staff panel"} title="Staff panel">
-            {staff ? <EyeOff strokeWidth={1.75} /> : <Eye strokeWidth={1.75} />}
-          </Button>
-        )}
-      </div>
+      {/* Functions, when the event has more than one */}
+      {(functions.length > 1 || booking) && (
+        <div className="no-scrollbar -mx-4 mb-3 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:px-0">
+          {functions.map((f) => (
+            <Chip key={f.id} active={f.id === fn.id} onClick={() => onActive(f.id)} className="h-10 px-4">
+              {f.name}<span className="tnum rounded-full bg-surface-muted px-1.5 text-xs text-text-muted">{f.itemIds.length}</span>
+            </Chip>
+          ))}
+          {functions.length > 1 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="ghost" className="shrink-0"><Copy strokeWidth={1.75} />Copy menu from</Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {functions.filter((f) => f.id !== fn.id).map((f) => (
+                  <DropdownMenuItem key={f.id} onSelect={() => patch({ packageId: f.packageId, itemIds: [...f.itemIds] })}>{f.name}<span className="tnum ml-auto text-xs text-text-muted">{f.itemIds.length} dishes</span></DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <span className="flex-1" />
+          {booking && (
+            <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setStaff(!staff)} aria-pressed={staff} aria-label={staff ? "Hide staff panel" : "Show staff panel"} title="Staff panel">
+              {staff ? <EyeOff strokeWidth={1.75} /> : <Eye strokeWidth={1.75} />}
+            </Button>
+          )}
+        </div>
+      )}
 
-      <div className="mt-4 flex items-start gap-4 lg:gap-6">
-        {/* Category rail */}
-        <nav className={cn("no-scrollbar sticky hidden w-16 shrink-0 space-y-0.5 overflow-y-auto md:block", booking ? "xl:w-52" : "2xl:w-52")} style={{ top, maxHeight: `calc(100dvh - ${top + 16}px)` }} aria-label="Categories">
-          {[{ id: "all", name: "All dishes", icon: "" }, ...categories].map((c) => {
-            const Icon = c.id === "all" ? LayoutGrid : categoryIcon(c.icon);
-            const count = c.id === "all" ? fn.itemIds.length : allItems.filter((i) => i.categoryId === c.id && selected.has(i.id)).length;
-            const active = category === c.id;
-            return (
-              <button key={c.id} type="button" title={c.name} onClick={() => setCategory(c.id)} aria-pressed={active} className={cn("relative flex h-11 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm font-medium transition-colors duration-150", active ? "bg-primary-soft text-primary" : "text-text-muted hover:bg-surface-muted hover:text-text")}>
-                <Icon className={cn("mx-auto size-5 shrink-0", booking ? "xl:mx-0" : "2xl:mx-0")} strokeWidth={1.75} />
-                <span className={cn("hidden flex-1 truncate", booking ? "xl:block" : "2xl:block")}>{c.name}</span>
-                {count > 0 && <span className={cn("tnum absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-xs leading-none text-primary-fg", booking ? "xl:static xl:h-5 xl:min-w-5" : "2xl:static 2xl:h-5 2xl:min-w-5")}>{count}</span>}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Dish grid */}
+      <div className="flex items-start gap-4 lg:gap-5">
         <div className="min-w-0 flex-1">
-          <div className="flex gap-2">
-            <label className="relative flex-1">
+          {/* Toolbar: search and the everyday filters in one row; the rest folds under Filters. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative min-w-48 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-muted" strokeWidth={1.75} />
               <span className="sr-only">Search dishes</span>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search dishes in English or Gujarati" className="h-11 w-full rounded-lg border bg-surface pl-10 pr-3 text-sm placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search dishes in English or Gujarati" className="h-11 w-full rounded-xl border bg-surface pl-10 pr-9 text-sm placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              {query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-text-muted hover:bg-surface-muted"><X className="size-4" strokeWidth={1.75} /></button>}
             </label>
-            <Button variant="secondary" size="icon-lg" onClick={() => setView(view === "grid" ? "list" : "grid")} aria-label={view === "grid" ? "Compact list" : "Photo grid"} title={view === "grid" ? "Compact list" : "Photo grid"}>
-              {view === "grid" ? <List strokeWidth={1.75} /> : <LayoutGrid strokeWidth={1.75} />}
-            </Button>
-          </div>
-
-          <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 md:hidden">
-            {[{ id: "all", name: "All" }, ...categories].map((c) => <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>{c.name}</Chip>)}
-          </div>
-
-          <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
-            {(["veg", "jain", "nonveg"] as Diet[]).map((d) => (
-              <Chip key={d} active={diets.includes(d)} onClick={() => setDiets((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]))}><VegMark diet={d} />{dietLabel(d)}</Chip>
-            ))}
-            <Chip active={bestsellers} onClick={() => setBestsellers(!bestsellers)}><Star strokeWidth={1.75} />Bestsellers</Chip>
-            {!booking && <Chip active={source === "inhouse"} onClick={() => setSource(source === "inhouse" ? "all" : "inhouse")}>In-house</Chip>}
-            {!booking && <Chip active={source === "outsourced"} onClick={() => setSource(source === "outsourced" ? "all" : "outsourced")}>Outsourced</Chip>}
-            <Select aria-label="Cuisine" value={cuisine} onChange={(e) => setCuisine(e.target.value)} className="!h-9 w-auto shrink-0 rounded-full bg-surface">
-              <option value="">Any cuisine</option>
-              {cuisines.map((c) => <option key={c}>{c}</option>)}
-            </Select>
-            <Select aria-label="Price range" value={priceMax} onChange={(e) => setPriceMax(Number(e.target.value))} className="!h-9 w-auto shrink-0 rounded-full bg-surface">
-              {priceBands.map((b) => <option key={b.max} value={b.max}>{b.label}</option>)}
-            </Select>
-            <Select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="!h-9 w-auto shrink-0 rounded-full bg-surface">
-              <option value="popular">Most popular</option>
-              <option value="price">Price, low to high</option>
-              <option value="name">Name</option>
-            </Select>
-          </div>
-
-          {pkg && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {price.rules.map((r) => (
-                <button key={r.categoryId} type="button" onClick={() => setCategory(r.categoryId)}>
-                  <Badge tone={r.met ? "success" : "warning"} className="h-7 px-2.5">
-                    {r.met && <Check strokeWidth={2.5} />}
-                    {categories.find((c) => c.id === r.categoryId)?.name} <span className="tnum">{Math.min(r.chosen, r.choose)} of {r.choose}</span> chosen
-                    {r.chosen > r.choose && <span className="tnum">, +{r.chosen - r.choose} extra</span>}
-                  </Badge>
-                </button>
+            <div className="no-scrollbar flex items-center gap-2 overflow-x-auto">
+              {(["veg", "jain"] as Diet[]).map((d) => (
+                <Chip key={d} active={diets.includes(d)} onClick={() => setDiets((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]))} className="h-11 shrink-0"><VegMark diet={d} />{dietLabel(d)}</Chip>
               ))}
+              <Chip active={bestsellers} onClick={() => setBestsellers(!bestsellers)} className="h-11 shrink-0"><Star strokeWidth={1.75} />Bestsellers</Chip>
+              <Chip active={more || extraFilters > 0} onClick={() => setMore(!more)} className="h-11 shrink-0"><SlidersHorizontal strokeWidth={1.75} />Filters{extraFilters > 0 && <span className="tnum rounded-full bg-primary px-1.5 text-xs text-primary-fg">{extraFilters}</span>}</Chip>
+              <Button variant="secondary" size="icon-lg" className="shrink-0 rounded-xl" onClick={() => setView(view === "grid" ? "list" : "grid")} aria-label={view === "grid" ? "Compact list" : "Photo grid"} title={view === "grid" ? "Compact list" : "Photo grid"}>
+                {view === "grid" ? <List strokeWidth={1.75} /> : <LayoutGrid strokeWidth={1.75} />}
+              </Button>
+            </div>
+          </div>
+          {more && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border bg-surface p-2">
+              <Chip active={diets.includes("nonveg")} onClick={() => setDiets((cur) => (cur.includes("nonveg") ? cur.filter((x) => x !== "nonveg") : [...cur, "nonveg"]))}><VegMark diet="nonveg" />{dietLabel("nonveg")}</Chip>
+              {!booking && <Chip active={source === "inhouse"} onClick={() => setSource(source === "inhouse" ? "all" : "inhouse")}>In-house</Chip>}
+              {!booking && <Chip active={source === "outsourced"} onClick={() => setSource(source === "outsourced" ? "all" : "outsourced")}>Outsourced</Chip>}
+              <Select aria-label="Cuisine" value={cuisine} onChange={(e) => setCuisine(e.target.value)} className="!h-9 w-auto rounded-full bg-surface"><option value="">Any cuisine</option>{cuisines.map((c) => <option key={c}>{c}</option>)}</Select>
+              {!hidePrices && <Select aria-label="Price" value={priceMax} onChange={(e) => setPriceMax(Number(e.target.value))} className="!h-9 w-auto rounded-full bg-surface">{priceBands.map((b) => <option key={b.max} value={b.max}>{b.label}</option>)}</Select>}
+              <Select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="!h-9 w-auto rounded-full bg-surface"><option value="popular">Most popular</option>{!hidePrices && <option value="price">Price, low to high</option>}<option value="name">Name</option></Select>
+              {filtering && <Button variant="ghost" onClick={clearFilters}>Clear all</Button>}
             </div>
           )}
 
+          {/* Category tabs, sticky under the page header */}
+          <div ref={tabsRef} className="no-scrollbar sticky z-10 -mx-4 mt-3 flex gap-1.5 overflow-x-auto border-b bg-bg/95 px-4 py-2 backdrop-blur md:mx-0 md:px-0" style={{ top }} role="tablist" aria-label="Menu categories">
+            {grouped.map(({ c }) => {
+              const Icon = categoryIcon(c.icon);
+              const rule = ruleFor(c.id);
+              const count = countIn(c.id);
+              const active = (current || grouped[0]?.c.id) === c.id;
+              return (
+                <button key={c.id} type="button" role="tab" aria-selected={active} data-tab={c.id} onClick={() => jump(c.id)} className={cn("flex h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors", active ? "border-primary bg-primary text-primary-fg" : "bg-surface text-text-muted hover:text-text")}>
+                  <Icon className="size-4" strokeWidth={1.75} />
+                  {c.name}
+                  {rule ? (
+                    <span className={cn("tnum rounded-full px-1.5 text-xs", active ? "bg-primary-fg/20" : rule.met ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>{Math.min(rule.chosen, rule.choose)}/{rule.choose}</span>
+                  ) : count > 0 ? (
+                    <span className={cn("tnum rounded-full px-1.5 text-xs", active ? "bg-primary-fg/20" : "bg-primary-soft text-primary")}>{count}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
           {beforeRow.length > 0 && (
             <section className="mt-4">
-              <h3 className="mb-2 text-xs font-medium text-text-muted">This client ordered before</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">This client ordered before</h3>
               <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0">
                 {beforeRow.map((i) => (
                   <button key={i.id} type="button" onClick={() => toggle(i.id)} aria-pressed={selected.has(i.id)} className={cn("flex h-11 shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-sm transition-colors duration-150", selected.has(i.id) ? "border-primary bg-primary-soft text-primary" : "bg-surface")}>
@@ -305,48 +365,32 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
             </section>
           )}
 
-          {visible.length === 0 && (
+          {grouped.length === 0 && (
             <div className="mt-10 text-center text-sm text-text-muted">
               <p>No dishes match these filters.</p>
-              <Button variant="ghost" className="mt-2" onClick={() => { setQuery(""); setDiets([]); setBestsellers(false); setSource("all"); setCuisine(""); setPriceMax(0); setCategory("all"); }}>Clear filters</Button>
+              <Button variant="ghost" className="mt-2" onClick={clearFilters}>Clear filters</Button>
             </div>
           )}
 
-          {view === "grid" ? (
-            <div className={cn("mt-4 grid grid-cols-2 gap-3", booking ? "lg:grid-cols-3" : "xl:grid-cols-3")}>
-              {plateDishes.map((i) => <DishCard key={i.id} item={i} selected={selected.has(i.id)} note={noteFor(i)} hideInternal={booking} large={booking} onToggle={() => toggle(i.id)} onOpen={() => setDetail(i)} />)}
-            </div>
-          ) : (
-            <ul className="mt-4 divide-y rounded-xl border bg-surface">
-              {plateDishes.map((i) => (
-                <li key={i.id} className={cn("flex items-center gap-3 px-3 py-2", selected.has(i.id) && "bg-primary-soft")}>
-                  <VegMark diet={i.diet} />
-                  <button type="button" onClick={() => setDetail(i)} className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-sm font-medium">{i.name}</span>
-                    <span className="block truncate text-xs text-text-muted">{i.nameLocal}{noteFor(i) ? ` · ${noteFor(i)}` : ""}</span>
-                  </button>
-                  <span className="tnum shrink-0 text-sm text-text-muted">{money(i.price)}</span>
-                  <Button size="icon" variant={selected.has(i.id) ? "secondary" : "ghost"} onClick={() => toggle(i.id)} aria-label={selected.has(i.id) ? `Remove ${i.name}` : `Add ${i.name}`} className={cn(selected.has(i.id) && "border-primary text-primary")}>
-                    {selected.has(i.id) ? <Check strokeWidth={2.5} /> : <Plus strokeWidth={1.75} />}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {addOns.length > 0 && (
-            <section className="mt-8">
-              <h3 className="font-heading text-base font-semibold">Add-ons and live counters</h3>
-              <p className="text-xs text-text-muted">Priced per counter or as a flat amount, on top of the plate price.</p>
-              <div className={cn("mt-3 grid grid-cols-2 gap-3", booking ? "lg:grid-cols-3" : "xl:grid-cols-3")}>
-                {addOns.map((i) => <DishCard key={i.id} item={i} selected={selected.has(i.id)} hideInternal={booking} large={booking} onToggle={() => toggle(i.id)} onOpen={() => setDetail(i)} />)}
-              </div>
-            </section>
-          )}
+          {grouped.map(({ c, dishes }) => {
+            const rule = ruleFor(c.id);
+            return (
+              <section key={c.id} data-section={c.id} ref={(el) => { if (el) sections.current.set(c.id, el); else sections.current.delete(c.id); }} className="mt-6">
+                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="font-heading text-lg font-semibold">{c.name}</h3>
+                  <span className="text-xs text-text-muted">
+                    {rule ? <span className={rule.met ? "text-success" : "text-warning"}>{rule.met ? "Package choice done" : `Choose ${rule.choose - Math.min(rule.chosen, rule.choose)} more for the package`}</span> : `${dishes.length} ${dishes.length === 1 ? "dish" : "dishes"}`}
+                    {rule && rule.chosen > rule.choose && !hidePrices && <span className="text-warning"> · {rule.chosen - rule.choose} beyond the package</span>}
+                  </span>
+                </div>
+                {dishGrid(dishes)}
+              </section>
+            );
+          })}
         </div>
 
         {/* Plate summary panel */}
-        <aside className="sticky hidden w-[320px] shrink-0 flex-col overflow-hidden rounded-2xl border bg-surface shadow-card lg:flex xl:w-[360px]" style={{ top, maxHeight: `calc(100dvh - ${top + 16}px)` }} aria-label="Plate summary">
+        <aside className="sticky hidden w-[300px] shrink-0 flex-col overflow-hidden rounded-2xl border bg-surface shadow-card lg:flex xl:w-[340px]" style={{ top, maxHeight: `calc(100dvh - ${top + 16}px)` }} aria-label="Plate summary">
           {summary}
         </aside>
       </div>
@@ -354,8 +398,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
       {/* Mobile and tablet: sticky bar that expands into a bottom sheet */}
       <button type="button" onClick={() => setSummaryOpen(true)} className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t bg-surface px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3 text-left shadow-sheet lg:hidden">
         <span className="tnum min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">{fn.itemIds.length} dishes · {money(price.perPlate)} per plate</span>
-          <span className="block truncate text-xs text-text-muted">{fn.name} · {num(fn.pax)} guests · {money(totals.grand)} total{warnings.length ? ` · ${warnings.length} to check` : ""}</span>
+          <span className="block truncate text-sm font-semibold">{fn.itemIds.length} dishes{hidePrices ? "" : ` · ${money(price.perPlate)} per plate`}</span>
+          <span className="block truncate text-xs text-text-muted">{fn.name} · {num(fn.pax)} guests{hidePrices ? "" : ` · ${money(totals.grand)} total`}{warnings.length ? ` · ${warnings.length} to check` : ""}</span>
         </span>
         <span className="flex h-11 items-center gap-1 rounded-lg bg-primary px-4 text-sm font-medium text-primary-fg">Review<ChevronUp className="size-5" strokeWidth={1.75} /></span>
       </button>
@@ -365,19 +409,19 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
 
       <PackagePicker open={pickPackage} onOpenChange={setPickPackage} value={fn.packageId} pax={fn.pax} onPick={choosePackage} />
 
-      <Sheet open={!!detail} onOpenChange={(o) => !o && setDetail(null)} title={detail?.name ?? ""} description={detail?.nameLocal}>
+      <Sheet open={!!detail} onOpenChange={(o) => !o && setDetail(null)} title={detail?.name ?? ""} description={detail?.nameLocal} wide>
         {detail && (
           <div className="space-y-4">
-            <DishImage item={detail} sizes="(max-width: 768px) 100vw, 420px" />
+            <DishImage item={detail} sizes="(max-width: 768px) 100vw, 640px" className="rounded-2xl" />
             <div className="flex flex-wrap items-center gap-2">
               <VegMark diet={detail.diet} withLabel />
-              <Badge>{detail.cuisine}</Badge>
+              {detail.cuisine && <Badge>{detail.cuisine}</Badge>}
               <Badge>{spiceWords[detail.spice]}</Badge>
               {detail.bestseller && <Badge tone="gold">Bestseller</Badge>}
               {detail.seasonal && <Badge tone="warning">Seasonal</Badge>}
             </div>
-            <p className="text-sm text-text-muted">{detail.description}</p>
-            <p className="tnum font-heading text-xl font-bold">{priceLabel(detail)}</p>
+            {detail.description && <p className="text-base text-text-muted">{detail.description}</p>}
+            {!hidePrices && <p className="tnum font-heading text-2xl font-bold">{priceLabel(detail)}</p>}
             <Field label={`Note for ${fn.name}`} hint="Printed on the event sheet for the kitchen.">
               <Textarea value={fn.itemNotes?.[detail.id] ?? ""} onChange={(e) => patch({ itemNotes: { ...fn.itemNotes, [detail.id]: e.target.value } })} placeholder="Less spicy, serve in kulhad, Jain version on the side" />
             </Field>

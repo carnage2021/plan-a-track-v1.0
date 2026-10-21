@@ -7,6 +7,7 @@ import { useStore } from "./store";
 import { supabase } from "./supabase/client";
 import type { EventFunction, PaymentMode } from "./types";
 import { isoDate, uid } from "./utils";
+import { inBranch, withBranch } from "./branch";
 
 // Phase 4A: workers, priced tasks, attendance, payouts and monthly payroll.
 // Types, calculations and the store live together here; tables are in supabase/migrations/0004_staff.sql.
@@ -143,7 +144,7 @@ export const useStaff = create<State>()((set, get) => ({
     if (failed) return void toast.error("Could not load staff and tasks", { description: failed.error?.message });
     set({
       ready: true,
-      workers: (workers.data as Row[]).map((w) => ({ id: w.id, name: w.name, phone: w.phone, role: w.role, type: w.worker_type, contractorId: w.contractor_id ?? undefined, skills: w.skills ?? [], rateDay: Number(w.rate_day), rateEvent: Number(w.rate_event), overtimeRate: Number(w.overtime_rate), monthlySalary: Number(w.monthly_salary), idProof: w.id_proof, upi: w.upi, rating: w.rating, active: w.active })),
+      workers: (workers.data as Row[]).filter(inBranch).map((w) => ({ id: w.id, name: w.name, phone: w.phone, role: w.role, type: w.worker_type, contractorId: w.contractor_id ?? undefined, skills: w.skills ?? [], rateDay: Number(w.rate_day), rateEvent: Number(w.rate_event), overtimeRate: Number(w.overtime_rate), monthlySalary: Number(w.monthly_salary), idProof: w.id_proof, upi: w.upi, rating: w.rating, active: w.active })),
       leaves: (leaves.data as Row[]).map((l) => ({ id: l.id, workerId: l.worker_id, date: day(l.leave_date), paid: l.paid })),
       tasks: (tasks.data as Row[]).map((t) => ({ id: t.id, orderId: t.order_id, functionId: t.function_id ?? "", title: t.title, role: t.role, workerId: t.worker_id ?? undefined, itemId: t.item_id ?? undefined, startTime: t.start_time, dueTime: t.due_time, priority: t.priority, status: t.status, qty: Number(t.qty), rate: Number(t.rate), overtimeHours: Number(t.overtime_hours), checkedInAt: t.checked_in_at ?? undefined, notes: t.notes })),
       payments: (payments.data as Row[]).map((p) => ({ id: p.id, workerId: p.worker_id ?? undefined, contractorId: p.contractor_id ?? undefined, kind: p.kind, amount: Number(p.amount), mode: p.mode, date: day(p.paid_on), note: p.note })),
@@ -154,7 +155,7 @@ export const useStaff = create<State>()((set, get) => ({
   saveWorker: (w) => {
     const saved: Worker = { ...w, id: w.id ?? uid() };
     set((s) => ({ workers: w.id ? s.workers.map((x) => (x.id === saved.id ? saved : x)) : [...s.workers, saved].sort((a, b) => a.name.localeCompare(b.name)) }));
-    background((sb) => ok(sb.from("workers").upsert(workerRow(saved)), "Saving the worker"));
+    background((sb) => ok(sb.from("workers").upsert(w.id ? workerRow(saved) : withBranch(workerRow(saved))), "Saving the worker"));
     return saved.id;
   },
 

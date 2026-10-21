@@ -42,3 +42,6 @@ next-env.d.ts
 
 # launch video scratch files
 brag-output*/
+
+# Private notes with live logins; never committed
+docs/private/

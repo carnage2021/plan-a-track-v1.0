@@ -16,6 +16,8 @@ import type { QuoteStatus, Quotation } from "@/lib/types";
 import { printLight } from "@/lib/ui";
 import { cn, daysFromToday, fmtDate, money, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
+import { DocLangPicker, DownloadPdf } from "@/components/documents/doc-actions";
+import type { Locale } from "@/lib/types";
 
 function QuotationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +27,7 @@ function QuotationDetail() {
   const setQuoteStatus = useStore((s) => s.setQuoteStatus);
   const convertToOrder = useStore((s) => s.convertToOrder);
   const quote = quotations.find((q) => q.id === id);
+  const [langPick, setDocLang] = React.useState<Locale | null>(null);
 
   if (!quote) return <EmptyState icon={FileQuestion} title="Quotation not found" help="It may have been removed, or the link is old." action={<Button variant="primary" asChild><Link href="/quotations">All quotations</Link></Button>} />;
 
@@ -35,6 +38,8 @@ function QuotationDetail() {
   const versions = quotations.filter((q) => q.groupId === quote.groupId).sort((a, b) => b.version - a.version);
   const previous = versions.find((v) => v.version === quote.version - 1);
   const doc = { ...quote, clientName: client?.name ?? "", clientPhone: client?.phone, date: quote.createdAt };
+  // The client's language until someone picks another.
+  const docLang: Locale = langPick ?? client?.language ?? "en";
   const expiresIn = daysFromToday(quote.validUntil);
   const active = !["superseded", "rejected"].includes(quote.status);
 
@@ -83,7 +88,8 @@ function QuotationDetail() {
             <p className="truncate text-sm text-text-muted">{client?.name} · {quote.eventType}</p>
           </div>
         </div>
-        <QuoteDocument data={doc} />
+        <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden"><DocLangPicker value={docLang} onChange={setDocLang} /><DownloadPdf kind="quote" id={quote.id} lang={docLang} variant="ghost" /></div>
+        <QuoteDocument data={{ ...doc, lang: docLang }} />
       </div>
 
       <aside className="space-y-4 print:hidden lg:sticky lg:top-20">

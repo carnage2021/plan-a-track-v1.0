@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     instantInsights: { validationLevel: "manual-warning" },
   },
   partialPrefetching: true,
+  // The PDF route drives a real browser; these load at run time instead of being bundled.
+  serverExternalPackages: ["puppeteer-core", "@sparticuz/chromium"],
   images: {
     // Dish photos and logos uploaded to Supabase Storage.
     remotePatterns: [{ protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" }],

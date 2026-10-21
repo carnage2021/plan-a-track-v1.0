@@ -3,7 +3,7 @@
 The project plan PDF stays the base specification. This file tracks the phase split, what is
 built, and features added to the plan after it was written.
 
-Last updated: 17 Oct 2026.
+Last updated: 22 Oct 2026.
 
 ## Phases
 
@@ -21,6 +21,14 @@ Last updated: 17 Oct 2026.
 
 Before phase 3 starts: connect Supabase (project URL and anon key), run the two migrations,
 replace the stand-in login with real OTP, and move data out of the browser store.
+
+## Added on 22 Oct 2026 (built and tested; migration `0011_labels_branches.sql`)
+
+- Staff logins: the owner creates a login ID and password for each team member, resets or removes it, and ties people to a branch.
+- Menu selection redesigned as a showroom: sticky category tabs with package progress, one sectioned photo menu, compact filters, wider grid.
+- QR labels for cutlery bunches, single pieces and raw material bags, printed 24 to an A4 sticker sheet; scanning to load cutlery to an event, take it back (missing and broken worked out), receive and issue raw material, and count stock.
+- Documents (quotation, menu card, confirmation, invoice, credit note) in English, Hindi or Gujarati, and real PDF downloads made by a server-side browser.
+- Multiple branches: branch switcher, branch-wise enquiries, quotations, orders, stores, staff and vehicles, limited by the plan.
 
 ## Added to the plan on 11 Oct 2026
 

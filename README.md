@@ -43,7 +43,7 @@ row-level security are in `supabase/migrations/`; each caterer only sees rows wi
 - Unfinished quotation drafts, language and sidebar state stay in the browser.
 
 Login is email and password. Mobile OTP needs an SMS provider connected in Supabase Auth first.
-Team invites are saved but invited people cannot join yet.
+Team members sign in with a login ID and password the owner creates in Settings, Team.
 
 ## Layout
 

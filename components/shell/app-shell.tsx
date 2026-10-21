@@ -8,6 +8,7 @@ import { useStaff } from "@/lib/staff";
 import { useSupply } from "@/lib/supply-store";
 import {
   Bell,
+  Building,
   LifeBuoy,
   Lock,
   Sparkles,
@@ -31,6 +32,7 @@ import {
   Home,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/blocks";
 import { HelpSheet, PlatformBanner, PlatformGate, WhatsNewSheet } from "@/components/shell/platform-ui";
 import { usePlan } from "@/lib/platform";
@@ -241,6 +243,33 @@ function useAlerts() {
   }, [enquiries, orders, clients, items, packages, slabs, credits, scheduleFor, tasks, ingredients, stock, issues]);
 }
 
+/** Which branch the app is showing. Someone tied to a branch just sees its name. */
+function BranchSwitcher() {
+  const { branches, branchesEnabled, myBranch, branchPref, setBranch } = useStore();
+  const [busy, setBusy] = React.useState(false);
+  if (!branchesEnabled || branches.length === 0) return null;
+  const current = branches.find((b) => b.id === (myBranch || branchPref));
+  if (myBranch) return <span className="hidden items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm text-text-muted md:inline-flex"><Building className="size-4" strokeWidth={1.75} />{current?.name}</span>;
+  const pick = async (id: string) => {
+    setBusy(true);
+    await setBranch(id);
+    setBusy(false);
+    toast.success(id ? `Showing ${branches.find((b) => b.id === id)?.name}` : "Showing all branches");
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" loading={busy} className="max-w-48"><Building strokeWidth={1.75} /><span className="truncate max-sm:hidden">{current?.name ?? "All branches"}</span></Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuLabel>Branch</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => void pick("")}>{!current && <Check strokeWidth={2} />}All branches</DropdownMenuItem>
+        {branches.map((b) => <DropdownMenuItem key={b.id} onSelect={() => void pick(b.id)}>{current?.id === b.id && <Check strokeWidth={2} />}{b.name}</DropdownMenuItem>)}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function Topbar() {
   const t = useTranslations("common");
   const tr = useTranslations("roles");
@@ -290,6 +319,8 @@ function Topbar() {
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+
+      <BranchSwitcher />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

@@ -14,11 +14,12 @@ import { Sheet } from "@/components/ui/sheet";
 import { scheduleRows, useBilling, type CreditNote, type Invoice, type Milestone, type MilestoneState, type ScheduleRow } from "@/lib/billing";
 import { priceQuote } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
-import type { Order, PaymentMode } from "@/lib/types";
+import type { Locale, Order, PaymentMode } from "@/lib/types";
 import { printLight } from "@/lib/ui";
 import { cn, fmtDate, money, relativeDay, uid, whatsappLink, localDay } from "@/lib/utils";
 import { CreditNoteDocument, InvoiceDocument } from "./documents";
 import { logWhatsApp } from "@/lib/messages";
+import { DocLangPicker, DownloadPdf } from "@/components/documents/doc-actions";
 
 export function BillingGate({ children }: { children: React.ReactNode }) {
   const ready = useBilling((s) => s.ready);
@@ -168,10 +169,14 @@ function CreditSheet({ order, onClose }: { order: Order; onClose: () => void }) 
 type Doc = { kind: "invoice"; invoice: Invoice } | { kind: "credit"; note: CreditNote };
 
 export function DocumentSheet({ doc, order, onClose }: { doc: Doc | null; order: Order; onClose: () => void }) {
+  const clientLang = useStore((s) => s.clients.find((c) => c.id === order.clientId)?.language) ?? "en";
+  const [lang, setLang] = React.useState<Locale>(clientLang);
+  const id = doc?.kind === "credit" ? doc.note.id : doc?.invoice.id;
   return (
-    <Sheet open={!!doc} onOpenChange={(o) => !o && onClose()} title={doc?.kind === "credit" ? doc.note.number : doc ? doc.invoice.number : ""} wide footer={<Button onClick={printLight}><Printer strokeWidth={1.75} />Print or PDF</Button>}>
-      {doc?.kind === "invoice" && <InvoiceDocument invoice={doc.invoice} order={order} />}
-      {doc?.kind === "credit" && <CreditNoteDocument note={doc.note} order={order} />}
+    <Sheet open={!!doc} onOpenChange={(o) => !o && onClose()} title={doc?.kind === "credit" ? doc.note.number : doc ? doc.invoice.number : ""} wide footer={<>{doc && id && <DownloadPdf kind={doc.kind === "credit" ? "credit" : "invoice"} id={id} lang={lang} />}<Button onClick={printLight}><Printer strokeWidth={1.75} />Print</Button></>}>
+      <DocLangPicker className="mb-3" value={lang} onChange={setLang} />
+      {doc?.kind === "invoice" && <InvoiceDocument invoice={doc.invoice} order={order} lang={lang} />}
+      {doc?.kind === "credit" && <CreditNoteDocument note={doc.note} order={order} lang={lang} />}
     </Sheet>
   );
 }

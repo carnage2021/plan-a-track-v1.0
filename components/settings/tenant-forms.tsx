@@ -1,18 +1,15 @@
 "use client";
 
-import { ImagePlus, Plus, Trash2 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { ImagePlus, Plus } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import { Avatar } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/primitives";
 import { brandColours } from "@/lib/brand";
 import { mediaUrl } from "@/lib/db";
-import { usePlan } from "@/lib/platform";
 import { useStore } from "@/lib/store";
-import type { Role, Tenant } from "@/lib/types";
+import type { Tenant } from "@/lib/types";
 import { cn, financialYear, initials } from "@/lib/utils";
 
 // The same sections are used by the first-run wizard and the Settings page.
@@ -183,48 +180,4 @@ export function RulesForm() {
   );
 }
 
-const roles: Role[] = ["sales", "operations", "kitchen", "store", "accountant", "owner"];
-
-export function TeamForm() {
-  const tr = useTranslations("roles");
-  const users = useStore((s) => s.users);
-  const addUser = useStore((s) => s.addUser);
-  const { seats } = usePlan();
-  const removeUser = useStore((s) => s.removeUser);
-  const [name, setName] = React.useState("");
-  const [phone, setPhone] = React.useState("");
-  const [role, setRole] = React.useState<Role>("sales");
-  const ok = name.trim() && phone.replace(/\D/g, "").length >= 10;
-
-  return (
-    <div className="space-y-4">
-      <ul className="divide-y rounded-xl border">
-        {users.map((u) => (
-          <li key={u.id} className="flex items-center gap-3 p-3">
-            <Avatar name={u.name} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{u.name}</p>
-              <p className="tnum truncate text-xs text-text-muted">{tr(u.role)}{u.phone ? ` · ${u.phone}` : ""}{u.invited ? " · invited, not joined yet" : ""}</p>
-            </div>
-            {u.invited && (
-              <Button variant="ghost" size="icon" aria-label={`Remove ${u.name}`} onClick={() => { removeUser(u.id); toast(`Invite for ${u.name} removed`, { action: { label: "Undo", onClick: () => addUser({ name: u.name, phone: u.phone, role: u.role, invited: true }) } }); }}>
-                <Trash2 strokeWidth={1.75} />
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <form
-        className="grid gap-3 rounded-xl bg-surface-muted p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
-        onSubmit={(e) => { e.preventDefault(); if (!ok) return; if (seats !== undefined && users.length >= seats) return void toast.error(`Your plan includes ${seats} team members`, { description: "Add extra users from Settings, Plan and billing." }); addUser({ name: name.trim(), phone, role, invited: true }); toast.success(`${name.trim()} added to the invite list`); setName(""); setPhone(""); }}
-      >
-        <Field label="Name"><Input className="bg-surface" value={name} onChange={(e) => setName(e.target.value)} placeholder="Team member" /></Field>
-        <Field label="Mobile number"><Input className="bg-surface" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98980 12345" /></Field>
-        <Field label="Role">
-          <Select className="bg-surface" value={role} onChange={(e) => setRole(e.target.value as Role)}>{roles.map((r) => <option key={r} value={r}>{tr(r)}</option>)}</Select>
-        </Field>
-        <Button type="submit" className="h-11 md:h-9" disabled={!ok}><Plus strokeWidth={1.75} />Invite</Button>
-      </form>
-    </div>
-  );
-}
+export { TeamForm } from "./team-form";

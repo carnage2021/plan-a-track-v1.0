@@ -5,8 +5,9 @@ import * as React from "react";
 import { DocHeader, DocPayBlock, docFrame, docStyle, useDocs } from "@/components/documents/theme";
 import { VegMark } from "@/components/shared/badges";
 import { priceFunction, priceQuote } from "@/lib/pricing";
+import { dishName, docT } from "@/lib/doc-i18n";
 import { useStore } from "@/lib/store";
-import type { Discount, EventFunction, ExtraCharge, MenuItem } from "@/lib/types";
+import type { Discount, EventFunction, ExtraCharge, Locale, MenuItem } from "@/lib/types";
 import { fmtDate, fmtTime, money, num } from "@/lib/utils";
 
 export interface DocumentData {
@@ -23,15 +24,16 @@ export interface DocumentData {
   date?: string;
   validUntil?: string;
   paid?: number;
+  /** Language of the document; the client's own language by default */
+  lang?: Locale;
 }
 
-const titles = { quotation: "Quotation", menu: "Menu card", confirmation: "Booking confirmation" };
 
 /**
  * The branded document the client receives. Rendered as HTML for preview and browser print;
  * the server-side PDF version (React PDF) is part of phase 5 and will reuse this layout.
  */
-export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentData; variant?: keyof typeof titles }) {
+export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentData; variant?: "quotation" | "menu" | "confirmation" }) {
   const tenant = useStore((s) => s.tenant);
   const items = useStore((s) => s.items);
   const categories = useStore((s) => s.categories);
@@ -39,22 +41,24 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
   const totals = priceQuote(data, items, packages, tenant.slabs);
   const showPrices = variant !== "menu";
   const docs = useDocs();
+  const lang = data.lang ?? "en";
+  const t = docT(lang);
 
   return (
     <article className={docFrame(docs.theme)} style={docStyle(tenant.brandColor, docs.theme)}>
-      <DocHeader title={titles[variant]} lines={[data.number ? `${data.number}${data.version && data.version > 1 ? ` · v${data.version}` : ""}` : ""]} />
+      <DocHeader title={t(variant)} lines={[data.number ? `${data.number}${data.version && data.version > 1 ? ` · v${data.version}` : ""}` : ""]} />
 
       <div className="space-y-6 px-5 py-6 md:px-8">
         <div className="flex flex-wrap justify-between gap-4">
           <div>
-            <p className="text-xs text-text-muted">Prepared for</p>
-            <p className="font-heading text-lg font-semibold">{data.clientName || "Client name"}</p>
+            <p className="text-xs text-text-muted">{t("preparedFor")}</p>
+            <p className="font-heading text-lg font-semibold">{data.clientName || t("clientName")}</p>
             <p className="tnum text-xs text-text-muted">{data.clientPhone}</p>
           </div>
           <dl className="tnum text-right text-xs text-text-muted">
-            <div><dt className="inline">Event: </dt><dd className="inline text-text">{data.eventType}</dd></div>
-            {data.date && <div><dt className="inline">Date: </dt><dd className="inline text-text">{fmtDate(data.date)}</dd></div>}
-            {data.validUntil && variant === "quotation" && <div><dt className="inline">Valid until: </dt><dd className="inline text-text">{fmtDate(data.validUntil)}</dd></div>}
+            <div><dt className="inline">{t("event")}: </dt><dd className="inline text-text">{data.eventType}</dd></div>
+            {data.date && <div><dt className="inline">{t("date")}: </dt><dd className="inline text-text">{fmtDate(data.date)}</dd></div>}
+            {data.validUntil && variant === "quotation" && <div><dt className="inline">{t("validUntil")}: </dt><dd className="inline text-text">{fmtDate(data.validUntil)}</dd></div>}
           </dl>
         </div>
 
@@ -66,15 +70,15 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
             <section key={f.id} className="break-inside-avoid">
               <div className="flex flex-wrap items-end justify-between gap-2 border-b-2 border-brand pb-2">
                 <div>
-                  <h3 className="font-heading text-lg font-semibold">{f.name}{pkg ? <span className="ml-2 text-sm font-medium text-text-muted">{pkg.name} package</span> : null}</h3>
+                  <h3 className="font-heading text-lg font-semibold">{f.name}{pkg ? <span className="ml-2 text-sm font-medium text-text-muted">{pkg.name} {t("package")}</span> : null}</h3>
                   <p className="tnum mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
                     {f.date && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3.5" strokeWidth={1.75} />{fmtDate(f.date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>}
                     <span className="inline-flex items-center gap-1"><Clock className="size-3.5" strokeWidth={1.75} />{fmtTime(f.time)}</span>
-                    <span className="inline-flex items-center gap-1"><Users className="size-3.5" strokeWidth={1.75} />{num(f.pax)} guests</span>
+                    <span className="inline-flex items-center gap-1"><Users className="size-3.5" strokeWidth={1.75} />{num(f.pax)} {t("guests")}</span>
                     {f.venue && <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" strokeWidth={1.75} />{f.venue}</span>}
                   </p>
                 </div>
-                {showPrices && <p className="tnum text-right"><span className="font-heading text-lg font-bold">{money(price.perPlate)}</span><span className="text-xs text-text-muted"> per plate</span></p>}
+                {showPrices && <p className="tnum text-right"><span className="font-heading text-lg font-bold">{money(price.perPlate)}</span><span className="text-xs text-text-muted"> {t("perPlate")}</span></p>}
               </div>
               <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 md:grid-cols-3">
                 {categories.map((c) => {
@@ -84,13 +88,13 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
                     <div key={c.id} className="break-inside-avoid">
                       <p className="text-xs font-medium uppercase tracking-wide text-text-muted">{c.name}</p>
                       <ul className="mt-1 space-y-1">
-                        {inCat.map((i) => <li key={i.id} className="flex items-center gap-2"><VegMark diet={i.diet} />{i.name}</li>)}
+                        {inCat.map((i) => <li key={i.id} className="flex items-center gap-2"><VegMark diet={i.diet} />{dishName(i, lang)}</li>)}
                       </ul>
                     </div>
                   );
                 })}
               </div>
-              {picked.length === 0 && <p className="mt-3 text-text-muted">Menu to be finalised.</p>}
+              {picked.length === 0 && <p className="mt-3 text-text-muted">{t("menuTbd")}</p>}
             </section>
           );
         })}
@@ -99,29 +103,29 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
           <section className="break-inside-avoid">
             <table className="tnum w-full">
               <thead>
-                <tr className="border-b text-left text-xs text-text-muted"><th className="py-2 font-medium">Description</th><th className="py-2 text-right font-medium">Guests</th><th className="py-2 text-right font-medium">Rate</th><th className="py-2 text-right font-medium">Amount</th></tr>
+                <tr className="border-b text-left text-xs text-text-muted"><th className="py-2 font-medium">{t("description")}</th><th className="py-2 text-right font-medium">{t("guests")}</th><th className="py-2 text-right font-medium">{t("rate")}</th><th className="py-2 text-right font-medium">{t("amount")}</th></tr>
               </thead>
               <tbody className="divide-y">
                 {data.functions.map((f) => {
                   const price = priceFunction(f, items, packages, tenant.slabs);
                   return (
                     <React.Fragment key={f.id}>
-                      <tr><td className="py-2">{f.name} food</td><td className="py-2 text-right">{num(f.pax)}</td><td className="py-2 text-right">{money(price.perPlate)}</td><td className="py-2 text-right">{money(price.perPlate * f.pax)}</td></tr>
-                      {price.fixed > 0 && <tr><td className="py-2">{f.name} live counters</td><td /><td /><td className="py-2 text-right">{money(price.fixed)}</td></tr>}
+                      <tr><td className="py-2">{f.name} {t("food")}</td><td className="py-2 text-right">{num(f.pax)}</td><td className="py-2 text-right">{money(price.perPlate)}</td><td className="py-2 text-right">{money(price.perPlate * f.pax)}</td></tr>
+                      {price.fixed > 0 && <tr><td className="py-2">{f.name} {t("liveCounters")}</td><td /><td /><td className="py-2 text-right">{money(price.fixed)}</td></tr>}
                     </React.Fragment>
                   );
                 })}
                 {data.extras.filter((e) => e.amount).map((e) => <tr key={e.id}><td className="py-2" colSpan={3}>{e.label}</td><td className="py-2 text-right">{money(e.amount)}</td></tr>)}
               </tbody>
               <tfoot>
-                <tr className="border-t"><td className="pt-3 text-text-muted" colSpan={3}>Subtotal</td><td className="pt-3 text-right">{money(totals.subtotal)}</td></tr>
-                {totals.discount > 0 && <tr><td className="py-1 text-text-muted" colSpan={3}>Discount</td><td className="py-1 text-right">-{money(totals.discount)}</td></tr>}
-                <tr><td className="py-1 text-text-muted" colSpan={3}>GST {data.gstRate}%{data.gstInclusive ? " (included above)" : ""}</td><td className="py-1 text-right">{money(totals.gst)}</td></tr>
-                <tr className="border-t-2 border-brand"><td className="py-3 font-heading text-base font-semibold" colSpan={3}>Grand total</td><td className="py-3 text-right font-heading text-xl font-bold">{money(totals.grand)}</td></tr>
+                <tr className="border-t"><td className="pt-3 text-text-muted" colSpan={3}>{t("subtotal")}</td><td className="pt-3 text-right">{money(totals.subtotal)}</td></tr>
+                {totals.discount > 0 && <tr><td className="py-1 text-text-muted" colSpan={3}>{t("discount")}</td><td className="py-1 text-right">-{money(totals.discount)}</td></tr>}
+                <tr><td className="py-1 text-text-muted" colSpan={3}>{t("gst")} {data.gstRate}%{data.gstInclusive ? ` (${t("included")})` : ""}</td><td className="py-1 text-right">{money(totals.gst)}</td></tr>
+                <tr className="border-t-2 border-brand"><td className="py-3 font-heading text-base font-semibold" colSpan={3}>{t("grandTotal")}</td><td className="py-3 text-right font-heading text-xl font-bold">{money(totals.grand)}</td></tr>
                 {data.paid !== undefined && (
                   <>
-                    <tr><td className="py-1 text-text-muted" colSpan={3}>Received</td><td className="py-1 text-right">{money(data.paid)}</td></tr>
-                    <tr><td className="py-1 font-medium" colSpan={3}>Balance due</td><td className="py-1 text-right font-semibold">{money(Math.max(0, totals.grand - data.paid))}</td></tr>
+                    <tr><td className="py-1 text-text-muted" colSpan={3}>{t("received")}</td><td className="py-1 text-right">{money(data.paid)}</td></tr>
+                    <tr><td className="py-1 font-medium" colSpan={3}>{t("balanceDue")}</td><td className="py-1 text-right font-semibold">{money(Math.max(0, totals.grand - data.paid))}</td></tr>
                   </>
                 )}
               </tfoot>
@@ -132,7 +136,7 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
         <footer className="grid gap-4 border-t pt-4 text-xs text-text-muted sm:grid-cols-2">
           {showPrices && (
             <div>
-              <p className="font-medium text-text">Terms</p>
+              <p className="font-medium text-text">{t("terms")}</p>
               <p className="mt-1">{tenant.terms}</p>
             </div>
           )}
@@ -143,7 +147,7 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
             {tenant.gstin && showPrices && <p className="tnum">GSTIN {tenant.gstin}</p>}
           </div>
         </footer>
-        {showPrices && variant !== "quotation" && <DocPayBlock due={data.paid !== undefined ? Math.max(0, totals.grand - data.paid) : totals.grand} note={data.number} />}
+        {showPrices && variant !== "quotation" && <DocPayBlock lang={lang} due={data.paid !== undefined ? Math.max(0, totals.grand - data.paid) : totals.grand} note={data.number} />}
       </div>
     </article>
   );

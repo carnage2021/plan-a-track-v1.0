@@ -29,10 +29,11 @@ import { priceFunction, priceQuote } from "@/lib/pricing";
 import { useBilling } from "@/lib/billing";
 import { useSupply } from "@/lib/supply-store";
 import { useStore } from "@/lib/store";
-import type { EventFunction, MenuItem, Order, Payment } from "@/lib/types";
+import type { EventFunction, MenuItem, Order, Payment, Locale } from "@/lib/types";
 import { printLight, printThermal, useUi } from "@/lib/ui";
 import { fmtDate, fmtTime, money, num, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
+import { DocLangPicker, DownloadPdf } from "@/components/documents/doc-actions";
 
 const laterTabs: { id: string; label: string; phase: number }[] = [];
 
@@ -102,6 +103,8 @@ function OrderView({ order }: { order: Order }) {
   const [cancelNote, setCancelNote] = React.useState("");
   const [receipt, setReceipt] = React.useState<Payment | null>(null);
   const [docView, setDocView] = React.useState<"confirmation" | "menu" | null>(null);
+  const clientLang = useStore((s) => s.clients.find((c) => c.id === order.clientId)?.language) ?? "en";
+  const [docLang, setDocLang] = React.useState<Locale>(clientLang);
   const [plates, setPlates] = React.useState(false);
   const [eventSheet, setEventSheet] = React.useState(false);
   const [tableQr, setTableQr] = React.useState(false);
@@ -354,8 +357,9 @@ function OrderView({ order }: { order: Order }) {
       <EventSheet order={order} open={eventSheet} onOpenChange={setEventSheet} />
       <TableQr order={order} open={tableQr} onOpenChange={setTableQr} />
 
-      <Sheet open={!!docView} onOpenChange={(o) => !o && setDocView(null)} title={docView === "menu" ? "Menu card" : "Booking confirmation"} wide footer={<Button onClick={printLight}><Printer strokeWidth={1.75} />Print or PDF</Button>}>
-        {docView && <QuoteDocument data={doc} variant={docView} />}
+      <Sheet open={!!docView} onOpenChange={(o) => !o && setDocView(null)} title={docView === "menu" ? "Menu card" : "Booking confirmation"} wide footer={<>{docView && <DownloadPdf kind={docView} id={order.id} lang={docLang} />}<Button onClick={printLight}><Printer strokeWidth={1.75} />Print</Button></>}>
+        <DocLangPicker className="mb-3" value={docLang} onChange={setDocLang} />
+        {docView && <QuoteDocument data={{ ...doc, lang: docLang }} variant={docView} />}
       </Sheet>
     </>
   );

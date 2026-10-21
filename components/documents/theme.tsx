@@ -5,7 +5,8 @@ import * as React from "react";
 import { BrandMark } from "@/components/settings/tenant-forms";
 import { defaultDocs, mediaUrl } from "@/lib/db";
 import { useStore } from "@/lib/store";
-import type { DocSettings, DocTheme, Tenant } from "@/lib/types";
+import { docT } from "@/lib/doc-i18n";
+import type { DocSettings, DocTheme, Locale, Tenant } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
 
 /** A QR code drawn as one SVG path, so it prints sharp at any size. */
@@ -96,7 +97,8 @@ export function DocHeader({ title, lines, contact = false }: { title: string; li
 }
 
 /** Bank details, a UPI QR for the amount due, the footer note and the signature, as the caterer set them up. */
-export function DocPayBlock({ due, note, signed = true }: { due?: number; note?: string; signed?: boolean }) {
+export function DocPayBlock({ due, note, signed = true, lang = "en" }: { due?: number; note?: string; signed?: boolean; lang?: Locale }) {
+  const t = docT(lang);
   const tenant = useStore((s) => s.tenant);
   const docs = useDocs();
   const qr = docs.showUpiQr && !!tenant.upiId && (due ?? 1) > 0;
@@ -106,20 +108,20 @@ export function DocPayBlock({ due, note, signed = true }: { due?: number; note?:
         {qr && (
           <div className="shrink-0 text-center">
             <QrCode value={upiLink(tenant, due, note)} label={`UPI QR to pay ${due ? money(due) : tenant.name}`} className="size-24 rounded-md border p-1" />
-            <p className="mt-1">Scan to pay{due ? ` ${money(due)}` : ""}</p>
+            <p className="mt-1">{t("scanToPay")}{due ? ` ${money(due)}` : ""}</p>
           </div>
         )}
         <div className="space-y-1">
-          {docs.showBank && tenant.bankAccount && <p className="tnum"><span className="font-medium text-text">Bank: </span>{tenant.bankName} · A/c {tenant.bankAccount} · IFSC {tenant.ifsc}</p>}
-          {tenant.upiId && <p className="tnum"><span className="font-medium text-text">UPI: </span>{tenant.upiId}</p>}
+          {docs.showBank && tenant.bankAccount && <p className="tnum"><span className="font-medium text-text">{t("bank")}: </span>{tenant.bankName} · A/c {tenant.bankAccount} · IFSC {tenant.ifsc}</p>}
+          {tenant.upiId && <p className="tnum"><span className="font-medium text-text">{t("upi")}: </span>{tenant.upiId}</p>}
           {docs.footer && <p className="whitespace-pre-line pt-1">{docs.footer}</p>}
         </div>
       </div>
       {signed && (
         <div className="self-end text-right">
           {docs.signaturePath && <img src={mediaUrl(docs.signaturePath)} alt="Signature" className="ml-auto h-12 object-contain" />}
-          <p className="mt-1 border-t border-dashed pt-1">For {tenant.name}</p>
-          <p>Authorised signatory</p>
+          <p className="mt-1 border-t border-dashed pt-1">{lang === "en" ? `${t("for")} ${tenant.name}` : `${tenant.name} ${t("for")}`}</p>
+          <p>{t("signatory")}</p>
         </div>
       )}
     </div>

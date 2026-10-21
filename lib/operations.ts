@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { background } from "./queue";
 import { supabase } from "./supabase/client";
 import { uid } from "./utils";
+import { inBranch, withBranch } from "./branch";
 
 // Phase 4B: dispatch and transport (D4) and the on-site event screen (D5).
 // Tables are in supabase/migrations/0006_operations.sql.
@@ -122,7 +123,7 @@ export const useOps = create<State>()((set, get) => ({
     if (failed) return void toast.error("Could not load dispatch and event-day data", { description: failed.error?.message });
     set({
       ready: true,
-      vehicles: (vehicles.data as Row[]).map((v) => ({ id: v.id, name: v.name, regNumber: v.reg_number, hired: v.hired, vendorId: v.vendor_id ?? undefined, capacity: v.capacity, ratePerTrip: Number(v.rate_per_trip), driverName: v.driver_name, driverPhone: v.driver_phone, active: v.active })),
+      vehicles: (vehicles.data as Row[]).filter(inBranch).map((v) => ({ id: v.id, name: v.name, regNumber: v.reg_number, hired: v.hired, vendorId: v.vendor_id ?? undefined, capacity: v.capacity, ratePerTrip: Number(v.rate_per_trip), driverName: v.driver_name, driverPhone: v.driver_phone, active: v.active })),
       trips: (trips.data as Row[]).map((t) => ({ id: t.id, orderId: t.order_id, functionId: t.function_id, vehicleId: t.vehicle_id ?? undefined, driverName: t.driver_name, driverPhone: t.driver_phone, departTime: t.depart_time, status: t.status, cost: Number(t.cost), loading: t.loading ?? [], proofPath: t.proof_path ?? undefined, deliveredAt: t.delivered_at ?? undefined, notes: t.notes })),
       onsite: Object.fromEntries((onsite.data as Row[]).map((o) => [o.function_id, { functionId: o.function_id, orderId: o.order_id, checklist: o.checklist ?? {}, guests: o.guests, signoffName: o.signoff_name, signoffPath: o.signoff_path ?? undefined, signedAt: o.signed_at ?? undefined }])),
       issues: (issues.data as Row[]).map((i) => ({ id: i.id, orderId: i.order_id, functionId: i.function_id, kind: i.kind, note: i.note, photoPath: i.photo_path ?? undefined, resolved: i.resolved, reportedBy: i.reported_by, createdAt: i.created_at })),
@@ -132,7 +133,7 @@ export const useOps = create<State>()((set, get) => ({
   saveVehicle: (v) => {
     const saved: Vehicle = { ...v, id: v.id ?? uid() };
     set((s) => ({ vehicles: v.id ? s.vehicles.map((x) => (x.id === saved.id ? saved : x)) : [...s.vehicles, saved].sort((a, b) => a.name.localeCompare(b.name)) }));
-    background((sb) => ok(sb.from("vehicles").upsert(vehicleRow(saved)), "Saving the vehicle"));
+    background((sb) => ok(sb.from("vehicles").upsert(v.id ? vehicleRow(saved) : withBranch(vehicleRow(saved))), "Saving the vehicle"));
     return saved.id;
   },
 

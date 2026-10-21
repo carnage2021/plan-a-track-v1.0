@@ -28,6 +28,7 @@ import {
 import type { Asset, Challan, Ingredient, Movement, OutsourceOrder, PoStatus, PurchaseOrder, RecipeLine, Vendor, VendorBill, VendorPayment } from "./supply-types";
 import { supabase } from "./supabase/client";
 import { financialYear, isoDate, uid } from "./utils";
+import { withBranch } from "./branch";
 
 // Phase 3 data (recipes, stock, vendors, agency orders, cutlery). Same pattern as lib/store.ts:
 // loaded after sign-in, changed on screen at once, written to Supabase behind it.
@@ -120,7 +121,7 @@ export const useSupply = create<SupplyStore>()((set, get) => {
     addStore: (name) => {
       const store = { id: uid(), name: name.trim() };
       set((s) => ({ stores: [...s.stores, store] }));
-      background((sb) => ok(sb.from("stores").insert(store), "Saving the store"));
+      background((sb) => ok(sb.from("stores").insert(withBranch(store)), "Saving the store"));
     },
 
     saveIngredient: (ingredient, openingQty) => {

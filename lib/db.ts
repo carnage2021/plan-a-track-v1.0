@@ -15,6 +15,7 @@ import type {
   Tenant,
   DocSettings,
 } from "./types";
+import { inBranch, setBranchContext, withBranch } from "./branch";
 import { localDay } from "./utils";
 
 // Maps between the app's objects (lib/types.ts) and the Postgres rows (supabase/migrations).
@@ -239,13 +240,13 @@ async function insertExtras(sb: SB, parent: { quotation_id?: string; order_id?: 
 }
 
 export async function insertQuotation(sb: SB, q: Quotation, tenantId?: string) {
-  check(await sb.from("quotations").insert(tenanted(quotationRow(q), tenantId)), "Saving the quotation");
+  check(await sb.from("quotations").insert(tenanted(withBranch(quotationRow(q)), tenantId)), "Saving the quotation");
   await insertFunctions(sb, { quotation_id: q.id }, q.functions, tenantId);
   await insertExtras(sb, { quotation_id: q.id }, q.extras, tenantId);
 }
 
 export async function insertOrder(sb: SB, o: Order, tenantId?: string, userId?: string) {
-  check(await sb.from("orders").insert(tenanted(orderRow(o), tenantId)), "Saving the order");
+  check(await sb.from("orders").insert(tenanted(withBranch(orderRow(o)), tenantId)), "Saving the order");
   await insertFunctions(sb, { order_id: o.id }, o.functions, tenantId);
   await insertExtras(sb, { order_id: o.id }, o.extras, tenantId);
   if (o.payments.length) check(await sb.from("payments").insert(o.payments.map((p) => tenanted(paymentRow(p, o.id, userId), tenantId))), "Saving payments");
@@ -281,9 +282,14 @@ export interface Loaded {
   enquiries: Enquiry[];
   quotations: Quotation[];
   orders: Order[];
+  branches: { id: string; name: string; address: string }[];
+  /** False until 0011 has added branch columns */
+  branchesEnabled: boolean;
+  /** The branch this person is tied to, if the owner assigned one */
+  myBranch: string;
 }
 
-export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
+export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Promise<Loaded | null> {
   await probeSupply(sb);
   const profile = (await sb.from("profiles").select("*").eq("id", userId).maybeSingle()).data as Row | null;
   if (!profile) return null;
@@ -292,6 +298,12 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
     const q = sb.from(table).select("*");
     return (order ? q.order(order, { ascending }) : q).range(0, 9999);
   };
+  const [branchProbe, branchRows] = await Promise.all([sb.from("orders").select("branch_id").limit(1), all("branches", "created_at")]);
+  const branchesEnabled = !branchProbe.error;
+  const branchList = ((branchRows.data ?? []) as Row[]).map((b) => ({ id: b.id as string, name: b.name as string, address: b.address as string }));
+  const myBranch = (profile.branch_id as string | null) ?? "";
+  // Someone tied to a branch always sees that branch; everyone else sees the one they picked, if it still exists.
+  setBranchContext(branchesEnabled, myBranch || (branchList.some((b) => b.id === preferredBranch) ? preferredBranch : ""));
   const [tenant, profiles, invites, clients, categories, items, packages, rules, enquiries, quotations, orders, functions, fnItems, extras, payments, changes] = await Promise.all([
     sb.from("tenants").select("*").eq("id", profile.tenant_id).single(),
     all("profiles", "created_at"),
@@ -379,7 +391,7 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       fixedItemIds: p.fixed_item_ids ?? [],
       rules: ruleRows.filter((r) => r.package_id === p.id).map((r) => ({ categoryId: r.category_id, choose: r.choose })),
     })),
-    enquiries: rowsOf(enquiries, "Loading enquiries").map((e) => ({
+    enquiries: rowsOf(enquiries, "Loading enquiries").filter(inBranch).map((e) => ({
       id: e.id,
       clientId: e.client_id,
       eventType: e.event_type,
@@ -396,7 +408,7 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       lostReason: e.lost_reason ?? undefined,
       createdAt: localDay(e.created_at),
     })),
-    quotations: rowsOf(quotations, "Loading quotations").map((q) => ({
+    quotations: rowsOf(quotations, "Loading quotations").filter(inBranch).map((q) => ({
       id: q.id,
       number: q.number,
       groupId: q.group_id,
@@ -415,7 +427,7 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       createdBy: q.created_by ?? "",
       createdAt: localDay(q.created_at),
     })),
-    orders: rowsOf(orders, "Loading orders").map((o) => ({
+    orders: rowsOf(orders, "Loading orders").filter(inBranch).map((o) => ({
       id: o.id,
       number: o.number,
       quotationId: o.quotation_id ?? undefined,
@@ -435,6 +447,9 @@ export async function loadAll(sb: SB, userId: string): Promise<Loaded | null> {
       cancelNote: o.cancel_note ?? undefined,
       createdAt: localDay(o.created_at),
     })),
+    branches: branchList,
+    branchesEnabled,
+    myBranch,
   };
 }
 

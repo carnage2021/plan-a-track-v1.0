@@ -84,3 +84,12 @@ export function printThermal() {
   document.documentElement.classList.remove("print-thermal");
   page.remove();
 }
+
+/** Prints label sheets edge to edge on A4, so each sticker lands on its label. */
+export function printLabels() {
+  const page = document.createElement("style");
+  page.textContent = "@page { size: A4; margin: 0; } .label-page { break-after: page; }";
+  document.head.append(page);
+  printLight();
+  page.remove();
+}

@@ -62,7 +62,9 @@ function LoginForm() {
         const res = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, business, email, password, samples }) });
         if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? "Could not create the account.");
       }
-      const { error: authError } = await supabase().auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      // Staff sign in with the login ID the owner gave them; it is stored as <id>@staff.invalid.
+      const login = email.trim().toLowerCase();
+      const { error: authError } = await supabase().auth.signInWithPassword({ email: login.includes("@") ? login : `${login}@staff.invalid`, password });
       if (authError) throw new Error(t("wrong"));
       if (!(await reload())) throw new Error("This login is not linked to a catering account.");
     } catch (err) {
@@ -113,7 +115,7 @@ function LoginForm() {
                 <Field label={t("business")}><Input className="!h-11" name="organization" autoComplete="organization" required placeholder="Royal Caterers" value={business} onChange={(e) => setBusiness(e.target.value)} /></Field>
               </>
             )}
-            <Field label={t("email")}><Input className="!h-11" type="email" name="email" autoComplete="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+            <Field label={signup ? t("email") : t("emailOrId")} hint={signup ? undefined : t("emailOrIdHint")}><Input className="!h-11" type={signup ? "email" : "text"} name={signup ? "email" : "username"} autoComplete={signup ? "email" : "username"} autoCapitalize="none" spellCheck={false} required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
             <Field label={t("password")} hint={signup ? t("passwordHint") : undefined}>
               <Input className="!h-11" type="password" name="password" autoComplete={signup ? "new-password" : "current-password"} required minLength={signup ? 8 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>

@@ -15,7 +15,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { blankDraft, blankFunction, draftIssues, useQuoteDraft } from "@/lib/draft";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { QuoteDraft } from "@/lib/types";
-import { money } from "@/lib/utils";
+import { money, uid } from "@/lib/utils";
 
 const steps = ["Details", "Menu", "Summary"];
 
@@ -38,7 +38,9 @@ function Builder() {
     const enquiry = s.enquiries.find((e) => e.id === enquiryId);
     if (enquiry) {
       const c = s.clients.find((x) => x.id === enquiry.clientId);
-      return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", eventType: enquiry.eventType, enquiryId, functions: [blankFunction(enquiry.eventType, enquiry.date, enquiry.pax, enquiry.venue)], step: 1 };
+      // The services asked for in the enquiry become the quotation's functions, menus still to pick.
+      const functions = enquiry.services?.length ? enquiry.services.map((f) => ({ ...f, id: uid(), itemIds: [] })) : [blankFunction(enquiry.eventType, enquiry.date, enquiry.pax, enquiry.venue)];
+      return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", eventType: enquiry.eventType, enquiryId, functions, step: 1 };
     }
     return blankDraft();
   }, [enquiryId, reviseId]);

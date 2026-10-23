@@ -13,7 +13,8 @@ import { useSupply } from "@/lib/supply-store";
 import type { Challan, ChallanLine, ChallanStatus } from "@/lib/supply-types";
 import type { EventFunction, Order } from "@/lib/types";
 import { printLight } from "@/lib/ui";
-import { cn, fmtDate, fmtTime, money, num, uid } from "@/lib/utils";
+import { ServiceLabel } from "@/components/shared/blocks";
+import { cn, fmtDate, money, num, uid } from "@/lib/utils";
 import { Num } from "./common";
 
 const statusLabel: Record<ChallanStatus, string> = { draft: "Not issued", issued: "Out at the event", returned: "Returned" };
@@ -59,7 +60,7 @@ export function ChallanEditor({ challan, fn }: { challan: Challan; fn: EventFunc
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="font-heading text-base font-semibold">{fn.name} · {challan.number}</h3>
-          <p className="tnum text-xs text-text-muted">{fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })}, {fmtTime(fn.time)} · {num(fn.pax)} guests · {fn.venue}</p>
+          <p className="tnum text-xs text-text-muted">{fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })}, <ServiceLabel fn={fn} /> · {num(fn.pax)} guests · {fn.venue}</p>
         </div>
         <ChallanBadge status={challan.status} />
       </div>

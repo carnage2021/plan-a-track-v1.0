@@ -4,7 +4,8 @@ import { CheckCircle2, Clock, MapPin, MessageCircle, Pencil, Phone, Plus, Trash2
 import * as React from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/shared/badges";
-import { EmptyState, MoneyInput } from "@/components/shared/blocks";
+import { EmptyState, MoneyInput, ServiceLabel } from "@/components/shared/blocks";
+import { timeRange } from "@/lib/services";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Card, ToggleRow } from "@/components/ui/primitives";
@@ -200,7 +201,7 @@ function TripCard({ trip, fn, venue, onEdit }: { trip: Trip; fn: EventFunction; 
     patchTrip(trip.id, { status: next, ...(next === "delivered" ? { deliveredAt: new Date().toISOString(), proofPath } : {}) });
     toast.success(next === "delivered" ? "Delivery confirmed" : next === "dispatched" ? "Trip dispatched" : "Loading started");
   };
-  const brief = [`${fn.name}, ${fmtDate(fn.date, { day: "numeric", month: "short" })}`, `Leave at ${fmtTime(trip.departTime)}. Guests served at ${fmtTime(fn.time)}.`, `Venue: ${venue}`, trip.notes, "", "Load:", ...trip.loading.map((l) => `- ${l.label}`)].filter((x) => x !== undefined).join("\n");
+  const brief = [`${fn.name}, ${fmtDate(fn.date, { day: "numeric", month: "short" })}`, `Leave at ${fmtTime(trip.departTime)}. Service ${timeRange(fn)}.`, `Venue: ${venue}`, trip.notes, "", "Load:", ...trip.loading.map((l) => `- ${l.label}`)].filter((x) => x !== undefined).join("\n");
 
   return (
     <Card className={cn("p-4", clash && "border-warning")}>
@@ -276,7 +277,7 @@ export function FunctionTrips({ order, fn, showHead = true }: { order: Order; fn
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h3 className="font-heading text-lg font-semibold">{client?.name} · {fn.name}</h3>
-            <p className="tnum flex flex-wrap gap-x-3 text-sm text-text-muted"><span>Serve {fmtTime(fn.time)}</span><span>{num(fn.pax)} guests</span><span className="inline-flex items-center gap-1"><MapPin className="size-3.5" strokeWidth={1.75} />{fn.venue}</span></p>
+            <p className="tnum flex flex-wrap gap-x-3 text-sm text-text-muted"><span><ServiceLabel fn={fn} /></span><span>{num(fn.pax)} guests</span><span className="inline-flex items-center gap-1"><MapPin className="size-3.5" strokeWidth={1.75} />{fn.venue}</span></p>
           </div>
           <Button onClick={plan}><Plus strokeWidth={1.75} />Plan a trip</Button>
         </div>

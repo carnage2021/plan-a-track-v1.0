@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, ImageOff, LayoutGrid, PencilLine, Plus, Search, TrendingUp, Users, UtensilsCrossed, X } from "lucide-react";
+import { Check, ImageOff, LayoutGrid, PencilLine, Plus, Search, Soup, TrendingUp, Users, UtensilsCrossed, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import { FoodTypesEditor } from "@/components/menu/food-types";
 import { ItemSheet, PackageSheet } from "@/components/menu/item-sheet";
 import { PackageCollage } from "@/components/menu/package-picker";
 import { Badge, VegMark } from "@/components/shared/badges";
@@ -14,7 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Chip, Skeleton, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/sheet";
 import { categoryIcon } from "@/lib/icons";
+import { offered, packageLines } from "@/lib/packages";
 import { marginTone } from "@/lib/pricing";
+import { useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { MenuItem, MenuPackage } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
@@ -23,12 +26,14 @@ import { useAccess } from "@/lib/access";
 function Menu() {
   const params = useSearchParams();
   const role = useCurrentUser().role;
-  const { items, categories, packages } = useStore();
+  const { items, categories, packages: allPackages } = useStore();
+  const packages = offered(allPackages);
   const patchItems = useStore((s) => s.patchItems);
   const raisePrices = useStore((s) => s.raisePrices);
   const restoreItems = useStore((s) => s.restoreItems);
   const canEdit = role === "owner" || role === "sales";
   const { hidePrices } = useAccess();
+  const foodTypes = useFoodTypes();
   const seesCost = (role === "owner" || role === "sales") && !hidePrices;
 
   const [category, setCategory] = React.useState("all");
@@ -61,10 +66,11 @@ function Menu() {
     <>
       <PageHeader title="Menu" subtitle={`${items.filter((i) => i.active).length} dishes on the menu, ${packages.length} packages.`} action={canEdit && <Button variant="primary" onClick={() => setEditing("new")}><Plus strokeWidth={2} /><span className="max-sm:hidden">Add dish</span></Button>} />
 
-      <Tabs defaultValue="dishes">
+      <Tabs defaultValue={params.get("tab") === "food-types" ? "food-types" : "dishes"}>
         <TabsList>
           <TabsTrigger value="dishes"><UtensilsCrossed className="size-5" strokeWidth={1.75} />Dishes</TabsTrigger>
           <TabsTrigger value="packages"><LayoutGrid className="size-5" strokeWidth={1.75} />Packages</TabsTrigger>
+          <TabsTrigger value="food-types"><Soup className="size-5" strokeWidth={1.75} />Food types</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dishes">
@@ -140,15 +146,15 @@ function Menu() {
                 <div className="relative"><PackageCollage pkg={p} />{p.tier === "premium" && <Badge tone="gold" className="absolute left-2 top-2 bg-surface">Premium</Badge>}</div>
                 <div className="flex flex-1 flex-col px-2 pb-2 pt-3">
                   <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-heading text-xl font-semibold">{p.name}</h3>
+                    <h3 className="font-heading text-xl font-semibold">{p.name}{p.foodTypeId && <Badge className="ml-2 align-middle">{foodTypes.find((t) => t.id === p.foodTypeId)?.name ?? "Food type removed"}</Badge>}</h3>
                     <p className="tnum text-sm"><span className="font-heading text-xl font-bold">{money(p.pricePerPlate)}</span> per plate</p>
                   </div>
                   <p className="mt-1 text-sm text-text-muted">{p.description}</p>
                   <p className="tnum mt-2 flex items-center gap-1.5 text-xs text-text-muted"><Users className="size-3.5" strokeWidth={1.75} />Minimum {p.minPax} guests · {p.fixedItemIds.length} dishes always included</p>
                   <ul className="mt-3 flex-1 space-y-1 text-sm">
-                    {p.rules.map((r) => <li key={r.categoryId} className="flex justify-between gap-2"><span className="text-text-muted">{categories.find((c) => c.id === r.categoryId)?.name}</span><span className="tnum">Choose any {r.choose} of {items.filter((i) => i.active && i.categoryId === r.categoryId && i.pricingType === "plate").length}</span></li>)}
+                    {packageLines(p, categories).map((line, k) => <li key={k} className="flex items-center gap-2"><Check className={cn("size-4 shrink-0", k < p.rules.length ? "text-success" : "text-accent-gold")} strokeWidth={2} />{line}</li>)}
                   </ul>
-                  {canEdit && <Button className="mt-4" onClick={() => setEditingPkg(p)}><PencilLine strokeWidth={1.75} />Edit package</Button>}
+                  {canEdit && <Button className="mt-4" onClick={() => setEditingPkg(p)}><PencilLine strokeWidth={1.75} />Edit or delete</Button>}
                 </div>
               </article>
             ))}
@@ -158,6 +164,10 @@ function Menu() {
               </button>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="food-types">
+          <FoodTypesEditor />
         </TabsContent>
       </Tabs>
 

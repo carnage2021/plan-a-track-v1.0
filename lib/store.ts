@@ -48,6 +48,10 @@ interface Data {
   branches: { id: string; name: string; address: string }[];
   branchesEnabled: boolean;
   myBranch: string;
+  /** False until 0012 has added food types, sessions and end times */
+  servicesReady: boolean;
+  /** False until 0013 has added package additions and archiving */
+  packageExtrasReady: boolean;
   tenantId: string;
   tenant: Tenant;
   users: TeamUser[];
@@ -95,6 +99,8 @@ interface Actions {
   /** Puts the menu back to an earlier snapshot (Undo for bulk edits). */
   restoreItems: (snapshot: MenuItem[]) => void;
   savePackage: (pkg: Omit<MenuPackage, "id"> & { id?: string }) => void;
+  /** Deletes a package, or archives it when quotations or orders use it. Says which it did. */
+  removePackage: (id: string) => "deleted" | "archived";
   saveDraft: (key: string, draft: QuoteDraft | null) => void;
   createQuotation: (draft: QuoteDraft, status: QuoteStatus) => Promise<string>;
   setQuoteStatus: (id: string, status: QuoteStatus) => void;
@@ -114,7 +120,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "",
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -276,6 +282,18 @@ export const useStore = create<Store>()(
         const saved: MenuPackage = { ...pkg, id: pkg.id ?? uid() };
         set((s) => ({ packages: pkg.id ? s.packages.map((p) => (p.id === saved.id ? saved : p)) : [...s.packages, saved] }));
         background((sb) => savePackageRows(sb, saved));
+      },
+      removePackage: (id) => {
+        const s = get();
+        const used = [...s.quotations, ...s.orders].some((x) => x.functions.some((f) => f.packageId === id));
+        if (used) {
+          set({ packages: s.packages.map((p) => (p.id === id ? { ...p, archived: true } : p)) });
+          background((sb) => run(sb.from("packages").update({ archived: true }).eq("id", id), "Archiving the package"));
+          return "archived";
+        }
+        set({ packages: s.packages.filter((p) => p.id !== id) });
+        background((sb) => run(sb.from("packages").delete().eq("id", id), "Deleting the package"));
+        return "deleted";
       },
 
       // Drafts stay on this device until they become a quotation.

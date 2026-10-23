@@ -4,7 +4,7 @@ import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Map
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { Badge } from "@/components/shared/badges";
-import { EmptyState, PageHeader, ProgressBar } from "@/components/shared/blocks";
+import { EmptyState, PageHeader, ProgressBar, ServiceLabel } from "@/components/shared/blocks";
 import { OpsGate } from "@/components/ops/common";
 import { OnsiteView } from "@/components/ops/onsite";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/primitives";
 import { checkSteps, useOps } from "@/lib/operations";
 import { useStore } from "@/lib/store";
-import { addDays, fmtTime, isoDate, num, parseDate } from "@/lib/utils";
+import { addDays, isoDate, num, parseDate } from "@/lib/utils";
 
 function DayList({ onPick }: { onPick: (id: string) => void }) {
   const [date, setDate] = React.useState(() => isoDate(new Date()));
@@ -48,7 +48,7 @@ function DayList({ onPick }: { onPick: (id: string) => void }) {
                     {rec?.signedAt ? <Badge tone="success"><CheckCircle2 />Signed off</Badge> : done > 0 ? <Badge tone="primary">Live</Badge> : null}
                     {open > 0 && <Badge tone="danger">{open} open {open === 1 ? "issue" : "issues"}</Badge>}
                   </p>
-                  <p className="tnum mt-1 flex flex-wrap gap-x-3 text-sm text-text-muted"><span>Serve {fmtTime(fn.time)}</span><span>{num(fn.pax)} guests</span><span className="inline-flex items-center gap-1"><MapPin className="size-3.5" strokeWidth={1.75} />{fn.venue}</span></p>
+                  <p className="tnum mt-1 flex flex-wrap gap-x-3 text-sm text-text-muted"><span><ServiceLabel fn={fn} /></span><span>{num(fn.pax)} guests</span><span className="inline-flex items-center gap-1"><MapPin className="size-3.5" strokeWidth={1.75} />{fn.venue}</span></p>
                   <div className="tnum mt-3 flex items-center gap-3 text-xs text-text-muted"><ProgressBar value={(done / checkSteps.length) * 100} className="h-1.5 flex-1" label="Checklist" />{done} of {checkSteps.length}</div>
                 </button>
               </li>

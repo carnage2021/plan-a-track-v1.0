@@ -3,16 +3,17 @@
 import { Copy, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import * as React from "react";
 import { Badge } from "@/components/shared/badges";
-import { MoneyInput, PaxInput } from "@/components/shared/blocks";
+import { MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Card } from "@/components/ui/primitives";
-import { blankFunction } from "@/lib/draft";
 import { marginTone, priceQuote } from "@/lib/pricing";
+import { datesBetween, eventSpan } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { QuoteDraft } from "@/lib/types";
-import { cn, isoDate, money, uid } from "@/lib/utils";
-import { DateAvailability, eventTypes } from "./enquiry-sheet";
+import { cn, fmtDate, money, uid } from "@/lib/utils";
+import { eventTypes } from "./enquiry-sheet";
+import { nextService, ServiceCard } from "./service-fields";
 
 type SetDraft = (patch: Partial<QuoteDraft> | ((d: QuoteDraft) => Partial<QuoteDraft>)) => void;
 
@@ -31,6 +32,8 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
   const names = functionNames[draft.eventType] ?? [];
   const unused = names.filter((n) => !draft.functions.some((f) => f.name === n));
   const last = draft.functions[draft.functions.length - 1];
+  const span = eventSpan(draft.functions);
+  const fallback = { date: "", pax: 200, venue: "" };
 
   return (
     <div className="space-y-4">
@@ -61,34 +64,20 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
         {match && <p className="mt-2 flex items-center gap-2 text-xs text-text-muted">Existing client{match.tags.map((t) => <Badge key={t} tone={t === "vip" ? "gold" : "info"}>{t === "vip" ? "VIP" : "Repeat client"}</Badge>)}</p>}
       </Card>
 
+      <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
+        <h2 className="font-heading text-base font-semibold">Catering services</h2>
+        {span.start && <p className="tnum text-sm text-text-muted">Event {fmtDate(span.start, { day: "numeric", month: "short" })}{span.end > span.start ? ` to ${fmtDate(span.end, { day: "numeric", month: "short" })}, ${datesBetween(span.start, span.end).length} days` : ", one day"} · {draft.functions.length} {draft.functions.length === 1 ? "service" : "services"}</p>}
+      </div>
       {draft.functions.map((f, i) => (
-        <Card key={f.id} className="p-4 md:p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-heading text-base font-semibold">Function {i + 1}</h2>
-            {draft.functions.length > 1 && (
-              <Button variant="ghost" size="icon" aria-label={`Remove ${f.name}`} onClick={() => setDraft((d) => ({ functions: d.functions.filter((x) => x.id !== f.id) }))}><Trash2 strokeWidth={1.75} /></Button>
-            )}
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <Field label="Function name" error={showErrors && !f.name.trim() ? "Give it a name" : ""}><Input value={f.name} onChange={(e) => setFn(f.id, { name: e.target.value })} placeholder="Wedding lunch" /></Field>
-            <Field label="Date" error={showErrors && !f.date ? "Pick a date" : ""}><Input type="date" min={isoDate(new Date())} value={f.date} onChange={(e) => setFn(f.id, { date: e.target.value })} /></Field>
-            <Field label="Serving time"><Input type="time" value={f.time} onChange={(e) => setFn(f.id, { time: e.target.value })} /></Field>
-            <Field label="Venue"><Input value={f.venue} onChange={(e) => setFn(f.id, { venue: e.target.value })} placeholder="Hall or address" /></Field>
-          </div>
-          <DateAvailability date={f.date} pax={f.pax} />
-          <div className="mt-3 max-w-md">
-            <span className="mb-1 block text-xs font-medium text-text-muted">Guests</span>
-            <PaxInput value={f.pax} onChange={(pax) => setFn(f.id, { pax })} />
-          </div>
-        </Card>
+        <ServiceCard key={f.id} fn={f} index={i} onChange={(p) => setFn(f.id, p)} onRemove={draft.functions.length > 1 ? () => setDraft((d) => ({ functions: d.functions.filter((x) => x.id !== f.id) })) : undefined} showErrors={showErrors} namePlaceholder="Wedding lunch" />
       ))}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => setDraft((d) => ({ functions: [...d.functions, blankFunction(unused[0] ?? `Function ${d.functions.length + 1}`, last?.date, last?.pax, last?.venue)] }))}><Plus strokeWidth={1.75} />Add a function</Button>
+        <Button onClick={() => setDraft((d) => ({ functions: [...d.functions, { ...nextService(d.functions, fallback), name: unused[0] ?? "" }] }))}><Plus strokeWidth={1.75} />Add a service</Button>
         {unused.slice(0, 4).map((n) => (
-          <Button key={n} variant="ghost" onClick={() => setDraft((d) => ({ functions: [...d.functions, blankFunction(n, last?.date, last?.pax, last?.venue)] }))}><Plus strokeWidth={1.75} />{n}</Button>
+          <Button key={n} variant="ghost" onClick={() => setDraft((d) => ({ functions: [...d.functions, { ...nextService(d.functions, fallback), name: n }] }))}><Plus strokeWidth={1.75} />{n}</Button>
         ))}
-        {last && draft.functions.length === 1 && <span className="flex items-center gap-1 text-xs text-text-muted"><Copy className="size-3.5" strokeWidth={1.75} />New functions copy the date, venue and guests; menus can be copied in the next step.</span>}
+        {last && draft.functions.length === 1 && <span className="flex items-center gap-1 text-xs text-text-muted"><Copy className="size-3.5" strokeWidth={1.75} />A new service copies the date, venue and guests and starts after this one ends; menus can be copied in the next step.</span>}
       </div>
     </div>
   );

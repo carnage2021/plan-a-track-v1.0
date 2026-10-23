@@ -12,7 +12,8 @@ import { clock, dishFlow, dishLabel, kitchenKey, portions, readyBy, useKitchen, 
 import { useStore } from "@/lib/store";
 import { fmtQty, requirementFor, roundQty } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
-import type { MenuItem } from "@/lib/types";
+import { serviceLine, timeRange, useFoodTypes } from "@/lib/services";
+import type { EventFunction, MenuItem } from "@/lib/types";
 import { printLight } from "@/lib/ui";
 import { addDays, cn, fmtDate, fmtTime, isoDate, num, parseDate } from "@/lib/utils";
 
@@ -24,7 +25,7 @@ const tone: Record<DishStatus, string> = {
   packed: "bg-primary-soft text-primary",
 };
 
-interface Use { key: string; fnName: string; client: string; pax: number; time: string; venue: string; portions: number }
+interface Use extends Pick<EventFunction, "time" | "endTime" | "session" | "foodTypeId"> { key: string; fnName: string; client: string; pax: number; venue: string; portions: number }
 interface Dish { item: MenuItem; category: string; uses: Use[]; total: number; readyBy: number; status: DishStatus; done: number }
 
 /** Everything to cook on one date, one card per dish, with the same dish across events cooked together. */
@@ -43,7 +44,7 @@ function useProduction(date: string) {
           if (!item || item.outsourced) continue;
           const category = categories.find((c) => c.id === item.categoryId)?.name ?? "";
           const dish = map.get(id) ?? { item, category, uses: [], total: 0, readyBy: Infinity, status: "pending" as DishStatus, done: 0 };
-          dish.uses.push({ key: kitchenKey(fn.id, id), fnName: fn.name, client: clients.find((c) => c.id === o.clientId)?.name ?? "", pax: fn.pax, time: fn.time, venue: fn.venue, portions: portions(item, fn.pax) });
+          dish.uses.push({ key: kitchenKey(fn.id, id), fnName: fn.name, client: clients.find((c) => c.id === o.clientId)?.name ?? "", pax: fn.pax, time: fn.time, endTime: fn.endTime, session: fn.session, foodTypeId: fn.foodTypeId, venue: fn.venue, portions: portions(item, fn.pax) });
           dish.total += portions(item, fn.pax);
           dish.readyBy = Math.min(dish.readyBy, readyBy(fn.time, category));
           map.set(id, dish);
@@ -64,6 +65,7 @@ function DishCard({ dish, now, isToday, recipeTop }: { dish: Dish; now: number; 
   const setStatus = useKitchen((s) => s.setStatus);
   const setLeftover = useKitchen((s) => s.setLeftover);
   const rows = useKitchen((s) => s.rows);
+  const foodTypes = useFoodTypes();
   const i = dishFlow.indexOf(dish.status);
   const next = dishFlow[i + 1];
   const late = isToday && now > dish.readyBy && i < dishFlow.indexOf("ready");
@@ -86,7 +88,7 @@ function DishCard({ dish, now, isToday, recipeTop }: { dish: Dish; now: number; 
       <ul className="tnum mt-3 divide-y border-y text-sm">
         {dish.uses.map((u) => (
           <li key={u.key} className="flex items-center justify-between gap-3 py-2">
-            <span className="min-w-0"><span className="block truncate font-medium">{u.client} · {u.fnName}</span><span className="block truncate text-text-muted">Serve {fmtTime(u.time)} · {u.venue}</span></span>
+            <span className="min-w-0"><span className="block truncate font-medium">{u.client} · {u.fnName}</span><span className="block truncate text-text-muted">{serviceLine(u, foodTypes)} · {u.venue}</span></span>
             <span className="flex shrink-0 items-center gap-2">
               <span className="font-semibold">{num(u.portions)}</span>
               {dish.uses.length > 1 && <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", tone[rows[u.key]?.status ?? "pending"])}>{dishLabel[rows[u.key]?.status ?? "pending"]}</span>}
@@ -140,6 +142,20 @@ export default function KitchenPage() {
   const orders = useStore((s) => s.orders);
   const guests = orders.filter((o) => o.status !== "cancelled" && o.status !== "tentative").flatMap((o) => o.functions).filter((f) => f.date === date).reduce((s, f) => s + f.pax, 0);
   const step = (n: number) => setDate(isoDate(addDays(parseDate(date), n)));
+  const foodTypes = useFoodTypes();
+  // One section per service start time, so the welcome drinks are cooked before the dinner. A dish needed
+  // at several services sits with the earliest of them.
+  const slots = React.useMemo(() => {
+    const map = new Map<string, { time: string; uses: Use[]; dishes: Dish[] }>();
+    for (const d of shown) {
+      const first = [...d.uses].sort((a, b) => a.time.localeCompare(b.time))[0];
+      const slot = map.get(first.time) ?? { time: first.time, uses: [], dishes: [] };
+      slot.dishes.push(d);
+      map.set(first.time, slot);
+    }
+    for (const d of dishes) for (const u of d.uses) { const slot = map.get(u.time); if (slot && !slot.uses.some((x) => x.fnName === u.fnName && x.client === u.client)) slot.uses.push(u); }
+    return [...map.values()].sort((a, b) => a.time.localeCompare(b.time));
+  }, [shown, dishes]);
 
   return (
     <>
@@ -168,11 +184,19 @@ export default function KitchenPage() {
                 <Chip active={filter === "all"} onClick={() => setFilter("all")}><Layers strokeWidth={1.75} />All</Chip>
                 <Chip active={filter === "todo"} onClick={() => setFilter("todo")}><ListOrdered strokeWidth={1.75} />Still to cook</Chip>
                 <Chip active={filter === "done"} onClick={() => setFilter("done")}>Ready or packed</Chip>
-                <span className="ml-auto text-sm text-text-muted">Ordered by the time each dish must be ready</span>
+                <span className="ml-auto text-sm text-text-muted">By service time, then by when each dish must be ready</span>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-                {shown.map((d) => <DishCard key={d.item.id} dish={d} now={now} isToday={isToday} recipeTop={recipeTop(d)} />)}
-              </div>
+              {slots.map((slot) => (
+                <section key={slot.time} className="mt-6 break-inside-avoid">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b pb-2">
+                    <h2 className="tnum font-heading text-xl font-bold">From {fmtTime(slot.time)}</h2>
+                    <p className="text-sm text-text-muted">{slot.uses.map((u) => `${u.client} · ${u.fnName} (${[foodTypes.find((t) => t.id === u.foodTypeId)?.name, timeRange(u)].filter(Boolean).join(", ")})`).join("; ")}</p>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                    {slot.dishes.map((d) => <DishCard key={d.item.id} dish={d} now={now} isToday={isToday} recipeTop={recipeTop(d)} />)}
+                  </div>
+                </section>
+              ))}
             </>
           )}
         </div>

@@ -13,6 +13,7 @@ import { Card, Chip, Tabs, TabsContent, TabsList, TabsTrigger } from "@/componen
 import { blankDraft, blankFunction } from "@/lib/draft";
 import { kitchenKey, portions, useKitchen } from "@/lib/kitchen";
 import { priceFunction } from "@/lib/pricing";
+import { offered } from "@/lib/packages";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { Diet, MenuItem } from "@/lib/types";
 import { cn, isoDate, money, num } from "@/lib/utils";
@@ -30,7 +31,7 @@ function useSuggestion(pax: number, budget: number, diet: "any" | "veg" | "jain"
     const used = new Map<string, number>();
     for (const o of orders) if (o.status !== "cancelled") for (const f of o.functions) for (const id of f.itemIds) used.set(id, (used.get(id) ?? 0) + 1);
     const rank = (a: MenuItem, b: MenuItem) => Number(b.bestseller) - Number(a.bestseller) || (used.get(b.id) ?? 0) - (used.get(a.id) ?? 0) || a.price - b.price;
-    const pkg = [...packages].filter((p) => p.pricePerPlate <= budget && p.minPax <= pax).sort((a, b) => b.pricePerPlate - a.pricePerPlate)[0];
+    const pkg = offered(packages).filter((p) => p.pricePerPlate <= budget && p.minPax <= pax).sort((a, b) => b.pricePerPlate - a.pricePerPlate)[0];
     let ids: string[];
     if (pkg) {
       ids = pkg.fixedItemIds.filter((id) => items.some((i) => i.id === id && fits(i)));

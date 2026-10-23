@@ -49,8 +49,9 @@ function LeadCard({ enquiry, onMove, dragging }: { enquiry: Enquiry; onMove: (st
         </DropdownMenu>
       </div>
       <dl className="tnum mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
-        <div className="inline-flex items-center gap-1"><CalendarDays className="size-3.5" strokeWidth={1.75} /><dt className="sr-only">Event date</dt><dd>{fmtDate(enquiry.date, { day: "numeric", month: "short" })}</dd></div>
+        <div className="inline-flex items-center gap-1"><CalendarDays className="size-3.5" strokeWidth={1.75} /><dt className="sr-only">Event date</dt><dd>{fmtDate(enquiry.date, { day: "numeric", month: "short" })}{enquiry.endDate && enquiry.endDate > enquiry.date && ` to ${fmtDate(enquiry.endDate, { day: "numeric", month: "short" })}`}</dd></div>
         <div className="inline-flex items-center gap-1"><Users className="size-3.5" strokeWidth={1.75} /><dt className="sr-only">Guests</dt><dd>{num(enquiry.pax)}</dd></div>
+        {(enquiry.services?.length ?? 0) > 1 && <div><dt className="sr-only">Services</dt><dd>{enquiry.services!.length} services</dd></div>}
         {enquiry.budgetPerPlate > 0 && <div><dt className="sr-only">Budget</dt><dd>{money(enquiry.budgetPerPlate)} per plate</dd></div>}
       </dl>
       {enquiry.notes && <p className="mt-2 line-clamp-2 text-xs text-text-muted">{enquiry.notes}</p>}

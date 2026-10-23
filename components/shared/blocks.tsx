@@ -5,9 +5,10 @@ import Link from "next/link";
 import * as React from "react";
 import { balanceOf, useBilling } from "@/lib/billing";
 import { priceQuote } from "@/lib/pricing";
+import { serviceLine, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
-import type { Order } from "@/lib/types";
-import { cn, fmtTime, initials, money, num, parseDate } from "@/lib/utils";
+import type { EventFunction, Order } from "@/lib/types";
+import { cn, initials, money, num, parseDate } from "@/lib/utils";
 import { StatusBadge } from "./badges";
 
 export function PageHeader({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: React.ReactNode; children?: React.ReactNode }) {
@@ -162,6 +163,12 @@ export function Stepper({ steps, current, onStep }: { steps: string[]; current: 
   );
 }
 
+/** "Gala Dinner · Night · 9 pm to 11 pm" for a service. */
+export function ServiceLabel({ fn }: { fn: Pick<EventFunction, "foodTypeId" | "session" | "time" | "endTime"> }) {
+  const foodTypes = useFoodTypes();
+  return <>{serviceLine(fn, foodTypes)}</>;
+}
+
 export function DateBlock({ iso, className }: { iso: string; className?: string }) {
   const d = parseDate(iso);
   return (
@@ -200,7 +207,7 @@ export function EventCard({ order, functionId, showMoney = true }: { order: Orde
           <div className="min-w-0">
             <h3 className="truncate font-heading text-base font-semibold">{client?.name}</h3>
             <p className="truncate text-sm text-text-muted">
-              {fn.name} · {fmtTime(fn.time)}
+              {fn.name} · <ServiceLabel fn={fn} />
             </p>
           </div>
           <StatusBadge status={order.status} />

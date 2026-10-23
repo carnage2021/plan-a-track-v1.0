@@ -11,7 +11,7 @@ import { EventSheet } from "@/components/sales/event-sheet";
 import { NamePlates } from "@/components/sales/name-plates";
 import { QuoteDocument } from "@/components/sales/quote-document";
 import { Badge, StatusBadge, VegMark } from "@/components/shared/badges";
-import { Avatar, DateBlock, EmptyState, PaxInput, ProgressBar, useOrderMoney } from "@/components/shared/blocks";
+import { Avatar, DateBlock, EmptyState, PaxInput, ProgressBar, ServiceLabel, useOrderMoney } from "@/components/shared/blocks";
 import { DishImage } from "@/components/shared/dish";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/input";
@@ -31,7 +31,7 @@ import { useSupply } from "@/lib/supply-store";
 import { useStore } from "@/lib/store";
 import type { EventFunction, MenuItem, Order, Payment, Locale } from "@/lib/types";
 import { printLight, printThermal, useUi } from "@/lib/ui";
-import { fmtDate, fmtTime, money, num, whatsappLink } from "@/lib/utils";
+import { fmtDate, money, num, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
 import { DocLangPicker, DownloadPdf } from "@/components/documents/doc-actions";
 
@@ -183,7 +183,7 @@ function OrderView({ order }: { order: Order }) {
                       <p className="tnum text-sm"><span className="font-semibold">{money(price.perPlate)}</span> <span className="text-text-muted">per plate</span></p>
                     </div>
                     <p className="tnum mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
-                      <span className="inline-flex items-center gap-1"><Clock className="size-3.5" strokeWidth={1.75} />{fmtTime(f.time)}</span>
+                      <span className="inline-flex items-center gap-1"><Clock className="size-3.5" strokeWidth={1.75} /><ServiceLabel fn={f} /></span>
                       <span className="inline-flex items-center gap-1"><UtensilsCrossed className="size-3.5" strokeWidth={1.75} />{f.itemIds.length} dishes</span>
                       <a className="inline-flex min-w-0 items-center gap-1 text-primary hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.venue)}`} target="_blank" rel="noreferrer"><MapPin className="size-3.5 shrink-0" strokeWidth={1.75} /><span className="truncate">{f.venue}</span></a>
                     </p>

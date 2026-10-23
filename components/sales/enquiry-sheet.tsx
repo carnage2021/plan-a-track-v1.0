@@ -8,8 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { useStore } from "@/lib/store";
-import type { Diet, Enquiry, LeadSource } from "@/lib/types";
+import { festivalsOn } from "@/lib/festivals";
+import { tithiLabel } from "@/lib/tithi";
+import { blankFunction } from "@/lib/draft";
+import { useFoodTypes } from "@/lib/services";
+import type { Diet, Enquiry, EventFunction, LeadSource } from "@/lib/types";
 import { useUi } from "@/lib/ui";
+import { ServiceList } from "./service-fields";
 import { addDays, fmtDate, isoDate, num } from "@/lib/utils";
 
 export const eventTypes = ["Wedding", "Engagement", "Reception", "Birthday", "Anniversary", "Baby Shower", "Housewarming", "Corporate", "Religious", "Other"];
@@ -21,40 +26,36 @@ const sources: { id: LeadSource; label: string }[] = [
   { id: "referral", label: "Referral" },
 ];
 
-/** Guests already booked on a date against the kitchen's daily capacity. */
+/** Functions and guests already booked on a date. */
 export function useDayLoad(date: string) {
   const orders = useStore((s) => s.orders);
-  const capacity = useStore((s) => s.tenant.dailyCapacityPax);
   return React.useMemo(() => {
-    const pax = orders
-      .filter((o) => o.status !== "cancelled")
-      .flatMap((o) => o.functions)
-      .filter((f) => f.date === date)
-      .reduce((s, f) => s + f.pax, 0);
-    return { pax, capacity, pct: capacity ? (pax / capacity) * 100 : 0 };
-  }, [orders, capacity, date]);
+    const fns = orders.filter((o) => o.status !== "cancelled").flatMap((o) => o.functions).filter((f) => f.date === date);
+    return { functions: fns.length, pax: fns.reduce((s, f) => s + f.pax, 0) };
+  }, [orders, date]);
 }
 
-export function DateAvailability({ date, pax = 0 }: { date: string; pax?: number }) {
+/** Whether a date already has functions, with that day's tithi. */
+export function DateAvailability({ date }: { date: string; pax?: number }) {
   const load = useDayLoad(date);
+  const locale = useStore((s) => s.locale);
   if (!date) return null;
-  const full = load.pax + pax > load.capacity;
-  const Icon = full ? AlertTriangle : CheckCircle2;
+  const tithi = tithiLabel(date, locale);
+  const busy = load.functions > 0;
+  const Icon = busy ? AlertTriangle : CheckCircle2;
   return (
-    <p className={`mt-1 flex items-start gap-1.5 text-xs ${full ? "text-danger" : load.pax ? "text-warning" : "text-success"}`}>
+    <p className={`mt-1 flex items-start gap-1.5 text-xs ${busy ? "text-warning" : "text-success"}`}>
       <Icon className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />
       <span className="tnum">
-        {full
-          ? `Over capacity: ${num(load.pax)} guests already booked, kitchen limit is ${num(load.capacity)}.`
-          : load.pax
-            ? `${num(load.pax)} of ${num(load.capacity)} guests already booked on ${fmtDate(date, { day: "numeric", month: "short" })}. There is room.`
-            : "Date is free."}
+        {busy ? `${load.functions} ${load.functions === 1 ? "function" : "functions"} already on ${fmtDate(date, { day: "numeric", month: "short" })}, ${num(load.pax)} guests.` : "Date is free."}
+        <span className={tithi.special ? "font-medium text-accent-gold" : "text-text-muted"}> {tithi.short}</span>
+        {festivalsOn(date).length > 0 && <span className="font-semibold text-accent-gold"> · {festivalsOn(date).join(", ")}</span>}
       </span>
     </p>
   );
 }
 
-type Form = Omit<Enquiry, "id" | "createdAt" | "clientId"> & { name: string; phone: string };
+type Form = Omit<Enquiry, "id" | "createdAt" | "clientId" | "services"> & { name: string; phone: string; services: EventFunction[] };
 
 /** Remounts each time it opens so the form starts from the enquiry being edited, or blank. */
 export function EnquirySheet() {
@@ -71,6 +72,7 @@ function EnquirySheetForm() {
   const currentUserId = useStore((s) => s.currentUserId);
   const ensureClient = useStore((s) => s.ensureClient);
   const saveEnquiry = useStore((s) => s.saveEnquiry);
+  const foodTypes = useFoodTypes();
 
   const blank = React.useCallback(
     (): Form => ({
@@ -87,32 +89,51 @@ function EnquirySheetForm() {
       stage: "new",
       assignedTo: users.find((u) => u.role === "sales" && !u.invited)?.id ?? currentUserId,
       followUpAt: isoDate(addDays(new Date(), 1)),
+      services: [blankFunction("", date ?? "", 200, "")],
     }),
     [date, users, currentUserId],
   );
-  const [form, setForm] = React.useState<Form>(() => (existing ? { ...existing, name: client?.name ?? "", phone: client?.phone ?? "" } : blank()));
+  const [form, setForm] = React.useState<Form>(() =>
+    existing
+      ? // An enquiry saved before services existed becomes one service on its date.
+        { ...existing, name: client?.name ?? "", phone: client?.phone ?? "", services: existing.services?.length ? existing.services : [blankFunction(existing.eventType, existing.date, existing.pax, existing.venue)] }
+      : blank(),
+  );
   const [touched, setTouched] = React.useState(false);
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
+  /** Changing the event's dates keeps every service inside them. */
+  const setDates = (start: string, end: string | undefined) =>
+    setForm((f) => {
+      const last = end && end > start ? end : start;
+      return { ...f, date: start, endDate: end && end > start ? end : undefined, services: f.services.map((x) => (!x.date || x.date < start || x.date > last ? { ...x, date: start } : x)) };
+    });
+  /** Guests and venue for the event flow into the services that still have the event's old value. */
+  const setShared = (key: "pax" | "venue", value: number | string) =>
+    setForm((f) => ({ ...f, [key]: value, services: f.services.map((x) => (x[key] === f[key] ? { ...x, [key]: value } : x)) }));
   const errors = {
     name: form.name.trim() ? "" : "Enter the client's name",
     phone: form.phone.replace(/\D/g, "").length >= 10 ? "" : "Enter a 10-digit mobile number",
     date: form.date ? "" : "Pick the event date",
+    services: form.services.every((x) => x.date) ? "" : "Every service needs a date",
   };
-  const valid = !errors.name && !errors.phone && !errors.date;
+  const valid = !errors.name && !errors.phone && !errors.date && !errors.services;
 
   const save = () => {
     setTouched(true);
     if (!valid) return;
-    const { name, phone, ...rest } = form;
+    const { name, phone, services, ...rest } = form;
     const clientId = existing?.clientId ?? ensureClient(name, phone);
-    saveEnquiry({ ...rest, clientId, id: existing?.id });
+    // A service with no name takes its food type's name.
+    const named = services.map((x, i) => ({ ...x, name: x.name.trim() || foodTypes.find((t) => t.id === x.foodTypeId)?.name || `Service ${i + 1}` }));
+    saveEnquiry({ ...rest, services: named, clientId, id: existing?.id });
     close();
     toast.success(existing ? "Enquiry updated" : "Enquiry saved", { description: `${name} · ${form.eventType} · ${fmtDate(form.date)}` });
   };
 
   return (
     <Sheet
+      full
       open={open}
       onOpenChange={(o) => !o && close()}
       title={existing ? "Edit enquiry" : "New enquiry"}
@@ -137,20 +158,26 @@ function EnquirySheetForm() {
               {eventTypes.map((t) => <option key={t}>{t}</option>)}
             </Select>
           </Field>
-          <Field label="Event date" error={touched ? errors.date : ""}>
-            <Input type="date" value={form.date} min={isoDate(new Date())} onChange={(e) => set("date", e.target.value)} />
+          <Field label="Venue">
+            <Input value={form.venue} onChange={(e) => setShared("venue", e.target.value)} placeholder="Hall, club or home address" />
           </Field>
-          <div className="col-span-2 -mt-2">
-            <DateAvailability date={form.date} pax={form.pax} />
-          </div>
-          <Field label="Venue" className="col-span-2">
-            <Input value={form.venue} onChange={(e) => set("venue", e.target.value)} placeholder="Hall, club or home address" />
+          <Field label="Event start date" error={touched ? errors.date : ""}>
+            <Input type="date" value={form.date} min={isoDate(new Date())} onChange={(e) => setDates(e.target.value, form.endDate)} />
+          </Field>
+          <Field label="Event end date" hint="Same as the start for a one-day event.">
+            <Input type="date" value={form.endDate ?? form.date} min={form.date || isoDate(new Date())} onChange={(e) => setDates(form.date, e.target.value)} />
           </Field>
         </div>
         <div>
           <span className="mb-1 block text-xs font-medium text-text-muted">Expected guests</span>
-          <PaxInput value={form.pax} onChange={(v) => set("pax", v)} />
+          <PaxInput value={form.pax} onChange={(v) => setShared("pax", v)} />
         </div>
+        <section>
+          <h3 className="font-heading text-base font-semibold">Catering services</h3>
+          <p className="mb-3 text-xs text-text-muted">One for each meal or counter, with its own food type and timings. Two on the same day is fine, such as welcome drinks at 6 pm and dinner at 9 pm.</p>
+          {touched && errors.services && <p className="mb-2 text-xs text-danger">{errors.services}</p>}
+          <ServiceList value={form.services} onChange={(services) => set("services", services)} start={form.date} end={form.endDate} fallback={{ date: form.date, pax: form.pax, venue: form.venue }} showErrors={touched} />
+        </section>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Budget per plate">
             <MoneyInput value={form.budgetPerPlate} onChange={(v) => set("budgetPerPlate", v)} />

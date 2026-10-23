@@ -6,12 +6,12 @@ import { ExpenseSheet } from "@/components/expenses/expense-sheet";
 import { categoryLabel, useExpenses } from "@/lib/expenses";
 import Link from "next/link";
 import { Badge } from "@/components/shared/badges";
-import { ProgressBar } from "@/components/shared/blocks";
+import { ProgressBar, ServiceLabel } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/primitives";
 import { checkSteps, issueKinds, transportCost, useOps } from "@/lib/operations";
 import type { Order } from "@/lib/types";
-import { fmtDate, fmtTime, money, num } from "@/lib/utils";
+import { fmtDate, money, num } from "@/lib/utils";
 import { FunctionTrips } from "./dispatch";
 
 /** Running costs of an event that are not vendor bills: transport and the expenses logged against it. */
@@ -55,7 +55,7 @@ export function OrderOps({ order }: { order: Order }) {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-heading text-lg font-semibold">{fn.name}</h3>
-                <p className="tnum text-sm text-text-muted">{fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })}, serve {fmtTime(fn.time)} · {num(fn.pax)} guests · {fn.venue}</p>
+                <p className="tnum text-sm text-text-muted">{fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })}, <ServiceLabel fn={fn} /> · {num(fn.pax)} guests · {fn.venue}</p>
               </div>
               <Button asChild><Link href={`/onsite?fn=${fn.id}`}><ClipboardCheck strokeWidth={1.75} />Event-day screen</Link></Button>
             </div>

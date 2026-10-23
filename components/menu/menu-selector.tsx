@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronUp, Copy, Eye, EyeOff, LayoutGrid, List, Package, Plus, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronUp, Clock, Copy, Eye, EyeOff, LayoutGrid, List, Package, Plus, Search, SlidersHorizontal, Star, UtensilsCrossed, X } from "lucide-react";
 import * as React from "react";
 import { Badge, VegMark, dietLabel } from "@/components/shared/badges";
 import { PaxInput } from "@/components/shared/blocks";
@@ -11,7 +11,9 @@ import { Chip, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenu
 import { Sheet } from "@/components/ui/sheet";
 import { useAccess } from "@/lib/access";
 import { categoryIcon } from "@/lib/icons";
+import { additionLine } from "@/lib/packages";
 import { marginTone, priceFunction, priceQuote } from "@/lib/pricing";
+import { serviceLine, timeRange, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { Diet, Discount, EventFunction, ExtraCharge, MenuItem } from "@/lib/types";
 import { cn, money, num } from "@/lib/utils";
@@ -53,6 +55,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const orders = useStore((s) => s.orders);
   const tenant = useStore((s) => s.tenant);
   const { hidePrices } = useAccess();
+  const foodTypes = useFoodTypes();
 
   const [query, setQuery] = React.useState("");
   const [diets, setDiets] = React.useState<Diet[]>([]);
@@ -68,6 +71,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const [summaryOpen, setSummaryOpen] = React.useState(false);
   const [staff, setStaff] = React.useState(!booking);
   const [current, setCurrent] = React.useState("");
+  /** Every category, not just the food type's own */
+  const [showAll, setShowAll] = React.useState(false);
   const sections = React.useRef(new Map<string, HTMLElement>());
   const tabsRef = React.useRef<HTMLDivElement>(null);
 
@@ -89,7 +94,15 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
     [functions, extras, discount, tenant, allItems, packages],
   );
 
+  const foodType = foodTypes.find((t) => t.id === fn.foodTypeId);
   const patch = (changes: Partial<EventFunction>) => onChange(functions.map((f) => (f.id === fn.id ? { ...f, ...changes } : f)));
+  const pickFoodType = (id: string) => {
+    // A package made for another food type no longer fits.
+    patch({ foodTypeId: id, ...(pkg?.foodTypeId && pkg.foodTypeId !== id ? { packageId: undefined } : {}) });
+    setShowAll(false);
+  };
+  // The food type comes first; a function that already has dishes (from before food types) is not held up.
+  const needsFoodType = !foodType && !showAll && fn.itemIds.length === 0;
   const toggle = (id: string) => patch({ itemIds: fn.itemIds.includes(id) ? fn.itemIds.filter((x) => x !== id) : [...fn.itemIds, id] });
   const choosePackage = (packageId?: string) => {
     const next = packages.find((p) => p.id === packageId);
@@ -128,8 +141,20 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   }, [allItems, fn.itemIds, query, diets, bestsellers, source, cuisine, priceMax, sort, popularity]);
 
   // One section per category, in the menu's own order, holding only the dishes that pass the filters.
-  const grouped = React.useMemo(() => categories.map((c) => ({ c, dishes: visible.filter((i) => i.categoryId === c.id) })).filter((g) => g.dishes.length), [categories, visible]);
-  const beforeRow = !filtering ? allItems.filter((i) => clientBefore.has(i.id) && i.active).slice(0, 10) : [];
+  // The food type's categories, plus any the package asks for or a picked dish sits in, so nothing chosen is hidden.
+  const allowed = React.useMemo(() => {
+    if (!foodType || showAll) return null;
+    const ids = new Set(foodType.categoryIds);
+    for (const r of pkg?.rules ?? []) ids.add(r.categoryId);
+    for (const i of allItems) if (fn.itemIds.includes(i.id)) ids.add(i.categoryId);
+    return ids;
+  }, [foodType, showAll, pkg, allItems, fn.itemIds]);
+  const grouped = React.useMemo(
+    () => (needsFoodType ? [] : categories.filter((c) => !allowed || allowed.has(c.id)).map((c) => ({ c, dishes: visible.filter((i) => i.categoryId === c.id) })).filter((g) => g.dishes.length)),
+    [categories, visible, allowed, needsFoodType],
+  );
+  const hiddenCategories = allowed ? categories.filter((c) => !allowed.has(c.id)).length : 0;
+  const beforeRow = !filtering && !needsFoodType ? allItems.filter((i) => clientBefore.has(i.id) && i.active).slice(0, 10) : [];
 
   // The tab for whichever section is at the top of the screen lights up as the menu scrolls.
   React.useEffect(() => {
@@ -174,7 +199,10 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 space-y-3 border-b p-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="min-w-0 truncate font-heading text-base font-semibold" title={`${fn.name} plate`}>{fn.name}</h2>
+          <div className="min-w-0">
+            <h2 className="truncate font-heading text-base font-semibold" title={`${fn.name} plate`}>{fn.name}</h2>
+            <p className="tnum truncate text-xs text-text-muted">{serviceLine(fn, foodTypes)}</p>
+          </div>
           <Button variant="ghost" className="-mr-2 shrink-0" onClick={() => setPickPackage(true)}><Package strokeWidth={1.75} />{pkg ? pkg.name : "Choose package"}</Button>
         </div>
         <PaxInput value={fn.pax} onChange={(pax) => patch({ pax })} compact />
@@ -187,6 +215,9 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
               </button>
             ))}
           </div>
+        )}
+        {pkg?.additions?.some((a) => a.name.trim()) && (
+          <p className="flex flex-wrap gap-1.5 text-xs">{pkg.additions.filter((a) => a.name.trim()).map((a) => <span key={a.id} className="rounded-lg bg-accent-gold/15 px-2 py-1 font-medium text-accent-gold">+ {additionLine(a)}</span>)}</p>
         )}
       </div>
 
@@ -273,8 +304,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
       {(functions.length > 1 || booking) && (
         <div className="no-scrollbar -mx-4 mb-3 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:px-0">
           {functions.map((f) => (
-            <Chip key={f.id} active={f.id === fn.id} onClick={() => onActive(f.id)} className="h-10 px-4">
-              {f.name}<span className="tnum rounded-full bg-surface-muted px-1.5 text-xs text-text-muted">{f.itemIds.length}</span>
+            <Chip key={f.id} active={f.id === fn.id} onClick={() => { onActive(f.id); setShowAll(false); }} className="h-auto min-h-10 px-4 py-1">
+              <span className="text-left leading-tight">{f.name}<span className="tnum block text-[11px] font-normal opacity-75">{timeRange(f)}</span></span><span className="tnum rounded-full bg-surface-muted px-1.5 text-xs text-text-muted">{f.itemIds.length}</span>
             </Chip>
           ))}
           {functions.length > 1 && (
@@ -298,6 +329,33 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
 
       <div className="flex items-start gap-4 lg:gap-5">
         <div className="min-w-0 flex-1">
+          {/* Food type first: it decides which categories and packages this service offers. */}
+          {needsFoodType ? (
+            <section className="mb-4 rounded-2xl border bg-surface p-4 shadow-card md:p-6">
+              <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-text-muted"><Clock className="size-3.5" strokeWidth={1.75} />{fn.name} · {serviceLine(fn, foodTypes)}</p>
+              <h2 className="mt-1 font-heading text-xl font-semibold">What is this service for?</h2>
+              <p className="text-sm text-text-muted">Pick the food type first; the menu then shows only its categories and packages.</p>
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {foodTypes.map((t) => (
+                  <button key={t.id} type="button" onClick={() => pickFoodType(t.id)} className="flex min-h-16 flex-col items-start justify-center rounded-xl border bg-surface px-4 py-3 text-left transition-colors duration-150 hover:border-primary hover:bg-primary-soft">
+                    <span className="flex items-center gap-2 font-heading text-base font-semibold"><UtensilsCrossed className="size-4 text-primary" strokeWidth={1.75} />{t.name}</span>
+                    <span className="mt-0.5 line-clamp-1 text-xs text-text-muted">{categories.filter((c) => t.categoryIds.includes(c.id)).map((c) => c.name).join(", ")}</span>
+                  </button>
+                ))}
+              </div>
+              <Button variant="ghost" className="mt-3" onClick={() => setShowAll(true)}>Skip and show the full menu</Button>
+            </section>
+          ) : (
+            <div className="no-scrollbar -mx-4 mb-3 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:px-0" role="group" aria-label="Food type">
+              <span className="shrink-0 text-xs font-medium text-text-muted">Food type</span>
+              {foodTypes.map((t) => <Chip key={t.id} active={t.id === fn.foodTypeId} onClick={() => pickFoodType(t.id)} className="shrink-0">{t.name}</Chip>)}
+              {foodType && (hiddenCategories > 0 || showAll) && (
+                <Chip active={showAll} onClick={() => setShowAll(!showAll)} className="shrink-0 border-dashed">{showAll ? "Only this food type" : `Show all categories (+${hiddenCategories})`}</Chip>
+              )}
+            </div>
+          )}
+
+          {!needsFoodType && (<>
           {/* Toolbar: search and the everyday filters in one row; the rest folds under Filters. */}
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative min-w-48 flex-1">
@@ -387,6 +445,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
               </section>
             );
           })}
+          </>)}
         </div>
 
         {/* Plate summary panel */}
@@ -407,7 +466,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
         <div className="-mx-4 -mb-4 flex min-h-0 flex-col md:-mx-6">{summary}</div>
       </Sheet>
 
-      <PackagePicker open={pickPackage} onOpenChange={setPickPackage} value={fn.packageId} pax={fn.pax} onPick={choosePackage} />
+      <PackagePicker open={pickPackage} onOpenChange={setPickPackage} value={fn.packageId} pax={fn.pax} foodTypeId={fn.foodTypeId} onPick={choosePackage} />
 
       <Sheet open={!!detail} onOpenChange={(o) => !o && setDetail(null)} title={detail?.name ?? ""} description={detail?.nameLocal} wide>
         {detail && (

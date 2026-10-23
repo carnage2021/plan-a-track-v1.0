@@ -14,10 +14,13 @@ interface SheetProps {
   footer?: React.ReactNode;
   /** Wider panel for previews and detail views */
   wide?: boolean;
+  /** Takes the whole screen, with the content centred at a readable width */
+  full?: boolean;
 }
 
 /** Side sheet on desktop, bottom sheet on mobile. Closes with Esc, the close button or a tap outside. */
-export function Sheet({ open, onOpenChange, title, description, children, footer, wide }: SheetProps) {
+export function Sheet({ open, onOpenChange, title, description, children, footer, wide, full }: SheetProps) {
+  const inner = full ? "mx-auto w-full max-w-3xl" : "";
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -26,13 +29,17 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
           aria-describedby={undefined}
           className={cn(
             "fixed z-50 flex flex-col bg-surface shadow-sheet focus:outline-none",
-            "inset-x-0 bottom-0 max-h-[92dvh] animate-sheet-up rounded-t-2xl",
-            "md:inset-y-0 md:left-auto md:right-0 md:max-h-none md:w-full md:animate-sheet-right md:rounded-none md:rounded-l-2xl",
-            wide ? "md:max-w-2xl" : "md:max-w-md",
+            full
+              ? "inset-0 h-dvh w-full animate-fade"
+              : cn(
+                  "inset-x-0 bottom-0 max-h-[92dvh] animate-sheet-up rounded-t-2xl",
+                  "md:inset-y-0 md:left-auto md:right-0 md:max-h-none md:w-full md:animate-sheet-right md:rounded-none md:rounded-l-2xl",
+                  wide ? "md:max-w-2xl" : "md:max-w-md",
+                ),
           )}
         >
-          <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border md:hidden" aria-hidden />
-          <div className="flex shrink-0 items-start justify-between gap-4 px-4 pb-3 pt-3 md:px-6 md:pt-5 print:hidden">
+          {!full && <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border md:hidden" aria-hidden />}
+          <div className={cn("flex shrink-0 items-start justify-between gap-4 px-4 pb-3 pt-3 md:px-6 md:pt-5 print:hidden", full && "border-b md:pb-4", inner)}>
             <div className="min-w-0">
               <Dialog.Title className="font-heading text-lg font-semibold">{title}</Dialog.Title>
               {description && <p className="mt-0.5 text-sm text-text-muted">{description}</p>}
@@ -41,8 +48,8 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
               <X className="size-5" strokeWidth={1.75} />
             </Dialog.Close>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-6">{children}</div>
-          {footer && <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-surface px-4 py-3 md:px-6 print:hidden">{footer}</div>}
+          <div className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-6", full && "pt-5")}><div className={inner}>{children}</div></div>
+          {footer && <div className="shrink-0 border-t bg-surface px-4 py-3 md:px-6 print:hidden"><div className={cn("flex items-center justify-end gap-2", inner)}>{footer}</div></div>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -7,6 +7,7 @@ import { DishImage } from "@/components/shared/dish";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { useStore } from "@/lib/store";
+import { additionLine, offered, ruleLine } from "@/lib/packages";
 import type { MenuPackage } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
 
@@ -30,11 +31,14 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   value?: string;
   pax: number;
+  /** Shows only packages for this food type, plus those for any food type */
+  foodTypeId?: string;
   onPick: (packageId?: string) => void;
 }
 
-export function PackagePicker({ open, onOpenChange, value, pax, onPick }: Props) {
-  const packages = useStore((s) => s.packages);
+export function PackagePicker({ open, onOpenChange, value, pax, foodTypeId, onPick }: Props) {
+  const all = useStore((s) => s.packages);
+  const packages = React.useMemo(() => offered(all).filter((p) => !foodTypeId || !p.foodTypeId || p.foodTypeId === foodTypeId), [all, foodTypeId]);
   const categories = useStore((s) => s.categories);
   const [compare, setCompare] = React.useState<string[]>([]);
   const pair = compare.map((id) => packages.find((p) => p.id === id)).filter((p): p is MenuPackage => !!p);
@@ -90,7 +94,8 @@ export function PackagePicker({ open, onOpenChange, value, pax, onPick }: Props)
                   <Users className="size-3.5" strokeWidth={1.75} />Minimum {p.minPax} guests{pax < p.minPax ? ` (this function has ${pax})` : ""}
                 </p>
                 <ul className="mt-2 flex flex-wrap gap-1">
-                  {p.rules.map((r) => <li key={r.categoryId}><Badge>{r.choose} {catName(r.categoryId).toLowerCase()}</Badge></li>)}
+                  {p.rules.map((r) => <li key={r.categoryId}><Badge>{ruleLine(r.choose, catName(r.categoryId))}</Badge></li>)}
+                  {(p.additions ?? []).filter((a) => a.name.trim()).map((a) => <li key={a.id}><Badge tone="gold">+ {additionLine(a)}</Badge></li>)}
                 </ul>
                 <div className="mt-3 flex gap-2">
                   <Button className="flex-1" variant={selected ? "primary" : "secondary"} onClick={() => pick(p.id)}>

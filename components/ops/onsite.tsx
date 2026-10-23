@@ -4,7 +4,7 @@ import { AlertTriangle, Check, CheckCircle2, Clock, MapPin, MessageCircle, Minus
 import * as React from "react";
 import { toast } from "sonner";
 import { Badge, VegMark } from "@/components/shared/badges";
-import { MoneyInput } from "@/components/shared/blocks";
+import { MoneyInput, ServiceLabel } from "@/components/shared/blocks";
 import { Num } from "@/components/supply/common";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
@@ -274,7 +274,7 @@ export function OnsiteView({ order, fn }: { order: Order; fn: EventFunction }) {
         <p className="text-sm text-text-muted">{order.number} · {order.eventType}</p>
         <h2 className="mt-0.5 font-heading text-2xl font-bold">{client?.name} · {fn.name}</h2>
         <p className="tnum mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          <span className="inline-flex items-center gap-1"><Clock className="size-4 text-text-muted" strokeWidth={1.75} />{fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })}, serve {fmtTime(fn.time)}</span>
+          <span className="inline-flex items-center gap-1"><Clock className="size-4 text-text-muted" strokeWidth={1.75} />{fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })}, <ServiceLabel fn={fn} /></span>
           <span className="inline-flex items-center gap-1"><MapPin className="size-4 text-text-muted" strokeWidth={1.75} />{fn.venue}</span>
         </p>
         <div className="mt-4 flex flex-wrap gap-2">

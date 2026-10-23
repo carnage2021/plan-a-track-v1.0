@@ -31,8 +31,10 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
   return res.data;
 }
 
-/** Set when the phase 3 migration (0003_supply.sql) has been run, so its columns can be written. */
-export const schema = { supply: false };
+/** Set when the phase 3 migration (0003_supply.sql) has been run, so its columns can be written;
+ * services once 0012 has added food types, sessions and end times; packageExtras once 0013 has added
+ * package additions and archiving. */
+export const schema = { supply: false, services: false, packageExtras: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -72,6 +74,7 @@ export function tenantRow(t: Tenant): Row {
     pax_slabs: t.slabs,
     // Only sent once the 0008 columns exist, so older databases keep saving settings.
     ...(t.access ? { role_access: t.access } : {}),
+    ...(schema.services && t.foodTypes ? { food_types: t.foodTypes } : {}),
     ...(t.docs ? { doc_settings: t.docs, public_slug: t.publicSlug || null, public_menu: !!t.publicMenu, public_prices: !!t.publicPrices } : {}),
   };
 }
@@ -102,6 +105,7 @@ function tenantFrom(r: Row): Tenant {
     slabs: Array.isArray(r.pax_slabs) && r.pax_slabs.length ? r.pax_slabs : [{ pct: 0 }],
     ...("plan_id" in r ? { subscription: { status: r.status, planId: r.plan_id ?? undefined, trialEndsAt: r.trial_ends_at ?? undefined, paidUntil: r.paid_until ?? undefined, cycle: r.billing_cycle, addons: r.addons ?? [], extraUsers: r.extra_users ?? 0 } } : {}),
     ...("role_access" in r ? { access: { roles: {}, poLimit: 0, payoutLimit: 0, ...r.role_access } } : {}),
+    ...(r.food_types ? { foodTypes: r.food_types } : {}),
     ...("doc_settings" in r ? { docs: { ...defaultDocs, ...r.doc_settings }, publicSlug: r.public_slug ?? "", publicMenu: r.public_menu, publicPrices: r.public_prices } : {}),
   };
 }
@@ -153,6 +157,8 @@ export const packageRow = (p: MenuPackage): Row => ({
   min_pax: p.minPax,
   description: p.description,
   fixed_item_ids: p.fixedItemIds,
+  ...(schema.services ? { food_type_id: p.foodTypeId ?? null } : {}),
+  ...(schema.packageExtras ? { additions: p.additions ?? [], archived: !!p.archived } : {}),
 });
 
 export const enquiryRow = (e: Enquiry): Row => ({
@@ -170,6 +176,7 @@ export const enquiryRow = (e: Enquiry): Row => ({
   assigned_to: e.assignedTo || null,
   follow_up_at: e.followUpAt || null,
   lost_reason: e.lostReason ?? null,
+  ...(schema.services ? { event_end_date: e.endDate && e.endDate > e.date ? e.endDate : null, services: e.services ?? [] } : {}),
 });
 
 const quotationRow = (q: Quotation): Row => ({
@@ -225,7 +232,7 @@ async function insertFunctions(sb: SB, parent: { quotation_id?: string; order_id
   check(
     await sb.from("event_functions").insert(
       functions.map((f, i) =>
-        tenanted({ id: f.id, ...parent, name: f.name, event_date: f.date, serving_time: f.time || "19:00", venue: f.venue, pax: f.pax, package_id: f.packageId ?? null, sort_order: i }, tenantId),
+        tenanted({ id: f.id, ...parent, name: f.name, event_date: f.date, serving_time: f.time || "19:00", venue: f.venue, pax: f.pax, package_id: f.packageId ?? null, sort_order: i, ...(schema.services ? { food_type_id: f.foodTypeId ?? null, session: f.session ?? null, end_time: f.endTime || null } : {}) }, tenantId),
       ),
     ),
     "Saving functions",
@@ -285,6 +292,10 @@ export interface Loaded {
   branches: { id: string; name: string; address: string }[];
   /** False until 0011 has added branch columns */
   branchesEnabled: boolean;
+  /** False until 0012 has added food types, sessions and end times */
+  servicesReady: boolean;
+  /** False until 0013 has added package additions and archiving */
+  packageExtrasReady: boolean;
   /** The branch this person is tied to, if the owner assigned one */
   myBranch: string;
 }
@@ -298,7 +309,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     const q = sb.from(table).select("*");
     return (order ? q.order(order, { ascending }) : q).range(0, 9999);
   };
-  const [branchProbe, branchRows] = await Promise.all([sb.from("orders").select("branch_id").limit(1), all("branches", "created_at")]);
+  const [branchProbe, branchRows, extrasProbe] = await Promise.all([sb.from("orders").select("branch_id").limit(1), all("branches", "created_at"), sb.from("packages").select("additions").limit(1)]);
+  schema.packageExtras = !extrasProbe.error;
   const branchesEnabled = !branchProbe.error;
   const branchList = ((branchRows.data ?? []) as Row[]).map((b) => ({ id: b.id as string, name: b.name as string, address: b.address as string }));
   const myBranch = (profile.branch_id as string | null) ?? "";
@@ -323,6 +335,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     all("order_changes", "created_at", false),
   ]);
   const t = check(tenant, "Loading the account") as Row;
+  schema.services = "food_types" in t;
   const rowsOf = (res: { data: unknown; error: { message: string } | null }, what: string) => (check(res, what) ?? []) as Row[];
   const profileRows = rowsOf(profiles, "Loading the team");
   const nameOf = (id: string | null) => profileRows.find((p) => p.id === id)?.name ?? "";
@@ -336,7 +349,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       .map((f) => {
         const picked = itemsByFn.get(f.id) ?? [];
         const notes = Object.fromEntries(picked.filter((p) => p.note).map((p) => [p.item_id, p.note]));
-        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined };
+        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined };
       });
   const extraRows = rowsOf(extras, "Loading extra charges");
   const extrasOf = (key: "quotation_id" | "order_id", id: string): ExtraCharge[] => extraRows.filter((e) => e[key] === id).map((e) => ({ id: e.id, label: e.label, amount: Number(e.amount) }));
@@ -390,6 +403,9 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       description: p.description,
       fixedItemIds: p.fixed_item_ids ?? [],
       rules: ruleRows.filter((r) => r.package_id === p.id).map((r) => ({ categoryId: r.category_id, choose: r.choose })),
+      foodTypeId: p.food_type_id ?? undefined,
+      additions: Array.isArray(p.additions) ? p.additions : [],
+      archived: !!p.archived,
     })),
     enquiries: rowsOf(enquiries, "Loading enquiries").filter(inBranch).map((e) => ({
       id: e.id,
@@ -407,6 +423,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       followUpAt: e.follow_up_at ? day(e.follow_up_at) : undefined,
       lostReason: e.lost_reason ?? undefined,
       createdAt: localDay(e.created_at),
+      endDate: e.event_end_date ? day(e.event_end_date) : undefined,
+      services: Array.isArray(e.services) && e.services.length ? e.services : undefined,
     })),
     quotations: rowsOf(quotations, "Loading quotations").filter(inBranch).map((q) => ({
       id: q.id,
@@ -450,6 +468,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     branches: branchList,
     branchesEnabled,
     myBranch,
+    servicesReady: schema.services,
+    packageExtrasReady: schema.packageExtras,
   };
 }
 

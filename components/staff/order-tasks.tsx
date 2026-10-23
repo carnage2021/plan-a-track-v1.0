@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCheck, ChefHat, DatabaseZap, LogIn, Plus, Trash2, U
 import * as React from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/shared/badges";
-import { EmptyState } from "@/components/shared/blocks";
+import { EmptyState, ServiceLabel } from "@/components/shared/blocks";
 import { Num } from "@/components/supply/common";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/primitives";
 import { clashFor, defaultRate, sampleWorkers, statusFlow, statusLabel, suggestedHeadcount, taskAmount, useStaff, workerRoles, type Task, type TaskStatus } from "@/lib/staff";
 import { useStore } from "@/lib/store";
 import type { EventFunction, Order } from "@/lib/types";
-import { cn, fmtDate, fmtTime, money, num } from "@/lib/utils";
+import { cn, fmtDate, money, num } from "@/lib/utils";
 
 const tone: Record<TaskStatus, "neutral" | "info" | "primary" | "success"> = { assigned: "neutral", accepted: "info", in_progress: "primary", done: "success", verified: "success" };
 export function TaskBadge({ status }: { status: TaskStatus }) {
@@ -110,7 +110,7 @@ function FunctionTasks({ fn, order }: { fn: EventFunction; order: Order }) {
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div><h3 className="font-heading text-base font-semibold">{fn.name}</h3><p className="tnum text-xs text-text-muted">{fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })}, {fmtTime(fn.time)} · {num(fn.pax)} guests</p></div>
+        <div><h3 className="font-heading text-base font-semibold">{fn.name}</h3><p className="tnum text-xs text-text-muted">{fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })}, <ServiceLabel fn={fn} /> · {num(fn.pax)} guests</p></div>
         <p className="tnum text-right text-sm"><span className="font-heading text-lg font-bold">{money(cost)}</span><span className="block text-xs text-text-muted">{mine.length} tasks{unassigned ? ` · ${unassigned} not assigned` : ""}</span></p>
       </div>
 

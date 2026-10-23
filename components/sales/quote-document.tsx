@@ -6,6 +6,8 @@ import { DocHeader, DocPayBlock, docFrame, docStyle, useDocs } from "@/component
 import { VegMark } from "@/components/shared/badges";
 import { priceFunction, priceQuote } from "@/lib/pricing";
 import { dishName, docT } from "@/lib/doc-i18n";
+import { additionLine } from "@/lib/packages";
+import { useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { Discount, EventFunction, ExtraCharge, Locale, MenuItem } from "@/lib/types";
 import { fmtDate, fmtTime, money, num } from "@/lib/utils";
@@ -38,6 +40,7 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
   const items = useStore((s) => s.items);
   const categories = useStore((s) => s.categories);
   const packages = useStore((s) => s.packages);
+  const foodTypes = useFoodTypes();
   const totals = priceQuote(data, items, packages, tenant.slabs);
   const showPrices = variant !== "menu";
   const docs = useDocs();
@@ -70,13 +73,15 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
             <section key={f.id} className="break-inside-avoid">
               <div className="flex flex-wrap items-end justify-between gap-2 border-b-2 border-brand pb-2">
                 <div>
+                  {f.foodTypeId && <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">{foodTypes.find((x) => x.id === f.foodTypeId)?.name}</p>}
                   <h3 className="font-heading text-lg font-semibold">{f.name}{pkg ? <span className="ml-2 text-sm font-medium text-text-muted">{pkg.name} {t("package")}</span> : null}</h3>
                   <p className="tnum mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
                     {f.date && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3.5" strokeWidth={1.75} />{fmtDate(f.date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>}
-                    <span className="inline-flex items-center gap-1"><Clock className="size-3.5" strokeWidth={1.75} />{fmtTime(f.time)}</span>
+                    <span className="inline-flex items-center gap-1"><Clock className="size-3.5" strokeWidth={1.75} />{f.session ? `${t(f.session)} · ` : ""}{fmtTime(f.time)}{f.endTime ? ` ${t("to")} ${fmtTime(f.endTime)}` : ""}</span>
                     <span className="inline-flex items-center gap-1"><Users className="size-3.5" strokeWidth={1.75} />{num(f.pax)} {t("guests")}</span>
                     {f.venue && <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" strokeWidth={1.75} />{f.venue}</span>}
                   </p>
+                  {pkg?.additions?.some((a) => a.name.trim()) && <p className="mt-1 text-xs font-medium">+ {pkg.additions.filter((a) => a.name.trim()).map(additionLine).join(" · ")}</p>}
                 </div>
                 {showPrices && <p className="tnum text-right"><span className="font-heading text-lg font-bold">{money(price.perPlate)}</span><span className="text-xs text-text-muted"> {t("perPlate")}</span></p>}
               </div>

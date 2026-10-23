@@ -39,7 +39,18 @@ export interface Tenant {
   access?: import("./access").TenantAccess;
   /** The platform subscription, set by the platform team; absent until 0010 has been run */
   subscription?: Subscription;
+  /** The owner's food types; absent until 0012 has been run or until the owner first edits them */
+  foodTypes?: FoodType[];
 }
+
+/** A kind of catering service, such as Welcome Drinks or Gala Dinner, and the menu categories it offers. */
+export interface FoodType {
+  id: string;
+  name: string;
+  categoryIds: string[];
+}
+
+export type Session = "morning" | "afternoon" | "evening" | "night";
 
 export interface Subscription {
   status: "trial" | "active" | "overdue" | "suspended";
@@ -104,6 +115,10 @@ export interface Enquiry {
   followUpAt?: string;
   lostReason?: string;
   createdAt: string;
+  /** Last day of a multi-day event; `date` is the first */
+  endDate?: string;
+  /** The catering services asked for, each with its own date, food type and timings */
+  services?: EventFunction[];
 }
 
 export interface MenuCategory {
@@ -153,13 +168,31 @@ export interface MenuPackage {
   fixedItemIds: string[];
   rules: PackageRule[];
   description: string;
+  /** Offered only for this food type; unset means every food type */
+  foodTypeId?: string;
+  /** Extra lines the package includes beyond the dish choices, e.g. "Paan counter" or 2 "Farsan" */
+  additions?: PackageAddition[];
+  /** Removed from offer but kept, because quotations or orders use it */
+  archived?: boolean;
+}
+
+export interface PackageAddition {
+  id: string;
+  name: string;
+  /** How many, when it is counted; 0 for a single item or counter */
+  count: number;
 }
 
 export interface EventFunction {
   id: string;
   name: string;
   date: string;
+  /** Start time, HH:MM */
   time: string;
+  /** End time, HH:MM; may be after midnight */
+  endTime?: string;
+  session?: Session;
+  foodTypeId?: string;
   venue: string;
   pax: number;
   packageId?: string;

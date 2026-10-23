@@ -6,6 +6,7 @@ import { VegMark } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Field, Select } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
+import { serviceLine, useFoodTypes } from "@/lib/services";
 import { useStaff } from "@/lib/staff";
 import { useStore } from "@/lib/store";
 import { assetRequirement, fmtQty, requirementFor, roundQty } from "@/lib/supply";
@@ -27,6 +28,7 @@ function Block({ title, children, empty }: { title: string; children: React.Reac
 /** Everything the event manager needs for one function, on paper. */
 function FunctionSheet({ order, fn }: { order: Order; fn: EventFunction }) {
   const { items, categories, clients, users, tenant } = useStore();
+  const foodTypes = useFoodTypes();
   const { ingredients, recipes, assets, challans, outsourceOrders, vendors, ready: supplyReady } = useSupply();
   const { tasks, workers, ready: staffReady } = useStaff();
   const client = clients.find((c) => c.id === order.clientId);
@@ -54,7 +56,7 @@ function FunctionSheet({ order, fn }: { order: Order; fn: EventFunction }) {
       </header>
 
       <dl className="tnum grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-        {[["Date", fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })], ["Serving time", fmtTime(fn.time)], ["Venue", fn.venue || "To be confirmed"], ["Event manager", manager?.name ?? "Not set"], ["Client", client?.name ?? ""], ["Client phone", client?.phone ?? ""], ["Event type", order.eventType], ["Dishes", String(dishes.length)]].map(([k, v]) => (
+        {[["Date", fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })], ["Service", serviceLine(fn, foodTypes)], ["Venue", fn.venue || "To be confirmed"], ["Event manager", manager?.name ?? "Not set"], ["Client", client?.name ?? ""], ["Client phone", client?.phone ?? ""], ["Event type", order.eventType], ["Dishes", String(dishes.length)]].map(([k, v]) => (
           <div key={k} className="min-w-0"><dt className="text-xs text-text-muted">{k}</dt><dd className="font-medium">{v}</dd></div>
         ))}
       </dl>
@@ -122,7 +124,7 @@ export function EventSheet({ order, open, onOpenChange }: { order: Order; open: 
       <Field label="Functions" className="mb-6 print:hidden">
         <Select value={which} onChange={(e) => setWhich(e.target.value)}>
           <option value="all">All {functions.length} functions</option>
-          {functions.map((f) => <option key={f.id} value={f.id}>{f.name} · {fmtDate(f.date, { day: "numeric", month: "short" })}</option>)}
+          {functions.map((f) => <option key={f.id} value={f.id}>{f.name} · {fmtDate(f.date, { day: "numeric", month: "short" })} · {fmtTime(f.time)}</option>)}
         </Select>
       </Field>
       <div className="space-y-10 print:space-y-0">{shown.map((fn) => <FunctionSheet key={fn.id} order={order} fn={fn} />)}</div>

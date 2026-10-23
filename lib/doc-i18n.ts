@@ -12,6 +12,7 @@ const en = {
   taxableValue: "Taxable value", pricesIncludeGst: "prices include GST", amountInWords: "Amount in words", proformaNote: "This is a proforma for payment and is not a tax invoice.",
   reason: "Reason", amountCredited: "Amount credited", refunded: "Refunded", adjusted: "Adjusted against the bill", against: "Against order",
   scanToPay: "Scan to pay", bank: "Bank", upi: "UPI", for: "For", signatory: "Authorised signatory", sac: "SAC",
+  morning: "Morning", afternoon: "Afternoon", evening: "Evening", night: "Night", to: "to",
 };
 type Key = keyof typeof en;
 
@@ -24,6 +25,7 @@ const hi: Record<Key, string> = {
   taxableValue: "कर योग्य मूल्य", pricesIncludeGst: "कीमतों में जीएसटी शामिल", amountInWords: "राशि शब्दों में", proformaNote: "यह भुगतान हेतु प्रोफ़ॉर्मा है, टैक्स इनवॉइस नहीं।",
   reason: "कारण", amountCredited: "क्रेडिट राशि", refunded: "वापस किया", adjusted: "बिल में समायोजित", against: "ऑर्डर के विरुद्ध",
   scanToPay: "भुगतान के लिए स्कैन करें", bank: "बैंक", upi: "यूपीआई", for: "की ओर से", signatory: "अधिकृत हस्ताक्षरकर्ता", sac: "SAC",
+  morning: "सुबह", afternoon: "दोपहर", evening: "शाम", night: "रात", to: "से",
 };
 
 const gu: Record<Key, string> = {
@@ -35,6 +37,7 @@ const gu: Record<Key, string> = {
   taxableValue: "કરપાત્ર મૂલ્ય", pricesIncludeGst: "ભાવમાં જીએસટી સમાવિષ્ટ", amountInWords: "રકમ શબ્દોમાં", proformaNote: "આ ચુકવણી માટેનું પ્રોફોર્મા છે, ટેક્સ ઇન્વૉઇસ નથી.",
   reason: "કારણ", amountCredited: "ક્રેડિટ રકમ", refunded: "પરત કરેલ", adjusted: "બિલમાં સરભર", against: "ઓર્ડર સામે",
   scanToPay: "ચુકવણી માટે સ્કેન કરો", bank: "બેંક", upi: "યુપીઆઈ", for: "વતી", signatory: "અધિકૃત સહી કરનાર", sac: "SAC",
+  morning: "સવાર", afternoon: "બપોર", evening: "સાંજ", night: "રાત", to: "થી",
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, hi, gu };

@@ -3,10 +3,12 @@
 import * as React from "react";
 import { useStore } from "./store";
 import type { EventFunction, QuoteDraft } from "./types";
+import { sessionFor } from "./services";
 import { uid } from "./utils";
 
-export function blankFunction(name = "Main function", date = "", pax = 200, venue = ""): EventFunction {
-  return { id: uid(), name, date, time: "19:00", venue, pax, itemIds: [] };
+export function blankFunction(name = "Main function", date = "", pax = 200, venue = "", slot: Partial<EventFunction> = {}): EventFunction {
+  const time = slot.time ?? "19:00";
+  return { id: uid(), name, date, time, endTime: slot.endTime ?? "22:00", session: sessionFor(time), venue, pax, itemIds: [], foodTypeId: slot.foodTypeId };
 }
 
 export function blankDraft(): QuoteDraft {

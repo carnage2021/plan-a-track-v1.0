@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle, Phone, Search, Sparkles, UtensilsCrossed } from "lucide-react";
+import { Gift, MessageCircle, Phone, Search, Sparkles, UtensilsCrossed } from "lucide-react";
 import Image from "next/image";
 import * as React from "react";
 import { VegMark } from "@/components/shared/badges";
@@ -21,7 +21,7 @@ export interface Catalogue { tenant: PublicTenant; categories: PublicCategory[];
 export interface EventMenu { tenant: PublicTenant; function: { name: string; date: string; eventType: string }; categories: PublicCategory[]; items: PublicItem[] }
 
 /** Calls one of the public database functions; null means the page does not exist or is switched off. */
-export function usePublic<T>(fn: "public_catalogue" | "public_event_menu", args: Record<string, string>) {
+export function usePublic<T>(fn: "public_catalogue" | "public_event_menu" | "public_referral", args: Record<string, string>) {
   const [state, setState] = React.useState<{ data: T | null; loading: boolean }>({ data: null, loading: true });
   const key = JSON.stringify(args);
   React.useEffect(() => {
@@ -122,12 +122,29 @@ export function DishGrid({ categories, items, showPrice }: { categories: PublicC
   );
 }
 
-export function CataloguePage({ data }: { data: Catalogue }) {
+/** What a ?ref= link may show: the referrer's first name and the offer. */
+export interface PublicReferral {
+  name: string;
+  code: string;
+  offer: { type: "percent" | "amount"; value: number; max: number };
+}
+
+export function CataloguePage({ data, referral }: { data: Catalogue; referral?: PublicReferral | null }) {
   const { tenant } = data;
-  const enquire = whatsappLink(tenant.phone, `Hi ${tenant.name}, I saw your menu online and would like a quotation.\nEvent: \nDate: \nGuests: `);
+  const offer = referral && (referral.offer.type === "percent" ? `${referral.offer.value}% off${referral.offer.max ? ` (up to ${money(referral.offer.max)})` : ""}` : `${money(referral.offer.value)} off`);
+  const enquire = whatsappLink(tenant.phone, `Hi ${tenant.name}, I saw your menu online and would like a quotation.${referral ? `\nReferral code: ${referral.code}` : ""}\nEvent: \nDate: \nGuests: `);
   return (
     <PublicShell tenant={tenant}>
       <main className="mx-auto max-w-5xl px-4 pb-28">
+        {referral && (
+          <section className="mt-6 flex items-center gap-4 rounded-2xl border border-accent-gold/40 bg-accent-gold/10 p-4">
+            <Gift className="size-8 shrink-0 text-accent-gold" strokeWidth={1.5} />
+            <div>
+              <p className="font-heading text-lg font-semibold">{referral.name} invited you: {offer} your booking</p>
+              <p className="text-sm text-text-muted">Your code <strong className="tnum tracking-wider text-text">{referral.code}</strong> is added to your WhatsApp enquiry automatically.</p>
+            </div>
+          </section>
+        )}
         {data.packages.length > 0 && (
           <section className="mt-6">
             <h2 className="font-heading text-xl font-semibold">Packages</h2>

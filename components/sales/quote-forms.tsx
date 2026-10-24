@@ -14,6 +14,7 @@ import type { QuoteDraft } from "@/lib/types";
 import { cn, fmtDate, money, uid } from "@/lib/utils";
 import { eventTypes } from "./enquiry-sheet";
 import { nextService, ServiceCard } from "./service-fields";
+import { ExtraDishes, ReferralCard } from "./summary-extras";
 
 type SetDraft = (patch: Partial<QuoteDraft> | ((d: QuoteDraft) => Partial<QuoteDraft>)) => void;
 
@@ -102,6 +103,21 @@ export function SummaryForm({ draft, setDraft, hideMargin }: { draft: QuoteDraft
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px] lg:items-start">
       <div className="space-y-4">
+        <ExtraDishes
+          functions={draft.functions}
+          onPrice={(fnId, itemId, price) =>
+            setDraft((d) => ({
+              functions: d.functions.map((f) => {
+                if (f.id !== fnId) return f;
+                const prices = { ...f.itemPrices };
+                if (price === undefined) delete prices[itemId];
+                else prices[itemId] = price;
+                return { ...f, itemPrices: Object.keys(prices).length ? prices : undefined };
+              }),
+            }))
+          }
+        />
+
         <Card className="p-4 md:p-5">
           <h2 className="font-heading text-base font-semibold">Extra charges</h2>
           <p className="text-xs text-text-muted">Each one shows as its own line on the quotation.</p>
@@ -147,18 +163,21 @@ export function SummaryForm({ draft, setDraft, hideMargin }: { draft: QuoteDraft
             </p>
           )}
         </Card>
+
+        <ReferralCard draft={draft} setDraft={setDraft} totals={totals} />
       </div>
 
       <Card className="p-4 md:p-5 lg:sticky lg:top-20">
         <h2 className="font-heading text-base font-semibold">Total</h2>
         <dl className="tnum mt-3 space-y-2 text-sm">
           {draft.functions.map((f) => {
-            const one = priceQuote({ ...draft, functions: [f], extras: [], discount: { type: "amount", value: 0 }, gstRate: 0, gstInclusive: false }, items, packages, tenant.slabs);
+            const one = priceQuote({ ...draft, functions: [f], extras: [], discount: { type: "amount", value: 0 }, creditUsed: 0, gstRate: 0, gstInclusive: false }, items, packages, tenant.slabs);
             return <div key={f.id} className="flex justify-between gap-3"><dt className="min-w-0 truncate text-text-muted">{f.name} · {f.pax} guests</dt><dd>{money(one.food)}</dd></div>;
           })}
           {draft.extras.filter((e) => e.amount).map((e) => <div key={e.id} className="flex justify-between gap-3"><dt className="truncate text-text-muted">{e.label || "Other charge"}</dt><dd>{money(e.amount)}</dd></div>)}
           <div className="flex justify-between border-t pt-2"><dt>Subtotal</dt><dd>{money(totals.subtotal)}</dd></div>
-          {totals.discount > 0 && <div className="flex justify-between text-success"><dt>Discount</dt><dd>-{money(totals.discount)}</dd></div>}
+          {totals.discount > 0 && <div className="flex justify-between text-success"><dt>Discount{draft.referralCode ? " (referral)" : ""}</dt><dd>-{money(totals.discount)}</dd></div>}
+          {totals.credit > 0 && <div className="flex justify-between text-success"><dt>Referral credit</dt><dd>-{money(totals.credit)}</dd></div>}
           <div className="flex justify-between text-text-muted"><dt>GST {tenant.gstRate}%{tenant.gstInclusive ? " (included)" : ""}</dt><dd>{money(totals.gst)}</dd></div>
           <div className="flex items-baseline justify-between border-t pt-3"><dt className="font-medium">Grand total</dt><dd className="font-heading text-2xl font-bold">{money(totals.grand)}</dd></div>
         </dl>

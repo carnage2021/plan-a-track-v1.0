@@ -37,7 +37,7 @@ import type {
   TeamUser,
   Tenant,
 } from "./types";
-import { addDays, financialYear, isoDate, uid } from "./utils";
+import { addDays, financialYear, isoDate, money, uid } from "./utils";
 
 // The store is the in-memory copy of the signed-in caterer's data. It is loaded from Supabase
 // after sign-in; every action updates it at once and writes the change to the database behind it.
@@ -52,6 +52,8 @@ interface Data {
   servicesReady: boolean;
   /** False until 0013 has added package additions and archiving */
   packageExtrasReady: boolean;
+  /** False until 0014 has added referrals, raw material changes and dish prices */
+  referralsReady: boolean;
   tenantId: string;
   tenant: Tenant;
   users: TeamUser[];
@@ -110,6 +112,12 @@ interface Actions {
   patchOrder: (id: string, patch: Partial<Pick<Order, "instructions" | "commissionPct">>) => void;
   addOrderExtra: (orderId: string, label: string, amount: number) => void;
   changePax: (orderId: string, functionId: string, pax: number, priceImpact: number) => void;
+  /** Raw material for one order changed by hand; an empty map goes back to the recipes. */
+  setRawOverrides: (orderId: string, overrides: Record<string, number>) => void;
+  /** A dish's per-plate price on a booked order; undefined goes back to the menu price. Logged as a change. */
+  setOrderItemPrice: (orderId: string, functionId: string, itemId: string, price: number | undefined, priceImpact: number) => void;
+  /** The client's referral code, made and saved the first time it is needed. */
+  ensureReferralCode: (clientId: string) => string;
 }
 
 export type Store = Data & Actions;
@@ -120,7 +128,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -239,7 +247,8 @@ export const useStore = create<Store>()(
       },
 
       saveClient: (client) => {
-        set((s) => ({ clients: s.clients.map((c) => (c.id === client.id ? client : c)) }));
+        // Referral code, credit and referrer change only through referrals, never from an edit form left open.
+        set((s) => ({ clients: s.clients.map((c) => (c.id === client.id ? { ...client, referralCode: c.referralCode, credit: c.credit, referredBy: c.referredBy } : c)) }));
         background((sb) => run(sb.from("clients").update(clientRow(client)).eq("id", client.id), "Saving the client"));
       },
 
@@ -333,6 +342,8 @@ export const useStore = create<Store>()(
             notes: "",
             createdBy: s.currentUserId,
             createdAt: today(),
+            referralCode: draft.referralCode?.trim().toUpperCase() || undefined,
+            creditUsed: draft.creditUsed || 0,
           };
           await insertQuotation(sb, q);
           if (previous) await run(sb.from("quotations").update({ status: "superseded" }).eq("group_id", previous.groupId).neq("id", id), "Closing the older version");
@@ -377,13 +388,22 @@ export const useStore = create<Store>()(
             managerId: s.users.find((u) => u.role === "operations" && !u.invited)?.id ?? s.currentUserId,
             commissionPct: 0,
             createdAt: today(),
+            referralCode: q.referralCode,
+            creditUsed: q.creditUsed || 0,
           };
           await insertOrder(sb, o);
+          // Booking spends the client's referral credit, and ties a referred client to whoever referred them.
+          const client = s.clients.find((c) => c.id === q.clientId);
+          const referrer = referrerOf(s.clients, q.referralCode, q.clientId);
+          if (client && (o.creditUsed || (referrer && !client.referredBy)))
+            await run(sb.from("clients").update({ ...(o.creditUsed ? { credit: Math.max(0, (client.credit ?? 0) - o.creditUsed) } : {}), ...(referrer && !client.referredBy ? { referred_by: referrer.id } : {}) }).eq("id", client.id), "Updating the client");
           await run(sb.from("quotations").update({ status: "approved" }).eq("id", quoteId), "Updating the quotation");
           if (q.enquiryId) await run(sb.from("enquiries").update({ stage: "booked" }).eq("id", q.enquiryId), "Updating the enquiry");
           return o;
         });
+        const referrer = referrerOf(s.clients, q.referralCode, q.clientId);
         set((st) => ({
+          clients: st.clients.map((c) => (c.id === q.clientId ? { ...c, credit: Math.max(0, (c.credit ?? 0) - (order.creditUsed ?? 0)), referredBy: c.referredBy ?? referrer?.id } : c)),
           orders: [order, ...st.orders],
           quotations: st.quotations.map((x) => (x.id === quoteId ? { ...x, status: "approved" as const } : x)),
           enquiries: st.enquiries.map((e) => (e.id === q.enquiryId ? { ...e, stage: "booked" as const } : e)),
@@ -394,14 +414,23 @@ export const useStore = create<Store>()(
       addPayment: async (orderId, amount, mode, note) => {
         const s = get();
         // The first payment on a tentative order is the booking advance, which confirms it.
-        const confirms = s.orders.find((o) => o.id === orderId)?.status === "tentative";
+        const order = s.orders.find((o) => o.id === orderId);
+        const confirms = order?.status === "tentative";
+        // Confirming a booking that came in on a referral code credits the client who shared the code, once.
+        const reward = s.tenant.referral?.enabled ? s.tenant.referral.reward : 0;
+        const referrer = confirms && reward > 0 && !order?.referralRewarded ? referrerOf(s.clients, order?.referralCode, order?.clientId) : undefined;
         const payment = await write(async (sb) => {
           const p: Payment = { id: uid(), amount, mode, note, date: today(), receiptNo: docNo("RCT", await nextNumber(sb, "receipt")) };
           await run(sb.from("payments").insert(paymentRow(p, orderId, s.currentUserId)), "Recording the payment");
-          if (confirms) await run(sb.from("orders").update({ status: "confirmed" }).eq("id", orderId), "Confirming the order");
+          if (confirms) await run(sb.from("orders").update({ status: "confirmed", ...(referrer ? { referral_rewarded: true } : {}) }).eq("id", orderId), "Confirming the order");
+          if (referrer) await run(sb.from("clients").update({ credit: (referrer.credit ?? 0) + reward }).eq("id", referrer.id), "Crediting the referral");
           return p;
         });
-        set((st) => ({ orders: st.orders.map((o) => (o.id === orderId ? { ...o, payments: [...o.payments, payment], status: confirms ? "confirmed" : o.status } : o)) }));
+        set((st) => ({
+          orders: st.orders.map((o) => (o.id === orderId ? { ...o, payments: [...o.payments, payment], status: confirms ? "confirmed" : o.status, referralRewarded: o.referralRewarded || !!referrer } : o)),
+          clients: referrer ? st.clients.map((c) => (c.id === referrer.id ? { ...c, credit: (c.credit ?? 0) + reward } : c)) : st.clients,
+        }));
+        if (referrer) toast.success(`${referrer.name} earned ${money(reward)} referral credit`);
         // A confirmed order drafts its third-party food orders straight away.
         if (confirms) void useSupply.getState().draftOutsource(orderId).catch(() => undefined);
         return payment;
@@ -433,6 +462,39 @@ export const useStore = create<Store>()(
           await run(sb.from("order_changes").insert({ id: entry.id, order_id: orderId, description: entry.text, price_impact: priceImpact, changed_by: s.currentUserId }), "Logging the change");
         });
       },
+      setRawOverrides: (orderId, overrides) => {
+        set((s) => ({ orders: s.orders.map((o) => (o.id === orderId ? { ...o, rawOverrides: Object.keys(overrides).length ? overrides : undefined } : o)) }));
+        background((sb) => run(sb.from("orders").update({ raw_overrides: overrides }).eq("id", orderId), "Saving the raw material"));
+      },
+      setOrderItemPrice: (orderId, functionId, itemId, price, priceImpact) => {
+        const s = get();
+        const fn = s.orders.find((o) => o.id === orderId)?.functions.find((f) => f.id === functionId);
+        const item = s.items.find((i) => i.id === itemId);
+        if (!fn || !item) return;
+        const before = fn.itemPrices?.[itemId] ?? item.price;
+        if (before === (price ?? item.price)) return;
+        const prices = { ...fn.itemPrices };
+        if (price === undefined) delete prices[itemId];
+        else prices[itemId] = price;
+        const entry = { id: uid(), at: today(), by: s.users.find((u) => u.id === s.currentUserId)?.name ?? "", text: `${fn.name}: ${item.name} per plate changed from ${money(before)} to ${money(price ?? item.price)}`, priceImpact };
+        set((st) => ({
+          orders: st.orders.map((o) => (o.id === orderId ? { ...o, functions: o.functions.map((f) => (f.id === functionId ? { ...f, itemPrices: Object.keys(prices).length ? prices : undefined } : f)), changeLog: [entry, ...o.changeLog] } : o)),
+        }));
+        background(async (sb) => {
+          await run(sb.from("function_items").update({ price_override: price ?? null }).eq("function_id", functionId).eq("item_id", itemId), "Saving the dish price");
+          await run(sb.from("order_changes").insert({ id: entry.id, order_id: orderId, description: entry.text, price_impact: priceImpact, changed_by: s.currentUserId }), "Logging the change");
+        });
+      },
+      ensureReferralCode: (clientId) => {
+        const s = get();
+        const client = s.clients.find((c) => c.id === clientId);
+        if (!client) return "";
+        if (client.referralCode) return client.referralCode;
+        const code = makeReferralCode(client.name, new Set(s.clients.map((c) => c.referralCode?.toUpperCase()).filter((x): x is string => !!x)));
+        set((st) => ({ clients: st.clients.map((c) => (c.id === clientId ? { ...c, referralCode: code } : c)) }));
+        background((sb) => run(sb.from("clients").update({ referral_code: code }).eq("id", clientId), "Saving the referral code"));
+        return code;
+      },
     }),
     {
       name: "catering-prefs-v1",
@@ -444,6 +506,22 @@ export const useStore = create<Store>()(
 );
 
 setReload(() => void useStore.getState().reload());
+
+/** The client whose code this is, unless it is the client's own. */
+export function referrerOf(clients: Client[], code: string | undefined, selfId?: string) {
+  const c = code?.trim().toUpperCase();
+  return c ? clients.find((x) => x.referralCode?.toUpperCase() === c && x.id !== selfId) : undefined;
+}
+
+/** RAJESH25: the first name in capitals and two digits, different from every code already given out. */
+function makeReferralCode(name: string, taken: Set<string>) {
+  const stem = (name.split(" ")[0] ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 8) || "FRIEND";
+  for (let i = 0; i < 200; i++) {
+    const code = `${stem}${10 + Math.floor(Math.random() * 90)}`;
+    if (!taken.has(code)) return code;
+  }
+  return `${stem}${Date.now() % 100000}`;
+}
 
 const nobody: TeamUser = { id: "", name: "", phone: "", role: "owner" };
 

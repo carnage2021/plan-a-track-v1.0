@@ -41,6 +41,19 @@ export interface Tenant {
   subscription?: Subscription;
   /** The owner's food types; absent until 0012 has been run or until the owner first edits them */
   foodTypes?: FoodType[];
+  /** The referral offer; absent until 0014 has been run */
+  referral?: ReferralSettings;
+}
+
+export interface ReferralSettings {
+  enabled: boolean;
+  /** What the new customer gets off their quotation */
+  type: "percent" | "amount";
+  value: number;
+  /** Most a percent discount can come to, in rupees; 0 for no limit */
+  max: number;
+  /** Credit the referring client earns once the new booking is confirmed */
+  reward: number;
 }
 
 /** A kind of catering service, such as Welcome Drinks or Gala Dinner, and the menu categories it offers. */
@@ -94,6 +107,12 @@ export interface Client {
   /** ISO dates; the year is ignored for greetings */
   birthday?: string;
   anniversary?: string;
+  /** The code this client shares with friends; absent until 0014 has been run */
+  referralCode?: string;
+  /** The client whose code brought this one in */
+  referredBy?: string;
+  /** Referral credit to spend on a later booking, in rupees */
+  credit?: number;
 }
 
 export type EnquiryStage = "new" | "contacted" | "quoted" | "followup" | "booked" | "lost";
@@ -199,6 +218,8 @@ export interface EventFunction {
   itemIds: string[];
   /** Per-dish notes for this function, keyed by item id */
   itemNotes?: Record<string, string>;
+  /** Per-plate prices changed for this quotation or order only, keyed by item id */
+  itemPrices?: Record<string, number>;
 }
 
 export interface ExtraCharge {
@@ -233,6 +254,10 @@ export interface Quotation {
   notes: string;
   createdBy: string;
   createdAt: string;
+  /** Referral code the client came in with */
+  referralCode?: string;
+  /** Referral credit taken off this quotation, in rupees */
+  creditUsed?: number;
 }
 
 export type OrderStatus = "tentative" | "confirmed" | "in_progress" | "completed" | "cancelled";
@@ -275,6 +300,12 @@ export interface Order {
   commissionPct: number;
   cancelNote?: string;
   createdAt: string;
+  referralCode?: string;
+  creditUsed?: number;
+  /** True once the referring client has been credited for this booking */
+  referralRewarded?: boolean;
+  /** Raw material changed by hand for this event: ingredient id to quantity; 0 removes it */
+  rawOverrides?: Record<string, number>;
 }
 
 /** Work in progress in the quotation builder or booking mode */
@@ -290,4 +321,6 @@ export interface QuoteDraft {
   discount: Discount;
   step: number;
   savedAt?: string;
+  referralCode?: string;
+  creditUsed?: number;
 }

@@ -28,6 +28,39 @@ export function requirementFor(functions: Pick<EventFunction, "pax" | "itemIds">
   return need;
 }
 
+/**
+ * An order's raw material with its hand changes applied: an overridden quantity replaces the recipe's,
+ * 0 removes the ingredient, and an ingredient no recipe uses is added.
+ */
+export function withOverrides(need: Map<string, number>, overrides?: Record<string, number>) {
+  if (!overrides) return need;
+  const out = new Map(need);
+  for (const [id, qty] of Object.entries(overrides)) {
+    if (qty > 0) out.set(id, qty);
+    else out.delete(id);
+  }
+  return out;
+}
+
+/**
+ * One function's share of an order's raw material. Changes are made for the whole order, so each function
+ * takes the same proportion of a changed quantity as it had of the recipe's; an added ingredient is split
+ * by guests.
+ */
+export function functionNeed(order: Pick<Order, "functions" | "rawOverrides">, fn: Pick<EventFunction, "id" | "pax" | "itemIds">, items: MenuItem[], recipes: RecipeLine[]) {
+  const own = requirementFor([fn], items, recipes);
+  if (!order.rawOverrides) return own;
+  const all = requirementFor(order.functions, items, recipes);
+  const guests = order.functions.reduce((s, f) => s + f.pax, 0) || 1;
+  for (const [id, qty] of Object.entries(order.rawOverrides)) {
+    const total = all.get(id) ?? 0;
+    const share = total > 0 ? (own.get(id) ?? 0) / total : fn.pax / guests;
+    if (qty > 0 && share > 0) own.set(id, qty * share);
+    else own.delete(id);
+  }
+  return own;
+}
+
 /** In-house dishes on these functions that have no recipe yet, so their raw material is not counted. */
 export function missingRecipes(functions: Pick<EventFunction, "itemIds">[], items: MenuItem[], recipes: RecipeLine[]) {
   const has = new Set(recipes.map((r) => r.itemId));

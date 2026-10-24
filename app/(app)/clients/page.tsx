@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import { ReferralPanel } from "@/components/sales/referral-panel";
 import { Badge, StatusBadge } from "@/components/shared/badges";
 import { Avatar, EmptyState, PageHeader } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,8 @@ function ClientSheet({ row, onClose }: { row: Row; onClose: () => void }) {
             <div key={k} className="rounded-xl bg-surface-muted p-3"><dt className="text-xs text-text-muted">{k}</dt><dd className={cn("font-heading text-lg font-bold", k === "Balance due" && "text-warning")}>{v}</dd></div>
           ))}
         </dl>
+
+        <ReferralPanel client={row.c} />
 
         <section>
           <h3 className="font-heading text-base font-semibold">History</h3>

@@ -33,7 +33,7 @@ function Builder() {
     const quote = s.quotations.find((q) => q.id === reviseId);
     if (quote) {
       const c = s.clients.find((x) => x.id === quote.clientId);
-      return { ...blankDraft(), clientId: quote.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", eventType: quote.eventType, functions: quote.functions, extras: quote.extras, discount: quote.discount, reviseOf: quote.id, enquiryId: quote.enquiryId, step: 1 };
+      return { ...blankDraft(), clientId: quote.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", eventType: quote.eventType, functions: quote.functions, extras: quote.extras, discount: quote.discount, reviseOf: quote.id, enquiryId: quote.enquiryId, referralCode: quote.referralCode, creditUsed: quote.creditUsed, step: 1 };
     }
     const enquiry = s.enquiries.find((e) => e.id === enquiryId);
     if (enquiry) {

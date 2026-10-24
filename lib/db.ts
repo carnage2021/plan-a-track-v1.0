@@ -33,8 +33,9 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
 
 /** Set when the phase 3 migration (0003_supply.sql) has been run, so its columns can be written;
  * services once 0012 has added food types, sessions and end times; packageExtras once 0013 has added
- * package additions and archiving. */
-export const schema = { supply: false, services: false, packageExtras: false };
+ * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
+ * per-quotation dish prices. */
+export const schema = { supply: false, services: false, packageExtras: false, referrals: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -75,6 +76,7 @@ export function tenantRow(t: Tenant): Row {
     // Only sent once the 0008 columns exist, so older databases keep saving settings.
     ...(t.access ? { role_access: t.access } : {}),
     ...(schema.services && t.foodTypes ? { food_types: t.foodTypes } : {}),
+    ...(schema.referrals && t.referral ? { referral_settings: t.referral } : {}),
     ...(t.docs ? { doc_settings: t.docs, public_slug: t.publicSlug || null, public_menu: !!t.publicMenu, public_prices: !!t.publicPrices } : {}),
   };
 }
@@ -106,6 +108,7 @@ function tenantFrom(r: Row): Tenant {
     ...("plan_id" in r ? { subscription: { status: r.status, planId: r.plan_id ?? undefined, trialEndsAt: r.trial_ends_at ?? undefined, paidUntil: r.paid_until ?? undefined, cycle: r.billing_cycle, addons: r.addons ?? [], extraUsers: r.extra_users ?? 0 } } : {}),
     ...("role_access" in r ? { access: { roles: {}, poLimit: 0, payoutLimit: 0, ...r.role_access } } : {}),
     ...(r.food_types ? { foodTypes: r.food_types } : {}),
+    ...(r.referral_settings ? { referral: r.referral_settings } : {}),
     ...("doc_settings" in r ? { docs: { ...defaultDocs, ...r.doc_settings }, publicSlug: r.public_slug ?? "", publicMenu: r.public_menu, publicPrices: r.public_prices } : {}),
   };
 }
@@ -195,6 +198,7 @@ const quotationRow = (q: Quotation): Row => ({
   valid_until: q.validUntil || null,
   notes: q.notes,
   created_by: q.createdBy || null,
+  ...(schema.referrals ? { referral_code: q.referralCode || null, credit_used: q.creditUsed ?? 0 } : {}),
 });
 
 const orderRow = (o: Order): Row => ({
@@ -212,6 +216,7 @@ const orderRow = (o: Order): Row => ({
   manager_id: o.managerId || null,
   cancel_note: o.cancelNote ?? null,
   ...(schema.supply ? { commission_pct: o.commissionPct } : {}),
+  ...(schema.referrals ? { referral_code: o.referralCode || null, credit_used: o.creditUsed ?? 0, referral_rewarded: !!o.referralRewarded, raw_overrides: o.rawOverrides ?? {} } : {}),
 });
 
 export const paymentRow = (p: Payment, orderId: string, recordedBy?: string): Row => ({
@@ -237,7 +242,9 @@ async function insertFunctions(sb: SB, parent: { quotation_id?: string; order_id
     ),
     "Saving functions",
   );
-  const items = functions.flatMap((f) => [...new Set(f.itemIds)].map((itemId, i) => tenanted({ function_id: f.id, item_id: itemId, note: f.itemNotes?.[itemId] ?? "", sort_order: i }, tenantId)));
+  const items = functions.flatMap((f) =>
+    [...new Set(f.itemIds)].map((itemId, i) => tenanted({ function_id: f.id, item_id: itemId, note: f.itemNotes?.[itemId] ?? "", sort_order: i, ...(schema.referrals ? { price_override: f.itemPrices?.[itemId] ?? null } : {}) }, tenantId)),
+  );
   if (items.length) check(await sb.from("function_items").insert(items), "Saving the menu");
 }
 
@@ -296,6 +303,8 @@ export interface Loaded {
   servicesReady: boolean;
   /** False until 0013 has added package additions and archiving */
   packageExtrasReady: boolean;
+  /** False until 0014 has added referrals, raw material changes and dish prices */
+  referralsReady: boolean;
   /** The branch this person is tied to, if the owner assigned one */
   myBranch: string;
 }
@@ -336,6 +345,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   ]);
   const t = check(tenant, "Loading the account") as Row;
   schema.services = "food_types" in t;
+  schema.referrals = "referral_settings" in t;
   const rowsOf = (res: { data: unknown; error: { message: string } | null }, what: string) => (check(res, what) ?? []) as Row[];
   const profileRows = rowsOf(profiles, "Loading the team");
   const nameOf = (id: string | null) => profileRows.find((p) => p.id === id)?.name ?? "";
@@ -349,7 +359,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       .map((f) => {
         const picked = itemsByFn.get(f.id) ?? [];
         const notes = Object.fromEntries(picked.filter((p) => p.note).map((p) => [p.item_id, p.note]));
-        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined };
+        const prices = Object.fromEntries(picked.filter((p) => p.price_override !== null && p.price_override !== undefined).map((p) => [p.item_id, Number(p.price_override)]));
+        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined, itemPrices: Object.keys(prices).length ? prices : undefined };
       });
   const extraRows = rowsOf(extras, "Loading extra charges");
   const extrasOf = (key: "quotation_id" | "order_id", id: string): ExtraCharge[] => extraRows.filter((e) => e[key] === id).map((e) => ({ id: e.id, label: e.label, amount: Number(e.amount) }));
@@ -368,7 +379,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     ],
     clients: rowsOf(clients, "Loading clients").map((c) => {
       if ("birthday" in c) clientDates = true;
-      return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined };
+      return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined, referralCode: c.referral_code ?? undefined, referredBy: c.referred_by ?? undefined, credit: Number(c.credit ?? 0) };
     }),
     categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
     items: rowsOf(items, "Loading the menu").map((i) => ({
@@ -444,6 +455,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       notes: q.notes,
       createdBy: q.created_by ?? "",
       createdAt: localDay(q.created_at),
+      referralCode: q.referral_code ?? undefined,
+      creditUsed: Number(q.credit_used ?? 0),
     })),
     orders: rowsOf(orders, "Loading orders").filter(inBranch).map((o) => ({
       id: o.id,
@@ -464,12 +477,17 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       commissionPct: Number(o.commission_pct ?? 0),
       cancelNote: o.cancel_note ?? undefined,
       createdAt: localDay(o.created_at),
+      referralCode: o.referral_code ?? undefined,
+      creditUsed: Number(o.credit_used ?? 0),
+      referralRewarded: !!o.referral_rewarded,
+      rawOverrides: o.raw_overrides && Object.keys(o.raw_overrides).length ? o.raw_overrides : undefined,
     })),
     branches: branchList,
     branchesEnabled,
     myBranch,
     servicesReady: schema.services,
     packageExtrasReady: schema.packageExtras,
+    referralsReady: schema.referrals,
   };
 }
 

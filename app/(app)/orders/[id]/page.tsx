@@ -28,8 +28,9 @@ import { Requirement } from "@/components/supply/requirement";
 import { priceFunction, priceQuote } from "@/lib/pricing";
 import { useBilling } from "@/lib/billing";
 import { useSupply } from "@/lib/supply-store";
-import { useStore } from "@/lib/store";
+import { referrerOf, useCurrentUser, useStore } from "@/lib/store";
 import type { EventFunction, MenuItem, Order, Payment, Locale } from "@/lib/types";
+import { ExtraDishes } from "@/components/sales/summary-extras";
 import { printLight, printThermal, useUi } from "@/lib/ui";
 import { fmtDate, money, num, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
@@ -90,9 +91,14 @@ function OrderView({ order }: { order: Order }) {
   const { clients, items, packages, categories, tenant, users, quotations } = useStore();
   const setOrderStatus = useStore((s) => s.setOrderStatus);
   const patchOrder = useStore((s) => s.patchOrder);
+  const setOrderItemPrice = useStore((s) => s.setOrderItemPrice);
+  const setRawOverrides = useStore((s) => s.setRawOverrides);
+  const referralsReady = useStore((s) => s.referralsReady);
+  const isOwner = useCurrentUser().role === "owner";
   const openPayment = useUi((s) => s.openPayment);
   const { totals, bill, paid, due, pct } = useOrderMoney(order);
   const client = clients.find((c) => c.id === order.clientId);
+  const referrer = referrerOf(clients, order.referralCode, order.clientId);
   const manager = users.find((u) => u.id === order.managerId);
   const quote = quotations.find((q) => q.id === order.quotationId);
   const functions = [...order.functions].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
@@ -218,6 +224,12 @@ function OrderView({ order }: { order: Order }) {
                   <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{manager.name}</p><p className="text-xs text-text-muted">Event manager</p></div>
                 </div>
               )}
+              {(order.referralCode || (order.creditUsed ?? 0) > 0) && (
+                <div className="mt-3 space-y-1 rounded-lg bg-surface-muted p-3 text-xs">
+                  {order.referralCode && <p>Referral code <strong className="tnum">{order.referralCode}</strong>{referrer && <> from <Link className="text-primary hover:underline" href={`/clients?id=${referrer.id}`}>{referrer.name}</Link></>}{order.referralRewarded ? " · reward credited" : " · reward credited when the advance comes in"}</p>}
+                  {(order.creditUsed ?? 0) > 0 && <p className="tnum">Referral credit used: {money(order.creditUsed!)}</p>}
+                </div>
+              )}
             </Card>
             <Card className="p-4">
               <h2 className="flex items-center gap-2 font-heading text-base font-semibold"><History className="size-5 text-text-muted" strokeWidth={1.75} />Change log</h2>
@@ -238,6 +250,17 @@ function OrderView({ order }: { order: Order }) {
         </TabsContent>
 
         <TabsContent value="menu" className="space-y-4">
+          <ExtraDishes
+            functions={functions}
+            readOnly={locked || !isOwner}
+            title={isOwner ? "Extra dishes · prices for this order" : "Extra dishes"}
+            onPrice={(fnId, itemId, price) => {
+              const next = { ...order, functions: order.functions.map((f) => (f.id === fnId ? { ...f, itemPrices: { ...f.itemPrices, [itemId]: price ?? items.find((i) => i.id === itemId)!.price } } : f)) };
+              const impact = priceQuote(next, items, packages, tenant.slabs).grand - priceQuote(order, items, packages, tenant.slabs).grand;
+              setOrderItemPrice(order.id, fnId, itemId, price, impact);
+              toast.success("Price changed", { description: `Order total ${impact >= 0 ? "up" : "down"} by ${money(Math.abs(impact))}. Logged in the change log.` });
+            }}
+          />
           {functions.map((f) => (
             <Card key={f.id}>
               <CardTitle action={<span className="tnum text-xs text-text-muted">{f.itemIds.length} dishes · {num(f.pax)} guests</span>}>{f.name}</CardTitle>
@@ -265,7 +288,7 @@ function OrderView({ order }: { order: Order }) {
         </TabsContent>
 
         <TabsContent value="agencies"><SupplyGate><AgenciesTab order={order} /></SupplyGate></TabsContent>
-        <TabsContent value="raw"><SupplyGate><Requirement functions={order.functions} orderId={order.id} title={`${client?.name ?? ""} · ${order.number}`} /></SupplyGate></TabsContent>
+        <TabsContent value="raw"><SupplyGate><Requirement functions={order.functions} orderId={order.id} title={`${client?.name ?? ""} · ${order.number}`} overrides={order.rawOverrides} onOverrides={referralsReady && !locked ? (map) => setRawOverrides(order.id, map) : undefined} /></SupplyGate></TabsContent>
         <TabsContent value="cutlery"><SupplyGate><CutleryTab order={order} /></SupplyGate></TabsContent>
 
         <TabsContent value="staff"><StaffGate><OrderTasks order={order} /></StaffGate></TabsContent>

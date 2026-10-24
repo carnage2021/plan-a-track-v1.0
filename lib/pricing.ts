@@ -30,12 +30,13 @@ export function slabPct(pax: number, slabs: Tenant["slabs"]) {
 }
 
 export function priceFunction(
-  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds">,
+  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices">,
   items: MenuItem[],
   packages: MenuPackage[],
   slabs: Tenant["slabs"],
 ): FunctionPrice {
-  const byId = new Map(items.map((i) => [i.id, i]));
+  // A price changed on this quotation or order wins over the menu price.
+  const byId = new Map(items.map((i) => [i.id, fn.itemPrices?.[i.id] !== undefined ? { ...i, price: fn.itemPrices[i.id] } : i]));
   const picked = fn.itemIds.map((id) => byId.get(id)).filter((i): i is MenuItem => !!i);
   const plateItems = picked.filter((i) => i.pricingType === "plate");
   const fixed = picked.filter((i) => i.pricingType !== "plate").reduce((s, i) => s + i.price, 0);
@@ -95,6 +96,8 @@ export interface QuoteTotals {
   subtotal: number;
   discount: number;
   discountPct: number;
+  /** Referral credit taken off after the discount */
+  credit: number;
   taxable: number;
   gst: number;
   grand: number;
@@ -110,6 +113,7 @@ interface Priceable {
   discount: Discount;
   gstRate: number;
   gstInclusive: boolean;
+  creditUsed?: number;
 }
 
 export function priceQuote(q: Priceable, items: MenuItem[], packages: MenuPackage[], slabs: Tenant["slabs"]): QuoteTotals {
@@ -120,7 +124,8 @@ export function priceQuote(q: Priceable, items: MenuItem[], packages: MenuPackag
   const subtotal = food + extras;
   const discount = Math.min(subtotal, q.discount.type === "percent" ? (subtotal * q.discount.value) / 100 : q.discount.value) || 0;
   const discountPct = subtotal ? (discount / subtotal) * 100 : 0;
-  const afterDiscount = subtotal - discount;
+  const credit = Math.min(subtotal - discount, q.creditUsed ?? 0) || 0;
+  const afterDiscount = subtotal - discount - credit;
   // Inclusive pricing: the quoted figure already contains GST, so back it out.
   const taxable = q.gstInclusive ? afterDiscount / (1 + q.gstRate / 100) : afterDiscount;
   const gst = (taxable * q.gstRate) / 100;
@@ -131,6 +136,7 @@ export function priceQuote(q: Priceable, items: MenuItem[], packages: MenuPackag
     subtotal,
     discount,
     discountPct,
+    credit,
     taxable,
     gst,
     grand,

@@ -125,7 +125,8 @@ export function buildSnapshot(order: Order, paid: number): InvoiceSnapshot {
     client: { name: client?.name ?? "", phone: client?.phone ?? "", address: client?.address ?? "", gstin: client?.gstin ?? "" },
     lines,
     subtotal: t.subtotal,
-    discount: Math.round(t.discount),
+    // Referral credit is taken off like a discount on the invoice.
+    discount: Math.round(t.discount + t.credit),
     taxable: Math.round(t.taxable * 100) / 100,
     gstRate: order.gstRate,
     gst: Math.round(t.gst * 100) / 100,

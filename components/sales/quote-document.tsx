@@ -125,6 +125,7 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
               <tfoot>
                 <tr className="border-t"><td className="pt-3 text-text-muted" colSpan={3}>{t("subtotal")}</td><td className="pt-3 text-right">{money(totals.subtotal)}</td></tr>
                 {totals.discount > 0 && <tr><td className="py-1 text-text-muted" colSpan={3}>{t("discount")}</td><td className="py-1 text-right">-{money(totals.discount)}</td></tr>}
+                {totals.credit > 0 && <tr><td className="py-1 text-text-muted" colSpan={3}>{t("referralCredit")}</td><td className="py-1 text-right">-{money(totals.credit)}</td></tr>}
                 <tr><td className="py-1 text-text-muted" colSpan={3}>{t("gst")} {data.gstRate}%{data.gstInclusive ? ` (${t("included")})` : ""}</td><td className="py-1 text-right">{money(totals.gst)}</td></tr>
                 <tr className="border-t-2 border-brand"><td className="py-3 font-heading text-base font-semibold" colSpan={3}>{t("grandTotal")}</td><td className="py-3 text-right font-heading text-xl font-bold">{money(totals.grand)}</td></tr>
                 {data.paid !== undefined && (

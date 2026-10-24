@@ -16,7 +16,7 @@ import { useOps } from "@/lib/operations";
 import { priceQuote } from "@/lib/pricing";
 import { taskAmount, useStaff } from "@/lib/staff";
 import { useStore } from "@/lib/store";
-import { requirementFor } from "@/lib/supply";
+import { requirementFor, withOverrides } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { Order } from "@/lib/types";
 import { printLight } from "@/lib/ui";
@@ -77,7 +77,7 @@ function useEventPL(orders: Order[]) {
       // Revenue is the bill before GST, less credit notes (also taken before GST).
       const revenue = Math.max(0, t.taxable - credited / (1 + o.gstRate / 100));
       let material = 0;
-      for (const [id, qty] of requirementFor(o.functions, items, recipes)) material += qty * (rate.get(id) ?? 0);
+      for (const [id, qty] of withOverrides(requirementFor(o.functions, items, recipes), o.rawOverrides)) material += qty * (rate.get(id) ?? 0);
       const outsourced = outsourceOrders.filter((x) => x.orderId === o.id && x.status !== "cancelled").reduce((s, x) => s + x.lines.reduce((a, l) => a + l.qty * l.agencyRate, 0), 0);
       const labour = tasks.filter((x) => x.orderId === o.id).reduce((s, x) => s + taskAmount(x, workers), 0);
       const transport = trips.filter((x) => x.orderId === o.id).reduce((s, x) => s + x.cost, 0);

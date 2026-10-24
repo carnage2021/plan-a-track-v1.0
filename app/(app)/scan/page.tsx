@@ -14,7 +14,7 @@ import { Field, Select } from "@/components/ui/input";
 import { Card, CardTitle, ToggleRow } from "@/components/ui/primitives";
 import { codeFrom, statusLabel, useLabels, type StockLabel } from "@/lib/labels";
 import { useStore } from "@/lib/store";
-import { fmtQty, requirementFor } from "@/lib/supply";
+import { fmtQty, functionNeed } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { Challan } from "@/lib/supply-types";
 import { addDays, cn, fmtDate, isoDate, num } from "@/lib/utils";
@@ -182,7 +182,9 @@ function Issue() {
   const [entries, setEntries] = React.useState<{ label: StockLabel; qty: number }[]>([]);
   const order = options.find((o) => o.id === orderId);
   const store = storeId || stores[0]?.id || "";
-  const need = order ? requirementFor(order.functions.filter((f) => f.date >= today), items, recipes) : new Map<string, number>();
+  // What the event still needs, with the order's hand changes to the raw material.
+  const need = new Map<string, number>();
+  if (order) for (const f of order.functions.filter((x) => x.date >= today)) for (const [id, q] of functionNeed(order, f, items, recipes)) need.set(id, (need.get(id) ?? 0) + q);
   const issuedBefore = (ingredientId: string) => -movements.filter((m) => m.orderId === orderId && m.type === "issue" && m.ingredientId === ingredientId).reduce((s, m) => s + m.qty, 0);
 
   const onCode = async (raw: string): Promise<ScanResult> => {

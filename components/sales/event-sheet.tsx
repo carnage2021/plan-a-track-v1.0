@@ -9,7 +9,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { serviceLine, useFoodTypes } from "@/lib/services";
 import { useStaff } from "@/lib/staff";
 import { useStore } from "@/lib/store";
-import { assetRequirement, fmtQty, requirementFor, roundQty } from "@/lib/supply";
+import { assetRequirement, fmtQty, functionNeed, roundQty } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import { sections } from "@/lib/supply-types";
 import type { EventFunction, Order } from "@/lib/types";
@@ -34,7 +34,8 @@ function FunctionSheet({ order, fn }: { order: Order; fn: EventFunction }) {
   const client = clients.find((c) => c.id === order.clientId);
   const manager = users.find((u) => u.id === order.managerId);
   const dishes = fn.itemIds.map((id) => items.find((i) => i.id === id)).filter((i) => !!i);
-  const need = requirementFor([fn], items, recipes);
+  // The order's hand changes to raw material, shared out across its functions.
+  const need = functionNeed(order, fn, items, recipes);
   const raw = ingredients.filter((i) => need.has(i.id)).map((i) => ({ i, qty: roundQty(need.get(i.id)!, i.unit) }));
   // A saved challan is what actually leaves the godown; without one, the rules give the expected counts.
   const challan = challans.find((c) => c.functionId === fn.id);

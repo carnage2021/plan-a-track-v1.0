@@ -52,6 +52,8 @@ function Builder() {
   const { totals, needsApproval } = useDraftTotals(draft);
   const issues = draftIssues(draft);
   const revising = useStore((s) => s.quotations.find((q) => q.id === draft.reviseOf));
+  // The new version comes after the newest in the group, not after the one the revision started from.
+  const nextVersion = useStore((s) => (revising ? Math.max(...s.quotations.filter((q) => q.groupId === revising.groupId).map((q) => q.version)) + 1 : 1));
   const step = draft.step;
 
   React.useEffect(() => {
@@ -95,7 +97,7 @@ function Builder() {
     toast.success("Draft saved", { description: "Reopen New quotation any time to continue." });
   };
 
-  const doc = { clientName: draft.clientName, clientPhone: draft.clientPhone, eventType: draft.eventType, functions: draft.functions, extras: draft.extras, discount: draft.discount, gstRate: tenant.gstRate, gstInclusive: tenant.gstInclusive, number: revising?.number, version: revising ? revising.version + 1 : undefined };
+  const doc = { clientName: draft.clientName, clientPhone: draft.clientPhone, eventType: draft.eventType, functions: draft.functions, extras: draft.extras, discount: draft.discount, gstRate: tenant.gstRate, gstInclusive: tenant.gstInclusive, number: revising?.number, version: revising ? nextVersion : undefined };
 
   return (
     <>
@@ -103,7 +105,7 @@ function Builder() {
         <Button variant="ghost" size="icon" asChild aria-label="Back to quotations"><Link href="/quotations"><ArrowLeft strokeWidth={1.75} /></Link></Button>
         <div className="min-w-48 flex-1">
           <h1 className="truncate font-heading text-2xl font-bold">{revising ? `Revise ${revising.number}` : "New quotation"}</h1>
-          <p className="truncate text-sm text-text-muted">{revising ? `This becomes version ${revising.version + 1}; the older version is kept for comparison.` : draft.clientName ? `${draft.clientName} · ${draft.eventType}` : "Autosaves as you go."}</p>
+          <p className="truncate text-sm text-text-muted">{revising ? `This becomes version ${nextVersion}; the older versions are kept for comparison.` : draft.clientName ? `${draft.clientName} · ${draft.eventType}` : "Autosaves as you go."}</p>
         </div>
         <Stepper steps={steps} current={step} onStep={go} />
       </div>
@@ -145,7 +147,7 @@ function Builder() {
           <div className="mt-6 flex flex-wrap justify-end gap-2">
             <Button size="lg" variant="ghost" onClick={() => go(1)}><ArrowLeft strokeWidth={1.75} />Back to menu</Button>
             <Button size="lg" onClick={() => setPreview("quotation")}><Eye strokeWidth={1.75} />Preview</Button>
-            <Button variant="primary" size="lg" loading={busy} onClick={create}><FileCheck2 strokeWidth={1.75} />{revising ? `Save as version ${revising.version + 1}` : "Create quotation"}</Button>
+            <Button variant="primary" size="lg" loading={busy} onClick={create}><FileCheck2 strokeWidth={1.75} />{revising ? `Save as version ${nextVersion}` : "Create quotation"}</Button>
           </div>
         </>
       )}

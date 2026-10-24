@@ -9,7 +9,6 @@ import { useStore } from "@/lib/store";
 import type { MenuItem } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
 import { Badge, VegMark } from "./badges";
-import { useAccess } from "@/lib/access";
 
 /** 4:3 dish photo. Dishes without a photo get their category illustration, never a broken image. */
 export function DishImage({ item, sizes = "(max-width: 768px) 50vw, 320px", className, priority }: { item: Pick<MenuItem, "photo" | "name" | "categoryId">; sizes?: string; className?: string; priority?: boolean }) {
@@ -45,7 +44,7 @@ export function dishTag(item: MenuItem) {
 interface DishCardProps {
   item: MenuItem;
   selected?: boolean;
-  /** Extra line under the price, e.g. "+₹45 beyond package" */
+  /** Extra line under the name */
   note?: string;
   /** Internal tags (Outsourced) are removed in booking mode, not just hidden */
   hideInternal?: boolean;
@@ -55,7 +54,7 @@ interface DishCardProps {
 }
 
 export function DishCard({ item, selected, note, hideInternal, large, onToggle, onOpen }: DishCardProps) {
-  const { hidePrices } = useAccess();
+  // Dishes are picked by name and photo; prices stay off the menu selection screen.
   const tag = hideInternal && item.outsourced ? (item.bestseller ? "Bestseller" : null) : dishTag(item);
   return (
     <article
@@ -87,7 +86,6 @@ export function DishCard({ item, selected, note, hideInternal, large, onToggle, 
         {note && <p className="tnum mt-1 text-xs text-warning">{note}</p>}
         <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
           <p className="tnum flex items-center gap-1.5 whitespace-nowrap text-sm">
-            {!hidePrices && <span className="font-medium">{priceLabel(item)}</span>}
             {item.spice >= 2 && <Flame className="size-3.5 shrink-0 text-danger" strokeWidth={1.75} aria-label="Spicy" />}
           </p>
           {onToggle && (

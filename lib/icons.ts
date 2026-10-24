@@ -1,6 +1,14 @@
-import { Candy, CookingPot, Flame, GlassWater, IceCreamCone, Salad, Soup, Utensils, Wheat, type LucideIcon } from "lucide-react";
+import {
+  Apple, Banana, Cake, CakeSlice, Candy, Carrot, ChefHat, Cherry, Citrus, Coffee, Cookie, CookingPot, Croissant, CupSoda, Dessert, Donut, Drumstick, Egg, Fish, Flame, Gift,
+  GlassWater, Grape, IceCreamBowl, IceCreamCone, Leaf, Milk, Pizza, Popcorn, Salad, Sandwich, Soup, Sparkles, Sprout, Utensils, Wheat, type LucideIcon,
+} from "lucide-react";
 
-const map: Record<string, LucideIcon> = { Candy, CookingPot, Flame, GlassWater, IceCreamCone, Salad, Soup, Utensils, Wheat };
+// Icons a menu category can have, in the order the category editor offers them: drinks, savoury, breads,
+// sweets, fruit and veg, the rest.
+const map: Record<string, LucideIcon> = {
+  GlassWater, CupSoda, Coffee, Milk, Salad, Flame, CookingPot, Soup, Popcorn, Sandwich, Pizza, Wheat, Croissant, Candy, IceCreamCone, IceCreamBowl, CakeSlice, Cake, Cookie, Donut, Dessert,
+  Apple, Banana, Cherry, Citrus, Grape, Carrot, Leaf, Sprout, Egg, Fish, Drumstick, ChefHat, Sparkles, Gift, Utensils,
+};
 
 export function categoryIcon(name?: string): LucideIcon {
   return (name && map[name]) || Utensils;

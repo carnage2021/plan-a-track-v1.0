@@ -5,7 +5,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, loadAll, paymentRow, run, savePackageRows, tenantRow } from "./db";
+import { categoryRow, clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, loadAll, paymentRow, run, savePackageRows, tenantRow } from "./db";
 import { background, setReload, write } from "./queue";
 import { supabase } from "./supabase/client";
 import { useKitchen } from "./kitchen";
@@ -101,6 +101,12 @@ interface Actions {
   /** Puts the menu back to an earlier snapshot (Undo for bulk edits). */
   restoreItems: (snapshot: MenuItem[]) => void;
   savePackage: (pkg: Omit<MenuPackage, "id"> & { id?: string }) => void;
+  /** Adds a menu category at the end, or renames one / changes its icon. Returns its id. */
+  saveCategory: (category: Omit<MenuCategory, "id"> & { id?: string }) => string;
+  /** Puts the categories in this order everywhere the menu is shown. */
+  reorderCategories: (ids: string[]) => void;
+  /** Deletes a category, first moving its dishes to another one. Package choices for it go with it. */
+  deleteCategory: (id: string, moveDishesTo?: string) => Promise<void>;
   /** Deletes a package, or archives it when quotations or orders use it. Says which it did. */
   removePackage: (id: string) => "deleted" | "archived";
   saveDraft: (key: string, draft: QuoteDraft | null) => void;
@@ -292,6 +298,39 @@ export const useStore = create<Store>()(
         set((s) => ({ packages: pkg.id ? s.packages.map((p) => (p.id === saved.id ? saved : p)) : [...s.packages, saved] }));
         background((sb) => savePackageRows(sb, saved));
       },
+      saveCategory: (category) => {
+        const s = get();
+        const id = category.id ?? uid();
+        const saved: MenuCategory = { id, name: category.name, icon: category.icon };
+        const exists = s.categories.some((c) => c.id === id);
+        const list = exists ? s.categories.map((c) => (c.id === id ? saved : c)) : [...s.categories, saved];
+        set({ categories: list });
+        background((sb) => run(sb.from("menu_categories").upsert(categoryRow(saved, list.findIndex((c) => c.id === id))), "Saving the category"));
+        return id;
+      },
+      reorderCategories: (ids) => {
+        const s = get();
+        const list = ids.map((id) => s.categories.find((c) => c.id === id)).filter((c): c is MenuCategory => !!c);
+        set({ categories: list });
+        background((sb) => run(sb.from("menu_categories").upsert(list.map((c, i) => categoryRow(c, i))), "Saving the order"));
+      },
+      deleteCategory: async (id, moveDishesTo) => {
+        const s = get();
+        const moving = s.items.filter((i) => i.categoryId === id);
+        if (moving.length && !moveDishesTo) throw new Error("Move its dishes to another category first.");
+        await write(async (sb) => {
+          if (moving.length) await run(sb.from("menu_items").update({ category_id: moveDishesTo }).eq("category_id", id), "Moving the dishes");
+          await run(sb.from("menu_categories").delete().eq("id", id), "Deleting the category");
+        });
+        set((st) => ({
+          categories: st.categories.filter((c) => c.id !== id),
+          items: st.items.map((i) => (i.categoryId === id ? { ...i, categoryId: moveDishesTo! } : i)),
+          packages: st.packages.map((p) => ({ ...p, rules: p.rules.filter((r) => r.categoryId !== id) })),
+        }));
+        // The owner's food types stop listing it too (only the owner can change account settings).
+        const types = get().tenant.foodTypes;
+        if (get().myRole === "owner" && types?.some((t) => t.categoryIds.includes(id))) get().updateTenant({ foodTypes: types.map((t) => ({ ...t, categoryIds: t.categoryIds.filter((x) => x !== id) })) });
+      },
       removePackage: (id) => {
         const s = get();
         const used = [...s.quotations, ...s.orders].some((x) => x.functions.some((f) => f.packageId === id));
@@ -327,7 +366,9 @@ export const useStore = create<Store>()(
             // A revision keeps the number and bumps the version; only the latest stays active.
             number: previous ? previous.number : docNo(s.tenant.quotePrefix, await nextNumber(sb, "quote")),
             groupId: previous?.groupId ?? id,
-            version: previous ? previous.version + 1 : 1,
+            // A revision follows the newest version in its group, wherever it was started from, so two
+            // revisions of the same quotation never take the same version number.
+            version: previous ? (await latestVersion(sb, previous.groupId)) + 1 : 1,
             clientId,
             enquiryId,
             eventType: draft.eventType,
@@ -506,6 +547,13 @@ export const useStore = create<Store>()(
 );
 
 setReload(() => void useStore.getState().reload());
+
+/** The highest version saved so far for a quotation, read from the database at the moment of saving. */
+async function latestVersion(sb: SupabaseClient, groupId: string) {
+  const res = await sb.from("quotations").select("version").eq("group_id", groupId).order("version", { ascending: false }).limit(1);
+  if (res.error) throw new Error(res.error.message);
+  return (res.data?.[0]?.version as number | undefined) ?? 1;
+}
 
 /** The client whose code this is, unless it is the client's own. */
 export function referrerOf(clients: Client[], code: string | undefined, selfId?: string) {

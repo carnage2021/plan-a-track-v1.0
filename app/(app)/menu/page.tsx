@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, ImageOff, LayoutGrid, PencilLine, Plus, Search, Soup, TrendingUp, Users, UtensilsCrossed, X } from "lucide-react";
+import { Check, ImageOff, LayoutGrid, PencilLine, Plus, Search, Settings2, Shapes, Soup, TrendingUp, Users, UtensilsCrossed, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import { CategoriesEditor } from "@/components/menu/categories";
 import { FoodTypesEditor } from "@/components/menu/food-types";
 import { ItemSheet, PackageSheet } from "@/components/menu/item-sheet";
 import { PackageCollage } from "@/components/menu/package-picker";
@@ -41,6 +42,7 @@ function Menu() {
   const [noPhoto, setNoPhoto] = React.useState(false);
   const [offOnly, setOffOnly] = React.useState(false);
   const [picked, setPicked] = React.useState<string[]>([]);
+  const [tab, setTab] = React.useState(() => (["categories", "packages", "food-types"].includes(params.get("tab") ?? "") ? params.get("tab")! : "dishes"));
   const [editing, setEditing] = React.useState<MenuItem | "new" | null>(null);
   const [editingPkg, setEditingPkg] = React.useState<MenuPackage | "new" | null>(null);
   const [raise, setRaise] = React.useState(false);
@@ -66,9 +68,10 @@ function Menu() {
     <>
       <PageHeader title="Menu" subtitle={`${items.filter((i) => i.active).length} dishes on the menu, ${packages.length} packages.`} action={canEdit && <Button variant="primary" onClick={() => setEditing("new")}><Plus strokeWidth={2} /><span className="max-sm:hidden">Add dish</span></Button>} />
 
-      <Tabs defaultValue={params.get("tab") === "food-types" ? "food-types" : "dishes"}>
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="dishes"><UtensilsCrossed className="size-5" strokeWidth={1.75} />Dishes</TabsTrigger>
+          <TabsTrigger value="categories"><Shapes className="size-5" strokeWidth={1.75} />Categories</TabsTrigger>
           <TabsTrigger value="packages"><LayoutGrid className="size-5" strokeWidth={1.75} />Packages</TabsTrigger>
           <TabsTrigger value="food-types"><Soup className="size-5" strokeWidth={1.75} />Food types</TabsTrigger>
         </TabsList>
@@ -85,6 +88,11 @@ function Menu() {
                   </button>
                 );
               })}
+              {canEdit && (
+                <button type="button" onClick={() => setTab("categories")} className="flex h-10 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm font-medium text-primary hover:bg-primary-soft">
+                  <Settings2 className="size-5 shrink-0" strokeWidth={1.75} />Manage categories
+                </button>
+              )}
             </nav>
 
             <div className="min-w-0 flex-1">
@@ -94,7 +102,7 @@ function Menu() {
                 <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the menu in English or Gujarati" className="!h-11 bg-surface pl-10" />
               </label>
               <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
-                <span className="contents lg:hidden">{[{ id: "all", name: "All" }, ...categories].map((c) => <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>{c.name}</Chip>)}</span>
+                <span className="contents lg:hidden">{[{ id: "all", name: "All" }, ...categories].map((c) => <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>{c.name}</Chip>)}{canEdit && <Chip onClick={() => setTab("categories")}><Settings2 strokeWidth={1.75} />Categories</Chip>}</span>
                 <Chip active={noPhoto} onClick={() => setNoPhoto(!noPhoto)}><ImageOff strokeWidth={1.75} />Missing photo<span className="tnum text-xs">{missing}</span></Chip>
                 <Chip active={offOnly} onClick={() => setOffOnly(!offOnly)}>Switched off</Chip>
               </div>
@@ -164,6 +172,10 @@ function Menu() {
               </button>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="categories">
+          <CategoriesEditor canEdit={canEdit} />
         </TabsContent>
 
         <TabsContent value="food-types">

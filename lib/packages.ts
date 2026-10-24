@@ -1,11 +1,11 @@
 import type { MenuCategory, MenuPackage, PackageAddition } from "./types";
 
-// How a package reads wherever it is shown: "Choose 2 starters", then its special additions.
+// How a package reads wherever it is shown: "Starters 2", then its special additions.
 
-export const ruleLine = (choose: number, categoryName: string) => `Choose ${choose} ${categoryName.toLowerCase()}`;
+export const ruleLine = (choose: number, categoryName: string) => `${categoryName} ${choose}`;
 
-/** "2 Farsan", or just "Paan counter" when it is not counted. */
-export const additionLine = (a: Pick<PackageAddition, "name" | "count">) => (a.count > 0 ? `${a.count} ${a.name}` : a.name);
+/** "Farsan 2", or just "Paan counter" when it is not counted. */
+export const additionLine = (a: Pick<PackageAddition, "name" | "count">) => (a.count > 0 ? `${a.name} ${a.count}` : a.name);
 
 /** Every line of a package in order: the choices, then the additions. */
 export function packageLines(pkg: MenuPackage, categories: MenuCategory[]) {

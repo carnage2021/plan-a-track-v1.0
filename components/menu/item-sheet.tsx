@@ -230,7 +230,7 @@ function PackageSheetForm({ open, onOpenChange, pkg }: PackageSheetProps) {
             {categories.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2">
                 <span className="text-sm">{c.name}</span>
-                <span className="flex items-center gap-2 text-sm text-text-muted">Choose
+                <span className="flex items-center gap-2 text-sm text-text-muted">
                   <Select aria-label={`Dishes from ${c.name}`} className="tnum !h-9 w-16" value={count(c.id)} onChange={(e) => setCount(c.id, Number(e.target.value))}>{[0, 1, 2, 3, 4, 5, 6].map((n) => <option key={n}>{n}</option>)}</Select>
                 </span>
               </li>

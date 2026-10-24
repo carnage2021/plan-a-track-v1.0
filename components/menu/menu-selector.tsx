@@ -4,7 +4,7 @@ import { AlertTriangle, Check, ChevronUp, Clock, Copy, Eye, EyeOff, LayoutGrid, 
 import * as React from "react";
 import { Badge, VegMark, dietLabel } from "@/components/shared/badges";
 import { PaxInput } from "@/components/shared/blocks";
-import { DishCard, DishImage, priceLabel } from "@/components/shared/dish";
+import { DishCard, DishImage } from "@/components/shared/dish";
 import { Button } from "@/components/ui/button";
 import { Field, Select, Textarea } from "@/components/ui/input";
 import { Chip, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/primitives";
@@ -36,13 +36,6 @@ interface Props {
 }
 
 const spiceWords = ["Not spicy", "Mild", "Medium", "Spicy"];
-const priceBands = [
-  { label: "Any price", max: 0 },
-  { label: "Up to ₹30", max: 30 },
-  { label: "Up to ₹50", max: 50 },
-  { label: "Up to ₹80", max: 80 },
-  { label: "Up to ₹120", max: 120 },
-];
 
 /**
  * The showpiece screen (G6), laid out like a showroom: sticky category tabs over one long, sectioned
@@ -62,8 +55,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const [bestsellers, setBestsellers] = React.useState(false);
   const [source, setSource] = React.useState<"all" | "inhouse" | "outsourced">("all");
   const [cuisine, setCuisine] = React.useState("");
-  const [priceMax, setPriceMax] = React.useState(0);
-  const [sort, setSort] = React.useState<"popular" | "price" | "name">("popular");
+  const [sort, setSort] = React.useState<"popular" | "name">("popular");
   const [more, setMore] = React.useState(false);
   const [view, setView] = React.useState<"grid" | "list">("grid");
   const [detail, setDetail] = React.useState<MenuItem | null>(null);
@@ -123,9 +115,9 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
 
   const cuisines = React.useMemo(() => [...new Set(allItems.map((i) => i.cuisine).filter(Boolean))].sort(), [allItems]);
   const selected = new Set(fn.itemIds);
-  const extraFilters = (source !== "all" ? 1 : 0) + (cuisine ? 1 : 0) + (priceMax ? 1 : 0) + (sort !== "popular" ? 1 : 0);
+  const extraFilters = (source !== "all" ? 1 : 0) + (cuisine ? 1 : 0) + (sort !== "popular" ? 1 : 0);
   const filtering = !!query || diets.length > 0 || bestsellers || extraFilters > 0;
-  const clearFilters = () => { setQuery(""); setDiets([]); setBestsellers(false); setSource("all"); setCuisine(""); setPriceMax(0); setSort("popular"); };
+  const clearFilters = () => { setQuery(""); setDiets([]); setBestsellers(false); setSource("all"); setCuisine(""); setSort("popular"); };
 
   const visible = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -136,9 +128,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
       .filter((i) => !bestsellers || i.bestseller)
       .filter((i) => source === "all" || (source === "outsourced") === i.outsourced)
       .filter((i) => !cuisine || i.cuisine === cuisine)
-      .filter((i) => !priceMax || (i.pricingType === "plate" && i.price <= priceMax))
-      .sort((a, b) => (sort === "price" ? a.price - b.price : sort === "name" ? a.name.localeCompare(b.name) : (popularity.get(b.id) ?? 0) - (popularity.get(a.id) ?? 0) || Number(b.bestseller) - Number(a.bestseller)));
-  }, [allItems, fn.itemIds, query, diets, bestsellers, source, cuisine, priceMax, sort, popularity]);
+      .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : (popularity.get(b.id) ?? 0) - (popularity.get(a.id) ?? 0) || Number(b.bestseller) - Number(a.bestseller)));
+  }, [allItems, fn.itemIds, query, diets, bestsellers, source, cuisine, sort, popularity]);
 
   // One section per category, in the menu's own order, holding only the dishes that pass the filters.
   // The food type's categories, plus any the package asks for or a picked dish sits in, so nothing chosen is hidden.
@@ -176,13 +167,6 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
     if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - top - 64, behavior: "smooth" });
   };
 
-  /** What picking this dish would add on top of the package price. */
-  const noteFor = (item: MenuItem) => {
-    if (hidePrices || !pkg || item.pricingType !== "plate" || pkg.fixedItemIds.includes(item.id)) return undefined;
-    if (selected.has(item.id)) return price.extraIds.includes(item.id) ? `+${money(item.price)} per plate, beyond package` : undefined;
-    const rule = price.rules.find((r) => r.categoryId === item.categoryId);
-    return !rule || rule.chosen >= rule.choose ? `+${money(item.price)} per plate` : undefined;
-  };
   const ruleFor = (categoryId: string) => price.rules.find((r) => r.categoryId === categoryId);
   const countIn = (categoryId: string) => allItems.filter((i) => i.categoryId === categoryId && selected.has(i.id)).length;
 
@@ -235,8 +219,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
                     <DishImage item={i} sizes="40px" className="w-10 shrink-0 rounded-md" />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5 text-sm"><VegMark diet={i.diet} /><span className="truncate">{i.name}</span></span>
-                      {!hidePrices && price.extraIds.includes(i.id) && <span className="tnum block text-xs text-warning">+{money(i.price)} extra</span>}
-                      {!hidePrices && i.pricingType !== "plate" && <span className="tnum block text-xs text-text-muted">{priceLabel(i)}</span>}
+                      {price.extraIds.includes(i.id) && <span className="block text-xs text-warning">Beyond the package</span>}
                     </span>
                     <button type="button" onClick={() => toggle(i.id)} className="grid size-8 shrink-0 place-items-center rounded-lg text-text-muted hover:bg-surface-muted hover:text-danger" aria-label={`Remove ${i.name}`}><X className="size-4" strokeWidth={1.75} /></button>
                   </li>
@@ -278,7 +261,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const dishGrid = (dishes: MenuItem[]) =>
     view === "grid" ? (
       <div className={cn("grid gap-3", booking ? "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))]" : "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]")}>
-        {dishes.map((i) => <DishCard key={i.id} item={i} selected={selected.has(i.id)} note={noteFor(i)} hideInternal={booking} large={booking} onToggle={() => toggle(i.id)} onOpen={() => setDetail(i)} />)}
+        {dishes.map((i) => <DishCard key={i.id} item={i} selected={selected.has(i.id)} hideInternal={booking} large={booking} onToggle={() => toggle(i.id)} onOpen={() => setDetail(i)} />)}
       </div>
     ) : (
       <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
@@ -287,9 +270,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
             <DishImage item={i} sizes="44px" className="w-11 shrink-0 rounded-md" />
             <button type="button" onClick={() => setDetail(i)} className="min-w-0 flex-1 text-left">
               <span className="flex items-center gap-1.5 text-sm font-medium"><VegMark diet={i.diet} /><span className="truncate">{i.name}</span>{i.bestseller && <Star className="size-3.5 shrink-0 fill-accent-gold text-accent-gold" strokeWidth={1.5} />}</span>
-              <span className="block truncate text-xs text-text-muted">{i.nameLocal}{noteFor(i) ? ` · ${noteFor(i)}` : ""}</span>
+              <span className="block truncate text-xs text-text-muted">{i.nameLocal}</span>
             </button>
-            {!hidePrices && <span className="tnum shrink-0 text-sm text-text-muted">{priceLabel(i)}</span>}
             <Button size="icon" variant={selected.has(i.id) ? "secondary" : "ghost"} onClick={() => toggle(i.id)} aria-label={selected.has(i.id) ? `Remove ${i.name}` : `Add ${i.name}`} className={cn(selected.has(i.id) && "border-primary text-primary")}>
               {selected.has(i.id) ? <Check strokeWidth={2.5} /> : <Plus strokeWidth={1.75} />}
             </Button>
@@ -381,8 +363,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
               {!booking && <Chip active={source === "inhouse"} onClick={() => setSource(source === "inhouse" ? "all" : "inhouse")}>In-house</Chip>}
               {!booking && <Chip active={source === "outsourced"} onClick={() => setSource(source === "outsourced" ? "all" : "outsourced")}>Outsourced</Chip>}
               <Select aria-label="Cuisine" value={cuisine} onChange={(e) => setCuisine(e.target.value)} className="!h-9 w-auto rounded-full bg-surface"><option value="">Any cuisine</option>{cuisines.map((c) => <option key={c}>{c}</option>)}</Select>
-              {!hidePrices && <Select aria-label="Price" value={priceMax} onChange={(e) => setPriceMax(Number(e.target.value))} className="!h-9 w-auto rounded-full bg-surface">{priceBands.map((b) => <option key={b.max} value={b.max}>{b.label}</option>)}</Select>}
-              <Select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="!h-9 w-auto rounded-full bg-surface"><option value="popular">Most popular</option>{!hidePrices && <option value="price">Price, low to high</option>}<option value="name">Name</option></Select>
+              <Select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="!h-9 w-auto rounded-full bg-surface"><option value="popular">Most popular</option><option value="name">Name</option></Select>
               {filtering && <Button variant="ghost" onClick={clearFilters}>Clear all</Button>}
             </div>
           )}
@@ -438,7 +419,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
                   <h3 className="font-heading text-lg font-semibold">{c.name}</h3>
                   <span className="text-xs text-text-muted">
                     {rule ? <span className={rule.met ? "text-success" : "text-warning"}>{rule.met ? "Package choice done" : `Choose ${rule.choose - Math.min(rule.chosen, rule.choose)} more for the package`}</span> : `${dishes.length} ${dishes.length === 1 ? "dish" : "dishes"}`}
-                    {rule && rule.chosen > rule.choose && !hidePrices && <span className="text-warning"> · {rule.chosen - rule.choose} beyond the package</span>}
+                    {rule && rule.chosen > rule.choose && <span className="text-warning"> · {rule.chosen - rule.choose} beyond the package</span>}
                   </span>
                 </div>
                 {dishGrid(dishes)}
@@ -480,7 +461,6 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
               {detail.seasonal && <Badge tone="warning">Seasonal</Badge>}
             </div>
             {detail.description && <p className="text-base text-text-muted">{detail.description}</p>}
-            {!hidePrices && <p className="tnum font-heading text-2xl font-bold">{priceLabel(detail)}</p>}
             <Field label={`Note for ${fn.name}`} hint="Printed on the event sheet for the kitchen.">
               <Textarea value={fn.itemNotes?.[detail.id] ?? ""} onChange={(e) => patch({ itemNotes: { ...fn.itemNotes, [detail.id]: e.target.value } })} placeholder="Less spicy, serve in kulhad, Jain version on the side" />
             </Field>

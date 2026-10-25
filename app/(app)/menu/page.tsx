@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Chip, Skeleton, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/sheet";
+import { isWithin, treeOrder } from "@/lib/categories";
 import { categoryIcon } from "@/lib/icons";
 import { offered, packageLines } from "@/lib/packages";
 import { marginTone } from "@/lib/pricing";
@@ -49,7 +50,7 @@ function Menu() {
   const [pct, setPct] = React.useState("5");
 
   const visible = items
-    .filter((i) => category === "all" || i.categoryId === category)
+    .filter((i) => category === "all" || isWithin(i.categoryId, category))
     .filter((i) => !query.trim() || i.name.toLowerCase().includes(query.trim().toLowerCase()) || i.nameLocal.includes(query.trim()))
     .filter((i) => !noPhoto || !i.photo)
     .filter((i) => !offOnly || !i.active);
@@ -79,12 +80,12 @@ function Menu() {
         <TabsContent value="dishes">
           <div className="flex items-start gap-6">
             <nav className="sticky top-20 hidden w-52 shrink-0 space-y-0.5 lg:block" aria-label="Categories">
-              {[{ id: "all", name: "All dishes", icon: "" }, ...categories].map((c) => {
+              {[{ c: { id: "all", name: "All dishes", icon: "" }, depth: 0 }, ...treeOrder(categories)].map(({ c, depth }) => {
                 const Icon = c.id === "all" ? LayoutGrid : categoryIcon(c.icon);
                 return (
-                  <button key={c.id} type="button" onClick={() => setCategory(c.id)} aria-pressed={category === c.id} className={cn("flex h-10 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm font-medium transition-colors duration-150", category === c.id ? "bg-primary-soft text-primary" : "text-text-muted hover:bg-surface-muted hover:text-text")}>
-                    <Icon className="size-5 shrink-0" strokeWidth={1.75} /><span className="flex-1 truncate">{c.name}</span>
-                    <span className="tnum text-xs">{c.id === "all" ? items.length : items.filter((i) => i.categoryId === c.id).length}</span>
+                  <button key={c.id} type="button" onClick={() => setCategory(c.id)} aria-pressed={category === c.id} style={{ paddingLeft: 10 + depth * 18 }} className={cn("flex w-full items-center gap-3 rounded-lg pr-2.5 text-left font-medium transition-colors duration-150", depth ? "h-8 text-xs" : "h-10 text-sm", category === c.id ? "bg-primary-soft text-primary" : "text-text-muted hover:bg-surface-muted hover:text-text")}>
+                    {depth ? <span className="size-1.5 shrink-0 rounded-full bg-current opacity-50" /> : <Icon className="size-5 shrink-0" strokeWidth={1.75} />}<span className="flex-1 truncate">{c.name}</span>
+                    <span className="tnum text-xs">{c.id === "all" ? items.length : items.filter((i) => isWithin(i.categoryId, c.id)).length}</span>
                   </button>
                 );
               })}
@@ -102,7 +103,7 @@ function Menu() {
                 <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the menu in English or Gujarati" className="!h-11 bg-surface pl-10" />
               </label>
               <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
-                <span className="contents lg:hidden">{[{ id: "all", name: "All" }, ...categories].map((c) => <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>{c.name}</Chip>)}{canEdit && <Chip onClick={() => setTab("categories")}><Settings2 strokeWidth={1.75} />Categories</Chip>}</span>
+                <span className="contents lg:hidden">{[{ id: "all", name: "All" }, ...treeOrder(categories).map((x) => ({ id: x.c.id, name: x.depth ? `› ${x.c.name}` : x.c.name }))].map((c) => <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>{c.name}</Chip>)}{canEdit && <Chip onClick={() => setTab("categories")}><Settings2 strokeWidth={1.75} />Categories</Chip>}</span>
                 <Chip active={noPhoto} onClick={() => setNoPhoto(!noPhoto)}><ImageOff strokeWidth={1.75} />Missing photo<span className="tnum text-xs">{missing}</span></Chip>
                 <Chip active={offOnly} onClick={() => setOffOnly(!offOnly)}>Switched off</Chip>
               </div>

@@ -7,6 +7,7 @@ import { DishImage } from "@/components/shared/dish";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { useStore } from "@/lib/store";
+import { isWithin } from "@/lib/categories";
 import { additionLine, offered, ruleLine } from "@/lib/packages";
 import type { MenuPackage } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
@@ -16,7 +17,7 @@ export function PackageCollage({ pkg, className }: { pkg: MenuPackage; className
   const items = useStore((s) => s.items);
   const picks = React.useMemo(() => {
     const withPhoto = items.filter((i) => i.active && i.photo);
-    const fromRules = pkg.rules.map((r) => withPhoto.find((i) => i.categoryId === r.categoryId && i.bestseller) ?? withPhoto.find((i) => i.categoryId === r.categoryId));
+    const fromRules = pkg.rules.map((r) => withPhoto.find((i) => isWithin(i.categoryId, r.categoryId) && i.bestseller) ?? withPhoto.find((i) => isWithin(i.categoryId, r.categoryId)));
     return [...new Set(fromRules.filter((i) => !!i))].slice(0, 4);
   }, [items, pkg]);
   return (

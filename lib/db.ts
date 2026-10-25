@@ -34,8 +34,8 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
 /** Set when the phase 3 migration (0003_supply.sql) has been run, so its columns can be written;
  * services once 0012 has added food types, sessions and end times; packageExtras once 0013 has added
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
- * per-quotation dish prices. */
-export const schema = { supply: false, services: false, packageExtras: false, referrals: false };
+ * per-quotation dish prices; subcategories once 0015 has added parent categories. */
+export const schema = { supply: false, services: false, packageExtras: false, referrals: false, subcategories: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -129,7 +129,7 @@ export const clientRow = (c: Client): Row => ({
   ...(clientDates ? { birthday: c.birthday || null, anniversary: c.anniversary || null } : {}),
 });
 
-export const categoryRow = (c: MenuCategory, sort: number): Row => ({ id: c.id, name: c.name, icon: c.icon, sort_order: sort });
+export const categoryRow = (c: MenuCategory, sort: number): Row => ({ id: c.id, name: c.name, icon: c.icon, sort_order: sort, ...(schema.subcategories ? { parent_id: c.parentId ?? null } : {}) });
 
 export const itemRow = (i: MenuItem): Row => ({
   id: i.id,
@@ -305,6 +305,8 @@ export interface Loaded {
   packageExtrasReady: boolean;
   /** False until 0014 has added referrals, raw material changes and dish prices */
   referralsReady: boolean;
+  /** False until 0015 has added sub-categories */
+  subcategoriesReady: boolean;
   /** The branch this person is tied to, if the owner assigned one */
   myBranch: string;
 }
@@ -320,6 +322,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   };
   const [branchProbe, branchRows, extrasProbe] = await Promise.all([sb.from("orders").select("branch_id").limit(1), all("branches", "created_at"), sb.from("packages").select("additions").limit(1)]);
   schema.packageExtras = !extrasProbe.error;
+  schema.subcategories = !(await sb.from("menu_categories").select("parent_id").limit(1)).error;
   const branchesEnabled = !branchProbe.error;
   const branchList = ((branchRows.data ?? []) as Row[]).map((b) => ({ id: b.id as string, name: b.name as string, address: b.address as string }));
   const myBranch = (profile.branch_id as string | null) ?? "";
@@ -381,7 +384,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       if ("birthday" in c) clientDates = true;
       return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined, referralCode: c.referral_code ?? undefined, referredBy: c.referred_by ?? undefined, credit: Number(c.credit ?? 0) };
     }),
-    categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
+    categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon, parentId: c.parent_id ?? undefined })),
     items: rowsOf(items, "Loading the menu").map((i) => ({
       id: i.id,
       name: i.name,
@@ -488,6 +491,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     servicesReady: schema.services,
     packageExtrasReady: schema.packageExtras,
     referralsReady: schema.referrals,
+    subcategoriesReady: schema.subcategories,
   };
 }
 

@@ -16,6 +16,7 @@ import { useMessages } from "./messages";
 import { eventsThisMonth, usePlatform } from "./platform";
 import { useLabels } from "./labels";
 import { withBranch } from "./branch";
+import { setCategoryTree, treeOrder } from "./categories";
 import { useStaff } from "./staff";
 import { useSupply } from "./supply-store";
 import type {
@@ -54,6 +55,8 @@ interface Data {
   packageExtrasReady: boolean;
   /** False until 0014 has added referrals, raw material changes and dish prices */
   referralsReady: boolean;
+  /** False until 0015 has added sub-categories */
+  subcategoriesReady: boolean;
   tenantId: string;
   tenant: Tenant;
   users: TeamUser[];
@@ -101,7 +104,7 @@ interface Actions {
   /** Puts the menu back to an earlier snapshot (Undo for bulk edits). */
   restoreItems: (snapshot: MenuItem[]) => void;
   savePackage: (pkg: Omit<MenuPackage, "id"> & { id?: string }) => void;
-  /** Adds a menu category at the end, or renames one / changes its icon. Returns its id. */
+  /** Adds a menu category (at the end of its parent's branch), or renames one / changes its icon. Returns its id. */
   saveCategory: (category: Omit<MenuCategory, "id"> & { id?: string }) => string;
   /** Puts the categories in this order everywhere the menu is shown. */
   reorderCategories: (ids: string[]) => void;
@@ -134,7 +137,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, subcategoriesReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -301,11 +304,15 @@ export const useStore = create<Store>()(
       saveCategory: (category) => {
         const s = get();
         const id = category.id ?? uid();
-        const saved: MenuCategory = { id, name: category.name, icon: category.icon };
+        const saved: MenuCategory = { id, name: category.name, icon: category.icon, parentId: category.parentId };
         const exists = s.categories.some((c) => c.id === id);
-        const list = exists ? s.categories.map((c) => (c.id === id ? saved : c)) : [...s.categories, saved];
+        const moved = exists && s.categories.find((c) => c.id === id)?.parentId !== saved.parentId;
+        // A new sub-category goes at the end of its parent's branch; the list stays in tree order.
+        let list = exists ? s.categories.map((c) => (c.id === id ? saved : c)) : [...s.categories, saved];
+        if (!exists || moved) list = treeOrder(list).map((x) => x.c);
         set({ categories: list });
-        background((sb) => run(sb.from("menu_categories").upsert(categoryRow(saved, list.findIndex((c) => c.id === id))), "Saving the category"));
+        const changed = !exists || moved ? list : [saved];
+        background((sb) => run(sb.from("menu_categories").upsert(changed.map((c) => categoryRow(c, list.findIndex((x) => x.id === c.id)))), "Saving the category"));
         return id;
       },
       reorderCategories: (ids) => {
@@ -318,12 +325,16 @@ export const useStore = create<Store>()(
         const s = get();
         const moving = s.items.filter((i) => i.categoryId === id);
         if (moving.length && !moveDishesTo) throw new Error("Move its dishes to another category first.");
+        // Its sub-categories move up to take its place.
+        const parentId = s.categories.find((c) => c.id === id)?.parentId;
+        const children = s.categories.filter((c) => c.parentId === id);
         await write(async (sb) => {
           if (moving.length) await run(sb.from("menu_items").update({ category_id: moveDishesTo }).eq("category_id", id), "Moving the dishes");
+          if (children.length) await run(sb.from("menu_categories").update({ parent_id: parentId ?? null }).eq("parent_id", id), "Moving the sub-categories");
           await run(sb.from("menu_categories").delete().eq("id", id), "Deleting the category");
         });
         set((st) => ({
-          categories: st.categories.filter((c) => c.id !== id),
+          categories: st.categories.filter((c) => c.id !== id).map((c) => (c.parentId === id ? { ...c, parentId } : c)),
           items: st.items.map((i) => (i.categoryId === id ? { ...i, categoryId: moveDishesTo! } : i)),
           packages: st.packages.map((p) => ({ ...p, rules: p.rules.filter((r) => r.categoryId !== id) })),
         }));
@@ -547,6 +558,10 @@ export const useStore = create<Store>()(
 );
 
 setReload(() => void useStore.getState().reload());
+// Pricing and grouping read the category tree outside React, so it follows the store.
+useStore.subscribe((s, prev) => {
+  if (s.categories !== prev.categories) setCategoryTree(s.categories);
+});
 
 /** The highest version saved so far for a quotation, read from the database at the moment of saving. */
 async function latestVersion(sb: SupabaseClient, groupId: string) {

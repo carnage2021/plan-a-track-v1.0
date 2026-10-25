@@ -11,6 +11,8 @@ import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { marginTone } from "@/lib/pricing";
+import { treeOrder } from "@/lib/categories";
+import { CategoryPicker } from "./category-picker";
 import { useFoodTypes } from "@/lib/services";
 import { AgencyFields, RecipeEditor } from "@/components/supply/recipe";
 import { useStore } from "@/lib/store";
@@ -117,7 +119,7 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
         <div className="grid grid-cols-2 gap-3">
           <Field label="Dish name" error={touched ? errors.name : ""} className="col-span-2"><Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Paneer Tikka" /></Field>
           <Field label="Name in Gujarati or Hindi" className="col-span-2"><Input value={form.nameLocal} onChange={(e) => set("nameLocal", e.target.value)} placeholder="પનીર ટિક્કા" /></Field>
-          <Field label="Category"><Select value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)}>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+          <CategoryPicker value={form.categoryId} onChange={(id) => set("categoryId", id)} canAdd />
           <Field label="Food type">
             <Select value={form.diet} onChange={(e) => set("diet", e.target.value as MenuItem["diet"])}><option value="veg">Veg</option><option value="jain">Jain / Swaminarayan</option><option value="nonveg">Non-veg</option></Select>
           </Field>
@@ -226,10 +228,11 @@ function PackageSheetForm({ open, onOpenChange, pkg }: PackageSheetProps) {
         </div>
         <div>
           <span className="mb-1 block text-xs font-medium text-text-muted">Client chooses</span>
+          <span className="mb-2 block text-xs text-text-muted">Count a whole category (Main course 3) or a sub-category (Paneer sabji 1). A dish fills the most specific choice first.</span>
           <ul className="divide-y rounded-xl border">
-            {categories.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                <span className="text-sm">{c.name}</span>
+            {treeOrder(categories).map(({ c, depth }) => (
+              <li key={c.id} className="flex items-center justify-between gap-3 py-2 pr-3" style={{ paddingLeft: 12 + depth * 20 }}>
+                <span className={depth ? "text-sm text-text-muted" : "text-sm font-medium"}>{depth ? "› " : ""}{c.name}</span>
                 <span className="flex items-center gap-2 text-sm text-text-muted">
                   <Select aria-label={`Dishes from ${c.name}`} className="tnum !h-9 w-16" value={count(c.id)} onChange={(e) => setCount(c.id, Number(e.target.value))}>{[0, 1, 2, 3, 4, 5, 6].map((n) => <option key={n}>{n}</option>)}</Select>
                 </span>

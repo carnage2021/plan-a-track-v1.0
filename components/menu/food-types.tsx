@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/primitives";
 import { categoryIcon } from "@/lib/icons";
 import { defaultFoodTypes, useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { roots } from "@/lib/categories";
 import type { FoodType } from "@/lib/types";
 import { cn, uid } from "@/lib/utils";
 
@@ -62,11 +63,11 @@ export function FoodTypesEditor() {
                 {canEdit && <Button variant="ghost" size="icon" aria-label={`Remove ${t.name || "food type"}`} onClick={() => remove(t)}><Trash2 strokeWidth={1.75} /></Button>}
               </div>
               <p className="tnum mt-2 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                {t.categoryIds.length} of {categories.length} categories
+                {t.categoryIds.length} of {roots(categories).length} categories
                 {pkgCount > 0 && <Badge>{pkgCount} {pkgCount === 1 ? "package" : "packages"}</Badge>}
               </p>
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {categories.map((c) => {
+                {roots(categories).map((c) => {
                   const on = t.categoryIds.includes(c.id);
                   const Icon = categoryIcon(c.icon);
                   return (

@@ -16,7 +16,7 @@ import { cn, fmtDate, initials, money, whatsappLink } from "@/lib/utils";
 
 export interface PublicTenant { name: string; tagline: string; city?: string; phone: string; logo?: string; brand: string; prices?: boolean }
 export interface PublicItem { id: string; category: string; name: string; local: string; diet: Diet; description: string; photo?: string; bestseller?: boolean; unit?: string; price?: number; note?: string }
-export interface PublicCategory { id: string; name: string; sort?: number }
+export interface PublicCategory { id: string; name: string; sort?: number; parent?: string | null }
 export interface Catalogue { tenant: PublicTenant; categories: PublicCategory[]; items: PublicItem[]; packages: { name: string; description: string; minPax: number; price?: number }[] }
 export interface EventMenu { tenant: PublicTenant; function: { name: string; date: string; eventType: string }; categories: PublicCategory[]; items: PublicItem[] }
 
@@ -89,7 +89,21 @@ function DishCard({ item, showPrice }: { item: PublicItem; showPrice?: boolean }
 }
 
 /** Category chips, search and the dish grid. */
-export function DishGrid({ categories, items, showPrice }: { categories: PublicCategory[]; items: PublicItem[]; showPrice?: boolean }) {
+export function DishGrid({ categories: all, items: dishes, showPrice }: { categories: PublicCategory[]; items: PublicItem[]; showPrice?: boolean }) {
+  // Guests see the main categories; a dish in a sub-category (Main course › Sabji) shows under its main one.
+  const topOf = (id: string) => {
+    const seen = new Set<string>();
+    let c = all.find((x) => x.id === id);
+    while (c?.parent && !seen.has(c.id)) {
+      seen.add(c.id);
+      const up = all.find((x) => x.id === c!.parent);
+      if (!up) break;
+      c = up;
+    }
+    return c?.id ?? id;
+  };
+  const categories = all.filter((c) => !c.parent || !all.some((x) => x.id === c.parent));
+  const items = dishes.map((i) => ({ ...i, category: topOf(i.category) }));
   const [cat, setCat] = React.useState("all");
   const [q, setQ] = React.useState("");
   const [diet, setDiet] = React.useState<"all" | "veg" | "jain">("all");

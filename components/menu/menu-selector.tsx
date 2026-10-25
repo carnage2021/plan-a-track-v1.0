@@ -10,6 +10,7 @@ import { Field, Select, Textarea } from "@/components/ui/input";
 import { Chip, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { useAccess } from "@/lib/access";
+import { isWithin, rootOf, roots, subPath, treeOrder } from "@/lib/categories";
 import { categoryIcon } from "@/lib/icons";
 import { additionLine } from "@/lib/packages";
 import { marginTone, priceFunction, priceQuote } from "@/lib/pricing";
@@ -131,20 +132,23 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
       .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : (popularity.get(b.id) ?? 0) - (popularity.get(a.id) ?? 0) || Number(b.bestseller) - Number(a.bestseller)));
   }, [allItems, fn.itemIds, query, diets, bestsellers, source, cuisine, sort, popularity]);
 
-  // One section per category, in the menu's own order, holding only the dishes that pass the filters.
-  // The food type's categories, plus any the package asks for or a picked dish sits in, so nothing chosen is hidden.
+  // One section per top-level category, in the menu's own order, holding the dishes in it and in its
+  // sub-categories that pass the filters. The food type's categories, plus any the package asks for or a
+  // picked dish sits in, so nothing chosen is hidden.
   const allowed = React.useMemo(() => {
     if (!foodType || showAll) return null;
-    const ids = new Set(foodType.categoryIds);
-    for (const r of pkg?.rules ?? []) ids.add(r.categoryId);
-    for (const i of allItems) if (fn.itemIds.includes(i.id)) ids.add(i.categoryId);
+    const ids = new Set(foodType.categoryIds.map(rootOf));
+    for (const r of pkg?.rules ?? []) ids.add(rootOf(r.categoryId));
+    for (const i of allItems) if (fn.itemIds.includes(i.id)) ids.add(rootOf(i.categoryId));
     return ids;
   }, [foodType, showAll, pkg, allItems, fn.itemIds]);
+  const tops = React.useMemo(() => roots(categories), [categories]);
   const grouped = React.useMemo(
-    () => (needsFoodType ? [] : categories.filter((c) => !allowed || allowed.has(c.id)).map((c) => ({ c, dishes: visible.filter((i) => i.categoryId === c.id) })).filter((g) => g.dishes.length)),
-    [categories, visible, allowed, needsFoodType],
+    () => (needsFoodType ? [] : tops.filter((c) => !allowed || allowed.has(c.id)).map((c) => ({ c, dishes: visible.filter((i) => isWithin(i.categoryId, c.id)) })).filter((g) => g.dishes.length)),
+    [tops, visible, allowed, needsFoodType],
   );
-  const hiddenCategories = allowed ? categories.filter((c) => !allowed.has(c.id)).length : 0;
+  const hiddenCategories = allowed ? tops.filter((c) => !allowed.has(c.id)).length : 0;
+  const tree = React.useMemo(() => treeOrder(categories), [categories]);
   const beforeRow = !filtering && !needsFoodType ? allItems.filter((i) => clientBefore.has(i.id) && i.active).slice(0, 10) : [];
 
   // The tab for whichever section is at the top of the screen lights up as the menu scrolls.
@@ -163,12 +167,13 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
     tabsRef.current?.querySelector(`[data-tab="${current}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [current]);
   const jump = (id: string) => {
-    const el = sections.current.get(id);
+    // A sub-category scrolls to its heading inside its top-level section.
+    const el = document.querySelector<HTMLElement>(`[data-sub="${id}"]`) ?? sections.current.get(rootOf(id));
     if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - top - 64, behavior: "smooth" });
   };
 
   const ruleFor = (categoryId: string) => price.rules.find((r) => r.categoryId === categoryId);
-  const countIn = (categoryId: string) => allItems.filter((i) => i.categoryId === categoryId && selected.has(i.id)).length;
+  const countIn = (categoryId: string) => allItems.filter((i) => isWithin(i.categoryId, categoryId) && selected.has(i.id)).length;
 
   const warnings: string[] = [];
   if (pkg && fn.pax < pkg.minPax) warnings.push(`${pkg.name} needs at least ${pkg.minPax} guests.`);
@@ -207,8 +212,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {fn.itemIds.length === 0 && <p className="py-8 text-center text-sm text-text-muted">Tap a dish to add it to the plate.</p>}
-        {categories.map((c) => {
-          const picked = fn.itemIds.map((id) => allItems.find((i) => i.id === id)).filter((i): i is MenuItem => !!i && i.categoryId === c.id);
+        {tops.map((c) => {
+          const picked = fn.itemIds.map((id) => allItems.find((i) => i.id === id)).filter((i): i is MenuItem => !!i && isWithin(i.categoryId, c.id));
           if (picked.length === 0) return null;
           return (
             <div key={c.id} className="mb-3">
@@ -422,7 +427,44 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
                     {rule && rule.chosen > rule.choose && <span className="text-warning"> · {rule.chosen - rule.choose} beyond the package</span>}
                   </span>
                 </div>
-                {dishGrid(dishes)}
+                {(() => {
+                  // Dishes straight in the category first, then each sub-category under its own heading.
+                  const subs = tree.filter((x) => x.depth > 0 && isWithin(x.c.id, c.id)).map((x) => x.c);
+                  const own = dishes.filter((i) => !subs.some((sc) => sc.id === i.categoryId));
+                  const groups = subs.map((sc) => ({ sc, dishes: dishes.filter((i) => i.categoryId === sc.id) })).filter((g) => g.dishes.length);
+                  const chips = subs.filter((sc) => groups.some((g) => isWithin(g.sc.id, sc.id)));
+                  return (
+                    <>
+                      {chips.length > 0 && (
+                        <div className="no-scrollbar -mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
+                          {chips.map((sc) => {
+                            const r = ruleFor(sc.id);
+                            const n = countIn(sc.id);
+                            return (
+                              <button key={sc.id} type="button" onClick={() => jump(groups.find((g) => isWithin(g.sc.id, sc.id))!.sc.id)} className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-surface px-3 text-xs font-medium text-text-muted hover:text-text">
+                                {sc.name}
+                                {r ? <span className={cn("tnum rounded-full px-1.5", r.met ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>{Math.min(r.chosen, r.choose)}/{r.choose}</span> : n > 0 ? <span className="tnum rounded-full bg-primary-soft px-1.5 text-primary">{n}</span> : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {own.length > 0 && dishGrid(own)}
+                      {groups.map(({ sc, dishes: list }) => {
+                        const r = ruleFor(sc.id);
+                        return (
+                          <div key={sc.id} data-sub={sc.id} className="mt-5">
+                            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b pb-1">
+                              <h4 className="text-sm font-semibold">{subPath(sc.id)}</h4>
+                              {r && <span className={cn("text-xs", r.met ? "text-success" : "text-warning")}>{r.met ? "Package choice done" : `Choose ${r.choose - Math.min(r.chosen, r.choose)} more`}</span>}
+                            </div>
+                            {dishGrid(list)}
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
               </section>
             );
           })}

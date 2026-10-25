@@ -1,4 +1,5 @@
 import type { Asset, Challan, Ingredient, Movement, OutsourceOrder, PurchaseOrder, RecipeLine, VendorBill, VendorPayment, VendorRate } from "./supply-types";
+import { isWithin } from "./categories";
 import type { EventFunction, MenuItem, Order } from "./types";
 
 // Pure calculations for the supply side: scaling recipes, stock, vendor choice and cutlery counts.
@@ -125,7 +126,7 @@ export function assetRequirement(asset: Asset, fn: Pick<EventFunction, "pax" | "
   if (asset.ruleBasis === "per_guest") return Math.ceil(fn.pax * asset.ruleValue);
   if (asset.ruleBasis === "per_function") return Math.ceil(asset.ruleValue);
   if (asset.ruleBasis === "per_dish") {
-    const dishes = items.filter((i) => fn.itemIds.includes(i.id) && (!asset.ruleCategoryId || i.categoryId === asset.ruleCategoryId)).length;
+    const dishes = items.filter((i) => fn.itemIds.includes(i.id) && (!asset.ruleCategoryId || isWithin(i.categoryId, asset.ruleCategoryId))).length;
     return Math.ceil(dishes * asset.ruleValue);
   }
   return 0;

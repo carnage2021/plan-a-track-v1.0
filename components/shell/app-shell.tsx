@@ -17,6 +17,8 @@ import {
   Languages,
   ListChecks,
   LogOut,
+  Maximize,
+  Minimize,
   Menu as MenuIcon,
   MessagesSquare,
   Moon,
@@ -270,6 +272,29 @@ function BranchSwitcher() {
   );
 }
 
+const onFullscreenChange = (cb: () => void) => {
+  document.addEventListener("fullscreenchange", cb);
+  return () => document.removeEventListener("fullscreenchange", cb);
+};
+
+/** Fills the whole screen with the app, hiding the browser's tabs and address bar; Esc or the button again leaves. */
+function FullscreenButton() {
+  const on = React.useSyncExternalStore(onFullscreenChange, () => !!document.fullscreenElement, () => false);
+  // iPhones and some in-app browsers cannot do this, so the button only shows where it works.
+  const supported = React.useSyncExternalStore(onFullscreenChange, () => !!document.fullscreenEnabled, () => false);
+  if (!supported) return null;
+  const toggle = () => {
+    const done = on ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    void done.catch(() => toast.error("Full screen is not available here"));
+  };
+  const label = on ? "Exit full screen" : "Full screen";
+  return (
+    <Button variant="ghost" size="icon" onClick={toggle} aria-label={label} title={`${label}${on ? " (Esc)" : ""}`} aria-pressed={on}>
+      {on ? <Minimize strokeWidth={1.75} /> : <Maximize strokeWidth={1.75} />}
+    </Button>
+  );
+}
+
 function Topbar() {
   const t = useTranslations("common");
   const tr = useTranslations("roles");
@@ -321,6 +346,8 @@ function Topbar() {
       )}
 
       <BranchSwitcher />
+
+      <FullscreenButton />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

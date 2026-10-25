@@ -144,6 +144,8 @@ export interface MenuCategory {
   id: string;
   name: string;
   icon: string;
+  /** The category this one sits inside; unset for a top-level category */
+  parentId?: string;
 }
 
 export interface MenuItem {

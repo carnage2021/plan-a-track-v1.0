@@ -1,3 +1,4 @@
+import { lineage } from "./categories";
 import type { Discount, EventFunction, ExtraCharge, MenuItem, MenuPackage, Tenant } from "./types";
 
 export interface RuleProgress {
@@ -49,15 +50,17 @@ export function priceFunction(
 
   if (pkg) {
     basePlate = pkg.pricePerPlate;
-    const allowance = new Map(pkg.rules.map((r) => [r.categoryId, r.choose]));
     const used = new Map<string, number>();
     for (const item of plateItems) {
       if (pkg.fixedItemIds.includes(item.id)) continue;
-      const allowed = allowance.get(item.categoryId) ?? 0;
-      const count = used.get(item.categoryId) ?? 0;
-      used.set(item.categoryId, count + 1);
-      // The first picks in a category are covered by the package; anything beyond is charged.
-      if (count >= allowed) {
+      // A dish fills the most specific package choice it belongs to (Paneer sabji before Main course),
+      // moving up to a wider one when that is full; with no room left anywhere it is charged extra.
+      const chain = lineage(item.categoryId);
+      const fits = chain.map((id) => pkg.rules.find((r) => r.categoryId === id)).filter((r) => !!r);
+      const rule = fits.find((r) => (used.get(r.categoryId) ?? 0) < r.choose);
+      const counted = rule ?? fits[0];
+      if (counted) used.set(counted.categoryId, (used.get(counted.categoryId) ?? 0) + 1);
+      if (!rule) {
         extraPerPlate += item.price;
         extraIds.push(item.id);
       }

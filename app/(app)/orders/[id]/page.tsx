@@ -29,6 +29,7 @@ import { priceFunction, priceQuote } from "@/lib/pricing";
 import { useBilling } from "@/lib/billing";
 import { useSupply } from "@/lib/supply-store";
 import { referrerOf, useCurrentUser, useStore } from "@/lib/store";
+import { isWithin, roots } from "@/lib/categories";
 import type { EventFunction, MenuItem, Order, Payment, Locale } from "@/lib/types";
 import { ExtraDishes } from "@/components/sales/summary-extras";
 import { printLight, printThermal, useUi } from "@/lib/ui";
@@ -265,8 +266,8 @@ function OrderView({ order }: { order: Order }) {
             <Card key={f.id}>
               <CardTitle action={<span className="tnum text-xs text-text-muted">{f.itemIds.length} dishes · {num(f.pax)} guests</span>}>{f.name}</CardTitle>
               <div className="grid gap-x-6 gap-y-4 p-4 sm:grid-cols-2 md:px-5 lg:grid-cols-3">
-                {categories.map((c) => {
-                  const picked = f.itemIds.map((i) => items.find((x) => x.id === i)).filter((i): i is MenuItem => !!i && i.categoryId === c.id);
+                {roots(categories).map((c) => {
+                  const picked = f.itemIds.map((i) => items.find((x) => x.id === i)).filter((i): i is MenuItem => !!i && isWithin(i.categoryId, c.id));
                   if (!picked.length) return null;
                   return (
                     <div key={c.id}>

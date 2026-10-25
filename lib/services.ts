@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { roots } from "./categories";
 import { useStore } from "./store";
 import type { EventFunction, FoodType, MenuCategory, Session } from "./types";
 import { addDays, fmtTime, isoDate, parseDate } from "./utils";
@@ -39,7 +40,9 @@ const starters: { id: string; name: string; match?: RegExp; skip?: RegExp }[] = 
   { id: "gala-dinner", name: "Gala Dinner", skip: /drink|beverage|mocktail|welcome/i },
 ];
 
-export function defaultFoodTypes(categories: MenuCategory[]): FoodType[] {
+export function defaultFoodTypes(all: MenuCategory[]): FoodType[] {
+  // Food types pick top-level categories; their sub-categories come with them.
+  const categories = roots(all);
   return starters.map((s) => {
     const ids = categories.filter((c) => (s.match ? s.match.test(c.name) || s.match.test(c.id) : true) && !(s.skip && (s.skip.test(c.name) || s.skip.test(c.id)))).map((c) => c.id);
     return { id: s.id, name: s.name, categoryIds: ids.length ? ids : categories.map((c) => c.id) };

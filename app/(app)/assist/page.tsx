@@ -15,6 +15,7 @@ import { kitchenKey, portions, useKitchen } from "@/lib/kitchen";
 import { priceFunction } from "@/lib/pricing";
 import { offered } from "@/lib/packages";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { isWithin, roots } from "@/lib/categories";
 import type { Diet, MenuItem } from "@/lib/types";
 import { cn, isoDate, money, num } from "@/lib/utils";
 
@@ -35,12 +36,12 @@ function useSuggestion(pax: number, budget: number, diet: "any" | "veg" | "jain"
     let ids: string[];
     if (pkg) {
       ids = pkg.fixedItemIds.filter((id) => items.some((i) => i.id === id && fits(i)));
-      for (const r of pkg.rules) ids.push(...items.filter((i) => i.categoryId === r.categoryId && fits(i) && i.pricingType === "plate" && !ids.includes(i.id)).sort(rank).slice(0, r.choose).map((i) => i.id));
+      for (const r of pkg.rules) ids.push(...items.filter((i) => isWithin(i.categoryId, r.categoryId) && fits(i) && i.pricingType === "plate" && !ids.includes(i.id)).sort(rank).slice(0, r.choose).map((i) => i.id));
     } else {
       // No package fits the budget: take the best dish from each category while the plate stays within it.
       ids = [];
-      for (const c of categories) {
-        const best = items.filter((i) => i.categoryId === c.id && fits(i) && i.pricingType === "plate").sort(rank)[0];
+      for (const c of roots(categories)) {
+        const best = items.filter((i) => isWithin(i.categoryId, c.id) && fits(i) && i.pricingType === "plate").sort(rank)[0];
         if (best && priceFunction({ pax, itemIds: [...ids, best.id] }, items, packages, tenant.slabs).perPlate <= budget) ids.push(best.id);
       }
     }
@@ -82,8 +83,8 @@ function MenuSuggest() {
         </div>
         {s.ids.length === 0 ? <p className="mt-6 text-sm text-text-muted">Nothing on the menu matches yet. Add dishes, or relax the food choice.</p> : (
           <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-            {categories.map((c) => {
-              const list = s.ids.map((id) => items.find((i) => i.id === id)).filter((i): i is MenuItem => !!i && i.categoryId === c.id);
+            {roots(categories).map((c) => {
+              const list = s.ids.map((id) => items.find((i) => i.id === id)).filter((i): i is MenuItem => !!i && isWithin(i.categoryId, c.id));
               if (!list.length) return null;
               return <div key={c.id}><p className="text-xs font-medium uppercase tracking-wide text-text-muted">{c.name}</p><ul className="mt-1 space-y-1">{list.map((i) => <li key={i.id} className="flex items-center gap-2 text-sm"><VegMark diet={i.diet} />{i.name}{i.bestseller && <Badge tone="gold">Bestseller</Badge>}</li>)}</ul></div>;
             })}

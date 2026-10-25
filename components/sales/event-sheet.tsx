@@ -9,6 +9,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { serviceLine, useFoodTypes } from "@/lib/services";
 import { useStaff } from "@/lib/staff";
 import { useStore } from "@/lib/store";
+import { isWithin, roots } from "@/lib/categories";
 import { assetRequirement, fmtQty, functionNeed, roundQty } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import { sections } from "@/lib/supply-types";
@@ -65,8 +66,8 @@ function FunctionSheet({ order, fn }: { order: Order; fn: EventFunction }) {
 
       <Block title={`Menu · ${dishes.length} dishes`} empty={dishes.length ? undefined : "No dishes on this function yet."}>
         <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
-          {categories.map((c) => {
-            const inCat = dishes.filter((d) => d.categoryId === c.id);
+          {roots(categories).map((c) => {
+            const inCat = dishes.filter((d) => isWithin(d.categoryId, c.id));
             if (!inCat.length) return null;
             return (
               <div key={c.id} className="break-inside-avoid">

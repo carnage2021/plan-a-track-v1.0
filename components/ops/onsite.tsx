@@ -14,6 +14,7 @@ import { checkSteps, issueKinds, useOps, type CheckStep, type IssueKind } from "
 import { priceQuote } from "@/lib/pricing";
 import { useStaff } from "@/lib/staff";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { isWithin, roots } from "@/lib/categories";
 import type { EventFunction, Order } from "@/lib/types";
 import { cn, fmtDate, fmtTime, money, num, whatsappLink, localDay } from "@/lib/utils";
 import { ExpenseSheet } from "@/components/expenses/expense-sheet";
@@ -142,7 +143,7 @@ function MenuAndStaff({ fn }: { fn: EventFunction }) {
   const staffReady = useStaff((s) => s.ready);
   const dishes = fn.itemIds.map((id) => items.find((i) => i.id === id)).filter((i) => !!i);
   // One counter per menu category, in the order the menu lists them.
-  const counters = categories.map((c) => ({ c, dishes: dishes.filter((d) => d.categoryId === c.id) })).filter((x) => x.dishes.length);
+  const counters = roots(categories).map((c) => ({ c, dishes: dishes.filter((d) => isWithin(d.categoryId, c.id)) })).filter((x) => x.dishes.length);
   const crew = tasks.filter((t) => t.functionId === fn.id);
   return (
     <>

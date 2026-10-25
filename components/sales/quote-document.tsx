@@ -9,6 +9,7 @@ import { dishName, docT } from "@/lib/doc-i18n";
 import { additionLine } from "@/lib/packages";
 import { useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
+import { isWithin, roots } from "@/lib/categories";
 import type { Discount, EventFunction, ExtraCharge, Locale, MenuItem } from "@/lib/types";
 import { fmtDate, fmtTime, money, num } from "@/lib/utils";
 
@@ -86,8 +87,8 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
                 {showPrices && <p className="tnum text-right"><span className="font-heading text-lg font-bold">{money(price.perPlate)}</span><span className="text-xs text-text-muted"> {t("perPlate")}</span></p>}
               </div>
               <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 md:grid-cols-3">
-                {categories.map((c) => {
-                  const inCat = picked.filter((i) => i.categoryId === c.id);
+                {roots(categories).map((c) => {
+                  const inCat = picked.filter((i) => isWithin(i.categoryId, c.id));
                   if (inCat.length === 0) return null;
                   return (
                     <div key={c.id} className="break-inside-avoid">

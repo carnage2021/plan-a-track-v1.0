@@ -7,6 +7,7 @@ import { Badge } from "@/components/shared/badges";
 import { PageHeader } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, Chip } from "@/components/ui/primitives";
+import { RecipeImport, undoRecipeUpload } from "@/components/import/recipe-import";
 import { cellText, download, lists, parseCsv, toCsv, validate, type ListSpec } from "@/lib/imports";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase/client";
@@ -43,6 +44,8 @@ async function readFile(file: File, spec: ListSpec): Promise<Parsed> {
 export default function ImportPage() {
   const reload = useStore((s) => s.reload);
   const [list, setList] = React.useState<ListSpec>(lists[0]);
+  /** Recipes have their own panel: they replace whole recipes and can add missing raw materials. */
+  const [recipesOpen, setRecipesOpen] = React.useState(false);
   const [parsed, setParsed] = React.useState<Parsed | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [history, setHistory] = React.useState<ImportRow[] | null>(null);
@@ -54,7 +57,7 @@ export default function ImportPage() {
   React.useEffect(loadHistory, [loadHistory]);
 
   const ok = parsed?.records.filter((x) => !x.errors.length && !x.duplicate) ?? [];
-  const pickList = (l: ListSpec) => { setList(l); setParsed(null); };
+  const pickList = (l: ListSpec) => { setList(l); setParsed(null); setRecipesOpen(false); };
   const onFile = async (file?: File) => {
     if (!file) return;
     try {
@@ -99,7 +102,8 @@ export default function ImportPage() {
     setBusy(true);
     const sb = supabase();
     try {
-      for (const [table, ids] of Object.entries(imp.ids).reverse()) {
+      if (imp.list === "recipes") await undoRecipeUpload(imp.ids);
+      else for (const [table, ids] of Object.entries(imp.ids).reverse()) {
         const { error } = await sb.from(table).delete().in("id", ids);
         if (error) throw new Error(/foreign key|violates/i.test(error.message) ? "Some of these records are already used in orders or quotations, so they cannot be removed." : error.message);
       }
@@ -118,10 +122,13 @@ export default function ImportPage() {
   return (
     <>
       <PageHeader title="Import and export" subtitle="Bring your lists in from Excel, check every row before it is saved, and take any list back out." />
-      <div className="flex flex-wrap gap-2">{lists.map((l) => <Chip key={l.key} active={l.key === list.key} onClick={() => pickList(l)}>{l.label}</Chip>)}</div>
+      <div className="flex flex-wrap gap-2">
+        {lists.map((l) => <Chip key={l.key} active={!recipesOpen && l.key === list.key} onClick={() => pickList(l)}>{l.label}</Chip>)}
+        <Chip active={recipesOpen} onClick={() => { setRecipesOpen(true); setParsed(null); }}>Recipes</Chip>
+      </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
-        <Card className="p-4 md:p-5">
+        {recipesOpen ? <RecipeImport onSaved={loadHistory} /> : <Card className="p-4 md:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h2 className="font-heading text-lg font-semibold">{list.label}</h2><p className="text-sm text-text-muted">Columns: {list.columns.map((c) => c.label + (c.required ? "*" : "")).join(", ")}</p></div>
             <div className="flex flex-wrap gap-2">
@@ -163,7 +170,7 @@ export default function ImportPage() {
               {parsed.records.length > 300 && <p className="text-xs text-text-muted">Showing the first 300 of {parsed.records.length} rows; all of them are checked.</p>}
             </div>
           )}
-        </Card>
+        </Card>}
 
         <div className="space-y-4">
           <Card>
@@ -172,7 +179,7 @@ export default function ImportPage() {
               <ul className="divide-y">
                 {history.map((h) => (
                   <li key={h.id} className="flex items-center gap-3 px-4 py-2.5 text-sm md:px-5">
-                    <span className="min-w-0 flex-1"><span className={cn("block truncate font-medium", h.undone && "text-text-muted line-through")}>{lists.find((l) => l.key === h.list)?.label}: {h.row_count}</span><span className="block truncate text-xs text-text-muted">{h.file_name} · {fmtDate(localDay(h.created_at), { day: "numeric", month: "short" })}</span></span>
+                    <span className="min-w-0 flex-1"><span className={cn("block truncate font-medium", h.undone && "text-text-muted line-through")}>{h.list === "recipes" ? "Recipes" : lists.find((l) => l.key === h.list)?.label}: {h.row_count}</span><span className="block truncate text-xs text-text-muted">{h.file_name} · {fmtDate(localDay(h.created_at), { day: "numeric", month: "short" })}</span></span>
                     {h.id === lastLive?.id && <Button variant="ghost" loading={busy} onClick={() => undo(h)}><Undo2 strokeWidth={1.75} />Undo</Button>}
                     {h.undone && <Badge>Undone</Badge>}
                   </li>

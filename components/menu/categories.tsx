@@ -132,7 +132,7 @@ function DeleteModal({ category, onClose }: { category: MenuCategory; onClose: (
       const lines = [
         r.deleted ? `${r.deleted} ${r.deleted === 1 ? "dish" : "dishes"} deleted.` : "",
         r.moved ? `${r.moved} ${r.moved === 1 ? "dish" : "dishes"} moved to ${where(moveTo)}.` : "",
-        r.kept.length ? `Kept, switched off, in ${where(moveTo)} because past orders list ${r.kept.length === 1 ? "it" : "them"}: ${r.kept.join(", ")}.` : "",
+        r.kept.length ? `Kept, switched off, in ${where(r.keptIn ?? moveTo)} because past orders list ${r.kept.length === 1 ? "it" : "them"}: ${r.kept.join(", ")}.` : "",
       ].filter(Boolean);
       toast.success(`${category.name} deleted`, { description: lines.join(" ") || undefined });
       onClose();

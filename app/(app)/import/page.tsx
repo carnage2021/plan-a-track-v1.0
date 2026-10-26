@@ -22,7 +22,8 @@ async function readFile(file: File, spec: ListSpec): Promise<Parsed> {
     const { readSheet } = await import("read-excel-file/browser");
     grid = ((await readSheet(file)) as unknown[][]).map((row) => row.map((c) => cellText(c as Date)));
   } else grid = parseCsv(await file.text());
-  const [head = [], ...body] = grid;
+  // Blank rows (formatted but empty, often at the bottom of a spreadsheet) are not records.
+  const [head = [], ...body] = grid.filter((row, i) => i === 0 || row.some((c) => c.trim()));
   // Headers are matched loosely, so "price" and "Price " both find the Price column.
   const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const index = new Map(head.map((h, i) => [key(h), i]));
@@ -76,7 +77,8 @@ export default function ImportPage() {
           const chunk = step.rows.slice(i, i + 200);
           const { error } = await sb.from(step.table).insert(chunk);
           if (error) throw new Error(error.message);
-          done[step.table] = [...(done[step.table] ?? []), ...chunk.map((r) => r.id as string)];
+          // Rows without their own id (package choices) go with their parent when an upload is undone.
+          if (chunk.every((r) => r.id)) done[step.table] = [...(done[step.table] ?? []), ...chunk.map((r) => r.id as string)];
         }
       }
       await sb.from("imports").insert({ list: list.key, file_name: parsed.file, row_count: ok.length, ids: done });

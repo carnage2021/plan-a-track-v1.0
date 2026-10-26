@@ -1,6 +1,8 @@
 "use client";
 
-import { itemRow, clientRow, packageRow } from "./db";
+import { subPath } from "./categories";
+import { defaultFoodTypes } from "./services";
+import { itemRow, clientRow, packageRow, schema } from "./db";
 import { useStaff } from "./staff";
 import { useStore } from "./store";
 import { assetRow, ingredientRow, vendorRow } from "./supply-db";
@@ -26,6 +28,8 @@ export interface ListSpec {
   existing: () => Set<string>;
   identity: (r: Record<string, string>) => string;
   build: (records: Record<string, string>[]) => Plan;
+  /** Checks a row against what is already in the account (categories, food types), beyond its own columns */
+  check?: (r: Record<string, string>) => string[];
   rows: () => Record<string, string | number>[];
 }
 
@@ -56,6 +60,7 @@ export function validate(spec: ListSpec, r: Record<string, string>) {
     else if (v && c.kind === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(v)) errors.push(`${c.label} must be a date like 1990-05-21`);
     else if (v && c.options && !(norm(v) in c.options)) errors.push(`${c.label} "${v}" is not one of: ${[...new Set(Object.values(c.options))].join(", ")}`);
   }
+  if (spec.check) errors.push(...spec.check(r));
   return errors;
 }
 const pick = (c: Column | undefined, v: string, fallback: string) => (v && c?.options ? (c.options[norm(v)] ?? fallback) : fallback);
@@ -68,7 +73,8 @@ export const lists: ListSpec[] = [
     columns: [
       { label: "Name", required: true, example: "Paneer Tikka" },
       { label: "Local name", example: "પનીર ટિક્કા" },
-      { label: "Category", required: true, example: "Starters" },
+      { label: "Category", required: true, example: "Main course" },
+      { label: "Sub-category", example: "Sabji > Paneer sabji" },
       { label: "Diet", example: "Veg", options: diet },
       { label: "Cuisine", example: "Punjabi" },
       { label: "Unit", example: "plate", options: units },
@@ -82,15 +88,22 @@ export const lists: ListSpec[] = [
     identity: (r) => norm(r.Name),
     build(records) {
       const s = useStore.getState();
-      const cats = new Map(s.categories.map((c) => [norm(c.name), c.id]));
+      // Categories by parent and name, so "Main course" and "Sabji > Paneer sabji" find the right ones,
+      // and any that do not exist yet are made, each inside the one before it.
+      const known = s.categories.map((c) => ({ id: c.id, name: c.name, parent: c.parentId && s.categories.some((p) => p.id === c.parentId) ? c.parentId : "" }));
       const newCats: Row[] = [];
+      const find = (parent: string, name: string) => {
+        const hit = known.find((c) => c.parent === parent && norm(c.name) === norm(name));
+        if (hit) return hit.id;
+        const id = uid();
+        known.push({ id, name: name.trim(), parent });
+        newCats.push({ id, name: name.trim(), icon: s.categories.find((c) => c.id === parent)?.icon ?? "Utensils", sort_order: s.categories.length + newCats.length, ...(schema.subcategories ? { parent_id: parent || null } : {}) });
+        return id;
+      };
       const items = records.map((r) => {
-        let categoryId = cats.get(norm(r.Category));
-        if (!categoryId) {
-          categoryId = uid();
-          cats.set(norm(r.Category), categoryId);
-          newCats.push({ id: categoryId, name: r.Category, icon: "Utensils", sort_order: s.categories.length + newCats.length });
-        }
+        let categoryId = find("", r.Category);
+        // Without sub-categories in the database, a sub-category path is ignored and the dish sits in its category.
+        if (schema.subcategories) for (const part of (r["Sub-category"] ?? "").split(/[>›/]/).map((x) => x.trim()).filter(Boolean)) categoryId = find(categoryId, part);
         return itemRow({
           id: uid(), name: r.Name, nameLocal: r["Local name"] ?? "", categoryId, diet: pick(col(this, "Diet"), r.Diet, "veg") as "veg", cuisine: r.Cuisine ?? "", spice: 1,
           unit: pick(col(this, "Unit"), r.Unit, "plate") as "plate", pricingType: pick(col(this, "Priced"), r.Priced, "plate") as "plate", cost: num(r.Cost), price: num(r.Price),
@@ -101,7 +114,9 @@ export const lists: ListSpec[] = [
     },
     rows: () => {
       const s = useStore.getState();
-      return s.items.map((i) => ({ Name: i.name, "Local name": i.nameLocal, Category: s.categories.find((c) => c.id === i.categoryId)?.name ?? "", Diet: i.diet, Cuisine: i.cuisine, Unit: i.unit, Priced: i.pricingType, Cost: i.cost, Price: i.price, Description: i.description, "Photo link": i.photo ?? "" }));
+      // The category is the top-level one; anything below it goes in Sub-category as "Sabji > Paneer sabji".
+      const top = (id: string) => { let c = s.categories.find((x) => x.id === id); for (let n = 0; c?.parentId && n < 20; n++) c = s.categories.find((x) => x.id === c!.parentId) ?? c; return c?.name ?? ""; };
+      return s.items.map((i) => ({ Name: i.name, "Local name": i.nameLocal, Category: top(i.categoryId), "Sub-category": subPath(i.categoryId).replace(/ › /g, " > "), Diet: i.diet, Cuisine: i.cuisine, Unit: i.unit, Priced: i.pricingType, Cost: i.cost, Price: i.price, Description: i.description, "Photo link": i.photo ?? "" }));
     },
   },
   {
@@ -111,18 +126,53 @@ export const lists: ListSpec[] = [
       { label: "Name", required: true, example: "Gold" },
       { label: "Price per plate", required: true, kind: "number", example: "650" },
       { label: "Minimum guests", kind: "number", example: "150" },
-      { label: "Dishes included", example: "Paneer Tikka; Dal Makhani; Jeera Rice" },
+      { label: "Food type", example: "Gala Dinner" },
+      { label: "Choices", example: "Welcome drinks 1; Starters 3; Main course 4; Breads 2; Rice 1; Sweets 2" },
+      { label: "Special additions", example: "Paan counter; Farsan 2" },
       { label: "Description", example: "Our most booked wedding menu" },
     ],
-    existing: () => new Set(useStore.getState().packages.map((p) => norm(p.name))),
+    existing: () => new Set(useStore.getState().packages.filter((p) => !p.archived).map((p) => norm(p.name))),
     identity: (r) => norm(r.Name),
+    check(r) {
+      const errors: string[] = [];
+      for (const part of splitList(r.Choices)) {
+        const c = parseCount(part);
+        if (!c.count) errors.push(`Choices "${part}" needs a number, like Starters 2`);
+        else if (!findCategory(c.name)) errors.push(`Choices: no category called "${c.name}"`);
+      }
+      if (r["Food type"] && !findFoodType(r["Food type"])) errors.push(`Food type "${r["Food type"]}" is not one of: ${foodTypes().map((t) => t.name).join(", ")}`);
+      return errors;
+    },
     build(records) {
-      const byName = new Map(useStore.getState().items.map((i) => [norm(i.name), i.id]));
-      return [{ table: "packages", rows: records.map((r) => packageRow({ id: uid(), name: r.Name, tier: "custom", pricePerPlate: num(r["Price per plate"]), minPax: num(r["Minimum guests"]), fixedItemIds: (r["Dishes included"] ?? "").split(/[;\n]/).map((d) => byName.get(norm(d))).filter((x): x is string => !!x), rules: [], description: r.Description ?? "" })) }];
+      const packages: Row[] = [];
+      const rules: Row[] = [];
+      for (const r of records) {
+        const id = uid();
+        const choices = new Map<string, number>();
+        for (const part of splitList(r.Choices)) {
+          const c = parseCount(part);
+          const categoryId = findCategory(c.name);
+          if (categoryId && c.count) choices.set(categoryId, c.count);
+        }
+        packages.push(packageRow({
+          id, name: r.Name, tier: "custom", pricePerPlate: num(r["Price per plate"]), minPax: num(r["Minimum guests"]), fixedItemIds: [], rules: [], description: r.Description ?? "",
+          foodTypeId: r["Food type"] ? findFoodType(r["Food type"]) : undefined,
+          additions: splitList(r["Special additions"]).map((part) => { const c = parseCount(part); return { id: uid(), name: c.name, count: c.count }; }),
+        }));
+        for (const [categoryId, choose] of choices) rules.push({ package_id: id, category_id: categoryId, choose });
+      }
+      return [{ table: "packages", rows: packages }, { table: "package_rules", rows: rules }];
     },
     rows: () => {
       const s = useStore.getState();
-      return s.packages.map((p) => ({ Name: p.name, "Price per plate": p.pricePerPlate, "Minimum guests": p.minPax, "Dishes included": p.fixedItemIds.map((id) => s.items.find((i) => i.id === id)?.name).filter(Boolean).join("; "), Description: p.description }));
+      const types = foodTypes();
+      return s.packages.filter((p) => !p.archived).map((p) => ({
+        Name: p.name, "Price per plate": p.pricePerPlate, "Minimum guests": p.minPax,
+        "Food type": types.find((t) => t.id === p.foodTypeId)?.name ?? "",
+        Choices: p.rules.map((r) => `${categoryLabel(r.categoryId)} ${r.choose}`).join("; "),
+        "Special additions": (p.additions ?? []).map((a) => (a.count ? `${a.name} ${a.count}` : a.name)).join("; "),
+        Description: p.description,
+      }));
     },
   },
   {
@@ -229,6 +279,49 @@ export const lists: ListSpec[] = [
     rows: () => useSupply.getState().assets.map((a) => ({ Item: a.name, Category: a.category, "Total quantity": a.totalQty, "Replacement cost": a.replacementCost, "Storage location": a.location })),
   },
 ];
+
+/** "Starters 4; Main course 5" or one per line, as a list. */
+function splitList(v?: string) {
+  return (v ?? "").split(/[;\n]/).map((x) => x.trim()).filter(Boolean);
+}
+
+/** "Starters 4" into the name and the number; "Paan counter" has no number (0). */
+function parseCount(part: string) {
+  const m = part.match(/^(.*?)[\s:×x-]*(\d+)$/);
+  return m ? { name: m[1].trim(), count: Number(m[2]) } : { name: part.trim(), count: 0 };
+}
+
+/** A category by name, or by path for a sub-category: "Main course > Sabji > Paneer sabji". */
+function findCategory(name: string) {
+  const cats = useStore.getState().categories;
+  const parts = name.split(/[>›]/).map((x) => x.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    let parent: string | undefined;
+    for (const p of parts) {
+      const hit = cats.find((c) => (c.parentId ?? undefined) === parent && norm(c.name) === norm(p));
+      if (!hit) return undefined;
+      parent = hit.id;
+    }
+    return parent;
+  }
+  // A plain name: a main category first, then any sub-category with that name.
+  const same = cats.filter((c) => norm(c.name) === norm(name));
+  return (same.find((c) => !c.parentId) ?? same[0])?.id;
+}
+
+/** How a category is written back in an export: its name, or its path when it is a sub-category. */
+function categoryLabel(id: string) {
+  const cats = useStore.getState().categories;
+  const names: string[] = [];
+  for (let c = cats.find((x) => x.id === id), n = 0; c && n < 20; c = cats.find((x) => x.id === c!.parentId), n++) names.unshift(c.name);
+  return names.join(" > ");
+}
+
+const foodTypes = () => {
+  const s = useStore.getState();
+  return s.tenant.foodTypes?.length ? s.tenant.foodTypes : defaultFoodTypes(s.categories);
+};
+const findFoodType = (name: string) => foodTypes().find((t) => norm(t.name) === norm(name))?.id;
 
 /** CSV text, quoted for Excel; a leading byte-order mark keeps Gujarati and Hindi readable. */
 export function toCsv(headers: string[], rows: (string | number)[][]) {

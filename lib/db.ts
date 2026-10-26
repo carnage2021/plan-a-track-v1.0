@@ -323,6 +323,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   const [branchProbe, branchRows, extrasProbe] = await Promise.all([sb.from("orders").select("branch_id").limit(1), all("branches", "created_at"), sb.from("packages").select("additions").limit(1)]);
   schema.packageExtras = !extrasProbe.error;
   schema.subcategories = !(await sb.from("menu_categories").select("parent_id").limit(1)).error;
+  // Asked of the database, not read off a loaded client, so an account with no clients yet still saves them.
+  clientDates = !(await sb.from("clients").select("birthday").limit(1)).error;
   const branchesEnabled = !branchProbe.error;
   const branchList = ((branchRows.data ?? []) as Row[]).map((b) => ({ id: b.id as string, name: b.name as string, address: b.address as string }));
   const myBranch = (profile.branch_id as string | null) ?? "";
@@ -381,7 +383,6 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       ...rowsOf(invites, "Loading invites").filter((i) => !i.accepted_at).map((i) => ({ id: i.id, name: i.name, phone: i.phone, role: i.role as Role, invited: true })),
     ],
     clients: rowsOf(clients, "Loading clients").map((c) => {
-      if ("birthday" in c) clientDates = true;
       return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined, referralCode: c.referral_code ?? undefined, referredBy: c.referred_by ?? undefined, credit: Number(c.credit ?? 0) };
     }),
     categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon, parentId: c.parent_id ?? undefined })),

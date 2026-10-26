@@ -115,7 +115,7 @@ interface Actions {
    * cannot be deleted (that record must stay whole), so it is switched off and kept in `moveTo` instead.
    * Package choices for the category go with it; its sub-categories move up a level.
    */
-  deleteCategory: (id: string, dishes: "delete" | "move", moveTo?: string) => Promise<{ deleted: number; kept: string[]; moved: number }>;
+  deleteCategory: (id: string, dishes: "delete" | "move", moveTo?: string) => Promise<{ deleted: number; kept: string[]; keptIn?: string; moved: number }>;
   /** Deletes a package, or archives it when quotations or orders use it. Says which it did. */
   removePackage: (id: string) => "deleted" | "archived";
   saveDraft: (key: string, draft: QuoteDraft | null) => void;
@@ -350,9 +350,12 @@ export const useStore = create<Store>()(
       deleteCategory: async (id, dishes, moveTo) => {
         const s = get();
         const inside = s.items.filter((i) => i.categoryId === id);
-        if (inside.length && !moveTo) throw new Error("Choose where its dishes go.");
         // Its sub-categories move up to take its place.
         const parentId = s.categories.find((c) => c.id === id)?.parentId;
+        if (dishes === "move" && inside.length && !moveTo) throw new Error("Choose where its dishes go.");
+        // Deleting needs a home only for dishes a past order still lists: the one picked, else the parent, else
+        // another main category.
+        const keepIn = moveTo || parentId || s.categories.find((c) => c.id !== id && !c.parentId)?.id;
         const children = s.categories.filter((c) => c.parentId === id);
         const deleted: string[] = [];
         const kept: string[] = [];
@@ -365,7 +368,8 @@ export const useStore = create<Store>()(
               else if (res.error.code === "23503") kept.push(d.id);
               else throw new Error(`Deleting ${d.name}: ${res.error.message}`);
             }
-            if (kept.length) await run(sb.from("menu_items").update({ category_id: moveTo, active: false }).in("id", kept), "Keeping dishes used on past orders");
+            if (kept.length && !keepIn) throw new Error("Some dishes are on past orders and need another category to stay in. Add one first.");
+            if (kept.length) await run(sb.from("menu_items").update({ category_id: keepIn, active: false }).in("id", kept), "Keeping dishes used on past orders");
             // Packages stop listing deleted dishes as always included.
             for (const p of s.packages.filter((x) => x.fixedItemIds.some((d) => deleted.includes(d))))
               await run(sb.from("packages").update({ fixed_item_ids: p.fixedItemIds.filter((d) => !deleted.includes(d)) }).eq("id", p.id), "Updating packages");
@@ -379,13 +383,13 @@ export const useStore = create<Store>()(
           categories: st.categories.filter((c) => c.id !== id).map((c) => (c.parentId === id ? { ...c, parentId } : c)),
           items: st.items
             .filter((i) => !deleted.includes(i.id))
-            .map((i) => (i.categoryId !== id ? i : dishes === "move" ? { ...i, categoryId: moveTo! } : { ...i, categoryId: moveTo!, active: false })),
+            .map((i) => (i.categoryId !== id ? i : dishes === "move" ? { ...i, categoryId: moveTo! } : { ...i, categoryId: keepIn!, active: false })),
           packages: st.packages.map((p) => ({ ...p, rules: p.rules.filter((r) => r.categoryId !== id), fixedItemIds: p.fixedItemIds.filter((d) => !deleted.includes(d)) })),
         }));
         // The owner's food types stop listing it too (only the owner can change account settings).
         const types = get().tenant.foodTypes;
         if (get().myRole === "owner" && types?.some((t) => t.categoryIds.includes(id))) get().updateTenant({ foodTypes: types.map((t) => ({ ...t, categoryIds: t.categoryIds.filter((x) => x !== id) })) });
-        return { deleted: deleted.length, kept: inside.filter((d) => kept.includes(d.id)).map((d) => d.name), moved: dishes === "move" ? inside.length : 0 };
+        return { deleted: deleted.length, kept: inside.filter((d) => kept.includes(d.id)).map((d) => d.name), keptIn: keepIn, moved: dishes === "move" ? inside.length : 0 };
       },
       removePackage: (id) => {
         const s = get();

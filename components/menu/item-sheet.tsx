@@ -54,6 +54,9 @@ export function ItemSheet(props: ItemSheetProps) {
 function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps) {
   const categories = useStore((s) => s.categories);
   const saveItem = useStore((s) => s.saveItem);
+  const deleteItem = useStore((s) => s.deleteItem);
+  const [confirming, setConfirming] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
   const [form, setForm] = React.useState<Omit<MenuItem, "id">>(() => (item ? { ...item } : { ...blank, categoryId: categoryId && categoryId !== "all" ? categoryId : (categories[0]?.id ?? "") }));
   const supplyReady = useSupply((s) => s.ready);
   const [touched, setTouched] = React.useState(false);
@@ -66,7 +69,11 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const margin = form.price ? ((form.price - form.cost) / form.price) * 100 : 0;
   const { hidePrices } = useAccess();
-  const errors = { name: form.name.trim() ? "" : "Give the dish a name", price: form.price > 0 ? "" : "Enter the selling price" };
+  const errors = {
+    name: form.name.trim() ? "" : "Give the dish a name",
+    price: form.price > 0 ? "" : "Enter the selling price",
+    category: categories.some((c) => c.id === form.categoryId) ? "" : "Choose a category",
+  };
 
   const addPhoto = async (f?: File) => {
     if (!f) return;
@@ -82,7 +89,7 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
   };
   const save = () => {
     setTouched(true);
-    if (errors.name || errors.price) return;
+    if (errors.name || errors.price || errors.category) return void (errors.category && toast.error(errors.category));
     // The recipe editor saves on its own and sets the food cost, so keep what it wrote.
     const latest = useStore.getState().items.find((i) => i.id === item?.id);
     const fromRecipe = latest && useSupply.getState().recipes.some((r) => r.itemId === latest.id) ? { cost: latest.cost, recipeBase: latest.recipeBase, bufferPct: latest.bufferPct } : {};
@@ -96,7 +103,37 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
       open={open}
       onOpenChange={onOpenChange}
       title={item ? "Edit dish" : "Add dish"}
-      footer={<><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button><Button variant="primary" onClick={save}>Save dish</Button></>}
+      footer={
+        confirming ? (
+          <>
+            <span className="mr-auto text-sm text-text-muted">Delete {item?.name}? If a past quotation or order lists it, it is switched off instead.</span>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>Keep it</Button>
+            <Button
+              variant="danger"
+              loading={deleting}
+              onClick={async () => {
+                setDeleting(true);
+                try {
+                  const how = await deleteItem(item!.id);
+                  onOpenChange(false);
+                  if (how === "deleted") toast.success(`${item!.name} deleted`);
+                  else toast(`${item!.name} switched off`, { description: "Past quotations or orders list it, so it stays on record but no longer shows on new menus." });
+                } catch (e) {
+                  toast.error("The dish was not deleted", { description: e instanceof Error ? e.message : undefined });
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >Delete dish</Button>
+          </>
+        ) : (
+          <>
+            {item && <Button variant="ghost" className="mr-auto text-danger" onClick={() => setConfirming(true)}><Trash2 strokeWidth={1.75} />Delete</Button>}
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button variant="primary" onClick={save}>Save dish</Button>
+          </>
+        )
+      }
     >
       <div className="space-y-4">
         <div

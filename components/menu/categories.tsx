@@ -100,25 +100,41 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
   );
 }
 
-/** Delete a category; its dishes move to the category picked here, and its sub-categories move up a level. */
+/**
+ * Delete a category, and with it its dishes or not. Dishes on past quotations or orders cannot be removed
+ * (those records must stay whole), so they are switched off and kept elsewhere; the dialog says which.
+ */
 function DeleteModal({ category, onClose }: { category: MenuCategory; onClose: () => void }) {
   const categories = useStore((s) => s.categories);
   const items = useStore((s) => s.items);
   const packages = useStore((s) => s.packages);
+  const quotations = useStore((s) => s.quotations);
+  const orders = useStore((s) => s.orders);
   const deleteCategory = useStore((s) => s.deleteCategory);
-  const dishes = items.filter((i) => i.categoryId === category.id).length;
+  const dishes = items.filter((i) => i.categoryId === category.id);
   const children = categories.filter((c) => c.parentId === category.id);
   const parent = categories.find((c) => c.id === category.parentId);
   const inPackages = packages.filter((p) => !p.archived && p.rules.some((r) => r.categoryId === category.id));
-  const others = treeOrder(categories).filter(({ c }) => c.id !== category.id);
-  const [moveTo, setMoveTo] = React.useState(parent?.id ?? others[0]?.c.id ?? "");
+  const others = treeOrder(categories).filter(({ c }) => !isWithin(c.id, category.id) || children.some((k) => isWithin(c.id, k.id)));
+  // Dishes this account's quotations or orders list; the database has the final say when deleting.
+  const usedIds = new Set([...quotations, ...orders].flatMap((x) => x.functions.flatMap((f) => f.itemIds)));
+  const used = dishes.filter((d) => usedIds.has(d.id));
+  const [mode, setMode] = React.useState<"delete" | "move">("delete");
+  const [moveTo, setMoveTo] = React.useState(parent?.id ?? "");
   const [busy, setBusy] = React.useState(false);
+  const needsTarget = dishes.length > 0 && (mode === "move" || used.length > 0);
+  const where = (id: string) => fullPath(id);
 
   const remove = async () => {
     setBusy(true);
     try {
-      await deleteCategory(category.id, dishes ? moveTo : undefined);
-      toast.success(`${category.name} deleted`, { description: dishes ? `${dishes} ${dishes === 1 ? "dish" : "dishes"} moved to ${fullPath(moveTo)}.` : undefined });
+      const r = await deleteCategory(category.id, mode, moveTo || undefined);
+      const lines = [
+        r.deleted ? `${r.deleted} ${r.deleted === 1 ? "dish" : "dishes"} deleted.` : "",
+        r.moved ? `${r.moved} ${r.moved === 1 ? "dish" : "dishes"} moved to ${where(moveTo)}.` : "",
+        r.kept.length ? `Kept, switched off, in ${where(moveTo)} because past orders list ${r.kept.length === 1 ? "it" : "them"}: ${r.kept.join(", ")}.` : "",
+      ].filter(Boolean);
+      toast.success(`${category.name} deleted`, { description: lines.join(" ") || undefined });
       onClose();
     } catch (e) {
       toast.error("The category was not deleted", { description: e instanceof Error ? e.message : undefined });
@@ -127,23 +143,39 @@ function DeleteModal({ category, onClose }: { category: MenuCategory; onClose: (
     }
   };
 
+  const option = (value: "delete" | "move", title: string, help: string) => (
+    <label className={cn("flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors duration-150", mode === value ? "border-primary bg-primary-soft" : "bg-surface hover:border-text-muted/40")}>
+      <input type="radio" name="dishes" className="mt-1 accent-[var(--color-primary)]" checked={mode === value} onChange={() => setMode(value)} />
+      <span><span className="block font-medium">{title}</span><span className="block text-xs text-text-muted">{help}</span></span>
+    </label>
+  );
+
   return (
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
       title={`Delete ${category.name}?`}
       description="This cannot be undone."
-      footer={<><Button variant="ghost" onClick={onClose}>Keep it</Button><Button variant="danger" loading={busy} disabled={dishes > 0 && !moveTo} onClick={remove}>Delete category</Button></>}
+      footer={<><Button variant="ghost" onClick={onClose}>Keep it</Button><Button variant="danger" loading={busy} disabled={needsTarget && !moveTo} onClick={remove}>{mode === "delete" && dishes.length ? `Delete category and ${dishes.length - used.length === dishes.length ? "" : "unused "}dishes` : "Delete category"}</Button></>}
     >
       <div className="space-y-3 text-sm">
-        {dishes > 0 ? (
-          others.length ? (
-            <Field label={`Move its ${dishes} ${dishes === 1 ? "dish" : "dishes"} to`}>
-              <Select value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>{others.map(({ c, depth }) => <option key={c.id} value={c.id}>{"   ".repeat(depth)}{depth ? "› " : ""}{c.name}</option>)}</Select>
-            </Field>
-          ) : (
-            <p className="text-warning">This is the only category. Add another one first so its dishes have somewhere to go.</p>
-          )
+        {dishes.length > 0 ? (
+          <>
+            <p className="font-medium">It has {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}: <span className="font-normal text-text-muted">{dishes.slice(0, 6).map((d) => d.name).join(", ")}{dishes.length > 6 ? ` and ${dishes.length - 6} more` : ""}</span></p>
+            <div className="grid gap-2">
+              {option("delete", "Delete the dishes too", "They are removed from the menu, with their recipes.")}
+              {option("move", "Move the dishes to another category", "Keep the dishes and put them somewhere else.")}
+            </div>
+            {mode === "delete" && used.length > 0 && <p className="rounded-lg bg-warning/10 p-3 text-xs text-warning">{used.map((d) => d.name).join(", ")} {used.length === 1 ? "is" : "are"} on past quotations or orders, so {used.length === 1 ? "it" : "they"} cannot be deleted. {used.length === 1 ? "It is" : "They are"} switched off (hidden from new menus) and kept in the category below.</p>}
+            {needsTarget && (
+              <Field label={mode === "move" ? "Move them to" : "Keep the used dishes in"}>
+                <Select value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+                  <option value="">Choose a category</option>
+                  {others.map(({ c, depth }) => <option key={c.id} value={c.id}>{"\u00a0\u00a0\u00a0".repeat(depth)}{depth ? "› " : ""}{c.name}</option>)}
+                </Select>
+              </Field>
+            )}
+          </>
         ) : (
           <p className="text-text-muted">It has no dishes of its own.</p>
         )}

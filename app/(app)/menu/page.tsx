@@ -38,7 +38,8 @@ function Menu() {
   const foodTypes = useFoodTypes();
   const seesCost = (role === "owner" || role === "sales") && !hidePrices;
 
-  const [category, setCategory] = React.useState("all");
+  const [chosenCategory, setCategory] = React.useState("all");
+  const category = chosenCategory === "all" || categories.some((c) => c.id === chosenCategory) ? chosenCategory : "all";
   const [query, setQuery] = React.useState(params.get("q") ?? "");
   const [noPhoto, setNoPhoto] = React.useState(false);
   const [offOnly, setOffOnly] = React.useState(false);

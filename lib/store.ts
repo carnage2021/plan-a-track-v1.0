@@ -99,6 +99,8 @@ interface Actions {
   saveEnquiry: (enquiry: Omit<Enquiry, "id" | "createdAt"> & { id?: string }) => string;
   moveEnquiry: (id: string, stage: EnquiryStage, lostReason?: string) => void;
   saveItem: (item: Omit<MenuItem, "id"> & { id?: string }) => void;
+  /** Deletes a dish, or switches it off when a past quotation or order lists it. Says which it did. */
+  deleteItem: (id: string) => Promise<"deleted" | "switched_off">;
   patchItems: (ids: string[], patch: Partial<MenuItem>) => void;
   raisePrices: (ids: string[], pct: number) => void;
   /** Puts the menu back to an earlier snapshot (Undo for bulk edits). */
@@ -108,8 +110,12 @@ interface Actions {
   saveCategory: (category: Omit<MenuCategory, "id"> & { id?: string }) => string;
   /** Puts the categories in this order everywhere the menu is shown. */
   reorderCategories: (ids: string[]) => void;
-  /** Deletes a category, first moving its dishes to another one. Package choices for it go with it. */
-  deleteCategory: (id: string, moveDishesTo?: string) => Promise<void>;
+  /**
+   * Deletes a category. Its dishes are deleted too, or moved to `moveTo`. A dish on a past quotation or order
+   * cannot be deleted (that record must stay whole), so it is switched off and kept in `moveTo` instead.
+   * Package choices for the category go with it; its sub-categories move up a level.
+   */
+  deleteCategory: (id: string, dishes: "delete" | "move", moveTo?: string) => Promise<{ deleted: number; kept: string[]; moved: number }>;
   /** Deletes a package, or archives it when quotations or orders use it. Says which it did. */
   removePackage: (id: string) => "deleted" | "archived";
   saveDraft: (key: string, draft: QuoteDraft | null) => void;
@@ -280,6 +286,26 @@ export const useStore = create<Store>()(
         set((s) => ({ items: item.id ? s.items.map((i) => (i.id === saved.id ? saved : i)) : [saved, ...s.items] }));
         background((sb) => run(sb.from("menu_items").upsert(itemRow(saved)), "Saving the dish"));
       },
+      deleteItem: async (id) => {
+        const s = get();
+        const how = await write(async (sb) => {
+          const res = await sb.from("menu_items").delete().eq("id", id);
+          // The database refuses a dish a quotation or order still lists; that record must stay whole.
+          if (res.error?.code === "23503") {
+            await run(sb.from("menu_items").update({ active: false }).eq("id", id), "Switching the dish off");
+            return "switched_off" as const;
+          }
+          if (res.error) throw new Error(res.error.message);
+          for (const p of s.packages.filter((x) => x.fixedItemIds.includes(id))) await run(sb.from("packages").update({ fixed_item_ids: p.fixedItemIds.filter((d) => d !== id) }).eq("id", p.id), "Updating packages");
+          return "deleted" as const;
+        });
+        set((st) =>
+          how === "deleted"
+            ? { items: st.items.filter((i) => i.id !== id), packages: st.packages.map((p) => ({ ...p, fixedItemIds: p.fixedItemIds.filter((d) => d !== id) })) }
+            : { items: st.items.map((i) => (i.id === id ? { ...i, active: false } : i)) },
+        );
+        return how;
+      },
       patchItems: (ids, patch) => {
         set((s) => ({ items: s.items.map((i) => (ids.includes(i.id) ? { ...i, ...patch } : i)) }));
         const changed = get().items.filter((i) => ids.includes(i.id));
@@ -321,26 +347,45 @@ export const useStore = create<Store>()(
         set({ categories: list });
         background((sb) => run(sb.from("menu_categories").upsert(list.map((c, i) => categoryRow(c, i))), "Saving the order"));
       },
-      deleteCategory: async (id, moveDishesTo) => {
+      deleteCategory: async (id, dishes, moveTo) => {
         const s = get();
-        const moving = s.items.filter((i) => i.categoryId === id);
-        if (moving.length && !moveDishesTo) throw new Error("Move its dishes to another category first.");
+        const inside = s.items.filter((i) => i.categoryId === id);
+        if (inside.length && !moveTo) throw new Error("Choose where its dishes go.");
         // Its sub-categories move up to take its place.
         const parentId = s.categories.find((c) => c.id === id)?.parentId;
         const children = s.categories.filter((c) => c.parentId === id);
+        const deleted: string[] = [];
+        const kept: string[] = [];
         await write(async (sb) => {
-          if (moving.length) await run(sb.from("menu_items").update({ category_id: moveDishesTo }).eq("category_id", id), "Moving the dishes");
+          if (dishes === "delete") {
+            // One at a time: the database refuses a dish that a quotation or order still lists.
+            for (const d of inside) {
+              const res = await sb.from("menu_items").delete().eq("id", d.id);
+              if (!res.error) deleted.push(d.id);
+              else if (res.error.code === "23503") kept.push(d.id);
+              else throw new Error(`Deleting ${d.name}: ${res.error.message}`);
+            }
+            if (kept.length) await run(sb.from("menu_items").update({ category_id: moveTo, active: false }).in("id", kept), "Keeping dishes used on past orders");
+            // Packages stop listing deleted dishes as always included.
+            for (const p of s.packages.filter((x) => x.fixedItemIds.some((d) => deleted.includes(d))))
+              await run(sb.from("packages").update({ fixed_item_ids: p.fixedItemIds.filter((d) => !deleted.includes(d)) }).eq("id", p.id), "Updating packages");
+          } else if (inside.length) {
+            await run(sb.from("menu_items").update({ category_id: moveTo }).eq("category_id", id), "Moving the dishes");
+          }
           if (children.length) await run(sb.from("menu_categories").update({ parent_id: parentId ?? null }).eq("parent_id", id), "Moving the sub-categories");
           await run(sb.from("menu_categories").delete().eq("id", id), "Deleting the category");
         });
         set((st) => ({
           categories: st.categories.filter((c) => c.id !== id).map((c) => (c.parentId === id ? { ...c, parentId } : c)),
-          items: st.items.map((i) => (i.categoryId === id ? { ...i, categoryId: moveDishesTo! } : i)),
-          packages: st.packages.map((p) => ({ ...p, rules: p.rules.filter((r) => r.categoryId !== id) })),
+          items: st.items
+            .filter((i) => !deleted.includes(i.id))
+            .map((i) => (i.categoryId !== id ? i : dishes === "move" ? { ...i, categoryId: moveTo! } : { ...i, categoryId: moveTo!, active: false })),
+          packages: st.packages.map((p) => ({ ...p, rules: p.rules.filter((r) => r.categoryId !== id), fixedItemIds: p.fixedItemIds.filter((d) => !deleted.includes(d)) })),
         }));
         // The owner's food types stop listing it too (only the owner can change account settings).
         const types = get().tenant.foodTypes;
         if (get().myRole === "owner" && types?.some((t) => t.categoryIds.includes(id))) get().updateTenant({ foodTypes: types.map((t) => ({ ...t, categoryIds: t.categoryIds.filter((x) => x !== id) })) });
+        return { deleted: deleted.length, kept: inside.filter((d) => kept.includes(d.id)).map((d) => d.name), moved: dishes === "move" ? inside.length : 0 };
       },
       removePackage: (id) => {
         const s = get();

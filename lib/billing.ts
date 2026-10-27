@@ -2,7 +2,7 @@
 
 import { toast } from "sonner";
 import { create } from "zustand";
-import { priceFunction, priceQuote } from "./pricing";
+import { chargeAmount, priceFunction, priceQuote } from "./pricing";
 import { background, write } from "./queue";
 import { useStore } from "./store";
 import { supabase } from "./supabase/client";
@@ -113,11 +113,13 @@ export function buildSnapshot(order: Order, paid: number): InvoiceSnapshot {
   const s = useStore.getState();
   const client = s.clients.find((c) => c.id === order.clientId);
   const lines: InvoiceLine[] = [];
-  for (const fn of [...order.functions].sort((a, b) => a.date.localeCompare(b.date))) {
+  for (const fn of [...order.functions].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))) {
     const p = priceFunction(fn, s.items, s.packages, s.tenant.slabs);
     const pkg = s.packages.find((x) => x.id === fn.packageId);
     if (fn.pax && p.perPlate) lines.push({ label: `${fn.name}, ${fn.date.split("-").reverse().join("-")}${pkg ? ` (${pkg.name})` : ""}`, qty: fn.pax, rate: p.perPlate, amount: p.perPlate * fn.pax });
     if (p.fixed) lines.push({ label: `${fn.name}: counters and add-ons`, qty: 1, rate: p.fixed, amount: p.fixed });
+    // Staff, cutlery and other charges of this event, each on its own line.
+    for (const c of fn.charges ?? []) if (chargeAmount(c)) lines.push({ label: `${fn.name}: ${c.label}`, qty: c.qty, rate: c.rate, amount: chargeAmount(c) });
   }
   for (const x of order.extras) lines.push({ label: x.label, qty: 1, rate: x.amount, amount: x.amount });
   const t = priceQuote(order, s.items, s.packages, s.tenant.slabs);

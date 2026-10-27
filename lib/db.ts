@@ -36,7 +36,7 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
  * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
  * added the client's second phone and the coordinator. */
-export const schema = { supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false };
+export const schema = { supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -78,6 +78,7 @@ export function tenantRow(t: Tenant): Row {
     ...(t.access ? { role_access: t.access } : {}),
     ...(schema.services && t.foodTypes ? { food_types: t.foodTypes } : {}),
     ...(schema.referrals && t.referral ? { referral_settings: t.referral } : {}),
+    ...(schema.charges && t.staffRates ? { staff_rates: t.staffRates } : {}),
     ...(t.docs ? { doc_settings: t.docs, public_slug: t.publicSlug || null, public_menu: !!t.publicMenu, public_prices: !!t.publicPrices } : {}),
   };
 }
@@ -110,6 +111,7 @@ function tenantFrom(r: Row): Tenant {
     ...("role_access" in r ? { access: { roles: {}, poLimit: 0, payoutLimit: 0, ...r.role_access } } : {}),
     ...(r.food_types ? { foodTypes: r.food_types } : {}),
     ...(r.referral_settings ? { referral: r.referral_settings } : {}),
+    ...(Array.isArray(r.staff_rates) ? { staffRates: r.staff_rates } : {}),
     ...("doc_settings" in r ? { docs: { ...defaultDocs, ...r.doc_settings }, publicSlug: r.public_slug ?? "", publicMenu: r.public_menu, publicPrices: r.public_prices } : {}),
   };
 }
@@ -242,7 +244,7 @@ async function insertFunctions(sb: SB, parent: { quotation_id?: string; order_id
   check(
     await sb.from("event_functions").insert(
       functions.map((f, i) =>
-        tenanted({ id: f.id, ...parent, name: f.name, event_date: f.date, serving_time: f.time || "19:00", venue: f.venue, pax: f.pax, package_id: f.packageId ?? null, sort_order: i, ...(schema.services ? { food_type_id: f.foodTypeId ?? null, session: f.session ?? null, end_time: f.endTime || null } : {}) }, tenantId),
+        tenanted({ id: f.id, ...parent, name: f.name, event_date: f.date, serving_time: f.time || "19:00", venue: f.venue, pax: f.pax, package_id: f.packageId ?? null, sort_order: i, ...(schema.services ? { food_type_id: f.foodTypeId ?? null, session: f.session ?? null, end_time: f.endTime || null } : {}), ...(schema.charges ? { charges: f.charges ?? [] } : {}) }, tenantId),
       ),
     ),
     "Saving functions",
@@ -310,6 +312,7 @@ export interface Loaded {
   packageExtrasReady: boolean;
   /** False until 0014 has added referrals, raw material changes and dish prices */
   referralsReady: boolean;
+  chargesReady: boolean;
   /** False until 0015 has added sub-categories */
   subcategoriesReady: boolean;
   /** False until 0016 has added the client's second phone and the coordinator */
@@ -364,6 +367,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   const t = check(tenant, "Loading the account") as Row;
   schema.services = "food_types" in t;
   schema.referrals = "referral_settings" in t;
+  schema.charges = "staff_rates" in t;
   const rowsOf = (res: { data: unknown; error: { message: string } | null }, what: string) => (check(res, what) ?? []) as Row[];
   const profileRows = rowsOf(profiles, "Loading the team");
   const nameOf = (id: string | null) => profileRows.find((p) => p.id === id)?.name ?? "";
@@ -378,7 +382,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
         const picked = itemsByFn.get(f.id) ?? [];
         const notes = Object.fromEntries(picked.filter((p) => p.note).map((p) => [p.item_id, p.note]));
         const prices = Object.fromEntries(picked.filter((p) => p.price_override !== null && p.price_override !== undefined).map((p) => [p.item_id, Number(p.price_override)]));
-        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined, itemPrices: Object.keys(prices).length ? prices : undefined };
+        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined, itemPrices: Object.keys(prices).length ? prices : undefined, charges: Array.isArray(f.charges) && f.charges.length ? f.charges : undefined };
       });
   const extraRows = rowsOf(extras, "Loading extra charges");
   const extrasOf = (key: "quotation_id" | "order_id", id: string): ExtraCharge[] => extraRows.filter((e) => e[key] === id).map((e) => ({ id: e.id, label: e.label, amount: Number(e.amount) }));
@@ -508,6 +512,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     servicesReady: schema.services,
     packageExtrasReady: schema.packageExtras,
     referralsReady: schema.referrals,
+    chargesReady: schema.charges,
     subcategoriesReady: schema.subcategories,
     contactsReady: schema.contacts,
     eventTypes: eventRows.error ? [] : ((eventRows.data ?? []) as Row[]).map((e) => ({ id: e.id as string, name: e.name as string })),

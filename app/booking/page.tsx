@@ -13,7 +13,8 @@ import { BrandMark } from "@/components/settings/tenant-forms";
 import { Stepper, useOrderMoney } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card, Skeleton } from "@/components/ui/primitives";
-import { blankDraft, draftIssues, useQuoteDraft } from "@/lib/draft";
+import { blankDraft, draftIssues, emptyServices, namedServices, useQuoteDraft } from "@/lib/draft";
+import { useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { Order } from "@/lib/types";
 import { useUi } from "@/lib/ui";
@@ -66,6 +67,7 @@ function BookingFlow() {
   const order = useStore((s) => s.orders.find((o) => o.id === orderId));
   const { totals, needsApproval } = useDraftTotals(draft);
   const issues = draftIssues(draft);
+  const foodTypes = useFoodTypes();
   const blocked = needsApproval && user.role !== "owner";
   const step = draft.step;
 
@@ -79,10 +81,11 @@ function BookingFlow() {
     if (next > 0 && issues.length) {
       setShowErrors(true);
       setDraft({ step: 0 });
-      toast.error(issues[0]);
+      toast.error(issues[0], { description: issues.length > 1 ? `and ${issues.length - 1} more to fill in, marked in red` : undefined });
       return;
     }
-    setDraft({ step: next });
+    // Blank service names take their food type's name, or "Service 7", rather than holding the booking up.
+    setDraft((d) => ({ step: next, functions: namedServices(d.functions, foodTypes) }));
     window.scrollTo({ top: 0 });
   };
   const saveLater = () => {
@@ -187,6 +190,7 @@ function BookingFlow() {
                   <h2 className="font-heading text-lg font-semibold">Ready to book?</h2>
                   <p className="tnum text-sm text-text-muted">{draft.functions.length} {draft.functions.length === 1 ? "function" : "functions"} · {num(totals.pax)} guests</p>
                   <p className="tnum font-heading text-3xl font-bold">{money(totals.grand)}</p>
+                  {emptyServices(draft.functions).length > 0 && <p className="rounded-lg bg-warning/10 p-3 text-xs text-warning">No menu yet for {emptyServices(draft.functions).join(", ")}. You can book now and add it later from the order, or go back to the menu.</p>}
                   {blocked ? (
                     <p className="rounded-lg bg-warning/10 p-3 text-xs text-warning">The discount is above {tenant.discountApprovalPct}%, so the owner has to approve it before this can be booked.</p>
                   ) : (

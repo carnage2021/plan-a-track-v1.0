@@ -48,14 +48,26 @@ export function useQuoteDraft(key: string, fresh: () => QuoteDraft, resume = tru
   return { draft, setDraft, clear, restart, resumed };
 }
 
+/** The name a service shows when none is typed: its food type, else "Service 3". */
+export const serviceName = (f: Pick<EventFunction, "name" | "foodTypeId">, index: number, foodTypes: { id: string; name: string }[]) =>
+  f.name.trim() || foodTypes.find((t) => t.id === f.foodTypeId)?.name || `Service ${index + 1}`;
+
+/** Services with every blank name filled in, so an unnamed service never holds up a booking. */
+export const namedServices = (functions: EventFunction[], foodTypes: { id: string; name: string }[]) =>
+  functions.map((f, i) => (f.name.trim() ? f : { ...f, name: serviceName(f, i, foodTypes) }));
+
+/** Services with no dishes and no package yet. Not an error (the menu can follow later) but worth a look before saving. */
+export const emptyServices = (functions: EventFunction[]) => functions.filter((f) => !f.itemIds.length && !f.packageId).map((f, i) => f.name.trim() || `Service ${i + 1}`);
+
 export function draftIssues(d: QuoteDraft) {
   const issues: string[] = [];
   if (!d.clientName.trim()) issues.push("Enter the client's name");
   if (d.clientPhone.replace(/\D/g, "").length < 10) issues.push("Enter a 10-digit mobile number");
-  for (const f of d.functions) {
-    if (!f.name.trim()) issues.push("Every function needs a name");
-    if (!f.date) issues.push(`Pick a date for ${f.name || "the function"}`);
-    if (!f.pax) issues.push(`Enter guests for ${f.name || "the function"}`);
-  }
+  // Names are filled in automatically when blank, so only a date and guests are needed per service.
+  d.functions.forEach((f, i) => {
+    const name = f.name.trim() || `Service ${i + 1}`;
+    if (!f.date) issues.push(`Pick a date for ${name}`);
+    if (!f.pax) issues.push(`Enter guests for ${name}`);
+  });
   return issues;
 }

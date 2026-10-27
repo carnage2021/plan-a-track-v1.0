@@ -6,7 +6,7 @@ import type { Locale, MenuItem } from "./types";
 const en = {
   quotation: "Quotation", menu: "Menu card", confirmation: "Booking confirmation", taxInvoice: "Tax invoice", proforma: "Proforma invoice", creditNote: "Credit note", creditRefund: "Credit note and refund receipt",
   preparedFor: "Prepared for", billedTo: "Billed to", issuedTo: "Issued to", clientName: "Client name", event: "Event", date: "Date", validUntil: "Valid until", order: "Order",
-  perPlate: "per plate", guests: "guests", package: "package", description: "Description", qty: "Qty", rate: "Rate", amount: "Amount", food: "food", liveCounters: "live counters",
+  perPlate: "per plate", guests: "guests", package: "package", description: "Description", qty: "Qty", rate: "Rate", amount: "Amount", food: "food", liveCounters: "live counters", eventTotal: "total", otherCharges: "Other charges",
   subtotal: "Subtotal", discount: "Discount", lessDiscount: "Less discount", gst: "GST", included: "included above", grandTotal: "Grand total", invoiceTotal: "Invoice total",
   received: "Received", receivedToDate: "Received to date", balanceDue: "Balance due", balancePayable: "Balance payable", terms: "Terms", menuTbd: "Menu to be finalised.",
   taxableValue: "Taxable value", pricesIncludeGst: "prices include GST", amountInWords: "Amount in words", proformaNote: "This is a proforma for payment and is not a tax invoice.",
@@ -19,7 +19,7 @@ type Key = keyof typeof en;
 const hi: Record<Key, string> = {
   quotation: "कोटेशन", menu: "मेनू कार्ड", confirmation: "बुकिंग पुष्टि", taxInvoice: "टैक्स इनवॉइस", proforma: "प्रोफ़ॉर्मा इनवॉइस", creditNote: "क्रेडिट नोट", creditRefund: "क्रेडिट नोट और रिफ़ंड रसीद",
   preparedFor: "के लिए तैयार", billedTo: "बिल प्राप्तकर्ता", issuedTo: "जारी किया गया", clientName: "ग्राहक का नाम", event: "कार्यक्रम", date: "तारीख", validUntil: "मान्य तिथि तक", order: "ऑर्डर",
-  perPlate: "प्रति प्लेट", guests: "मेहमान", package: "पैकेज", description: "विवरण", qty: "मात्रा", rate: "दर", amount: "राशि", food: "भोजन", liveCounters: "लाइव काउंटर",
+  perPlate: "प्रति प्लेट", guests: "मेहमान", package: "पैकेज", description: "विवरण", qty: "मात्रा", rate: "दर", amount: "राशि", food: "भोजन", liveCounters: "लाइव काउंटर", eventTotal: "कुल", otherCharges: "अन्य शुल्क",
   subtotal: "उप-योग", discount: "छूट", lessDiscount: "घटाएँ छूट", gst: "जीएसटी", included: "ऊपर शामिल", grandTotal: "कुल राशि", invoiceTotal: "इनवॉइस कुल",
   received: "प्राप्त", receivedToDate: "अब तक प्राप्त", balanceDue: "बकाया राशि", balancePayable: "देय शेष", terms: "शर्तें", menuTbd: "मेनू तय होना बाकी है।",
   taxableValue: "कर योग्य मूल्य", pricesIncludeGst: "कीमतों में जीएसटी शामिल", amountInWords: "राशि शब्दों में", proformaNote: "यह भुगतान हेतु प्रोफ़ॉर्मा है, टैक्स इनवॉइस नहीं।",
@@ -31,7 +31,7 @@ const hi: Record<Key, string> = {
 const gu: Record<Key, string> = {
   quotation: "ક્વોટેશન", menu: "મેનુ કાર્ડ", confirmation: "બુકિંગ પુષ્ટિ", taxInvoice: "ટેક્સ ઇન્વૉઇસ", proforma: "પ્રોફોર્મા ઇન્વૉઇસ", creditNote: "ક્રેડિટ નોટ", creditRefund: "ક્રેડિટ નોટ અને રિફંડ રસીદ",
   preparedFor: "માટે તૈયાર", billedTo: "બિલ મેળવનાર", issuedTo: "જારી કરેલ", clientName: "ગ્રાહકનું નામ", event: "પ્રસંગ", date: "તારીખ", validUntil: "માન્ય તારીખ સુધી", order: "ઓર્ડર",
-  perPlate: "પ્રતિ પ્લેટ", guests: "મહેમાન", package: "પેકેજ", description: "વિગત", qty: "જથ્થો", rate: "દર", amount: "રકમ", food: "ભોજન", liveCounters: "લાઇવ કાઉન્ટર",
+  perPlate: "પ્રતિ પ્લેટ", guests: "મહેમાન", package: "પેકેજ", description: "વિગત", qty: "જથ્થો", rate: "દર", amount: "રકમ", food: "ભોજન", liveCounters: "લાઇવ કાઉન્ટર", eventTotal: "કુલ", otherCharges: "અન્ય ચાર્જ",
   subtotal: "પેટા સરવાળો", discount: "વળતર", lessDiscount: "બાદ વળતર", gst: "જીએસટી", included: "ઉપર સમાવિષ્ટ", grandTotal: "કુલ રકમ", invoiceTotal: "ઇન્વૉઇસ કુલ",
   received: "મળેલ", receivedToDate: "અત્યાર સુધી મળેલ", balanceDue: "બાકી રકમ", balancePayable: "ચૂકવવાની બાકી રકમ", terms: "શરતો", menuTbd: "મેનુ નક્કી કરવાનું બાકી છે.",
   taxableValue: "કરપાત્ર મૂલ્ય", pricesIncludeGst: "ભાવમાં જીએસટી સમાવિષ્ટ", amountInWords: "રકમ શબ્દોમાં", proformaNote: "આ ચુકવણી માટેનું પ્રોફોર્મા છે, ટેક્સ ઇન્વૉઇસ નથી.",

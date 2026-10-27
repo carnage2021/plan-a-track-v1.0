@@ -7,7 +7,7 @@ import { MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Card } from "@/components/ui/primitives";
-import { marginTone, priceQuote } from "@/lib/pricing";
+import { marginTone, priceFunction, priceQuote } from "@/lib/pricing";
 import { datesBetween, eventSpan } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { QuoteDraft } from "@/lib/types";
@@ -16,6 +16,7 @@ import { useEventTypes } from "@/lib/event-types";
 import { ContactFields, withCurrent } from "./enquiry-sheet";
 import { nextService, ServiceCard } from "./service-fields";
 import { ExtraDishes, ReferralCard } from "./summary-extras";
+import { byDay, EventCharges } from "./event-charges";
 
 type SetDraft = (patch: Partial<QuoteDraft> | ((d: QuoteDraft) => Partial<QuoteDraft>)) => void;
 
@@ -82,7 +83,7 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
         {span.start && <p className="tnum text-sm text-text-muted">Event {fmtDate(span.start, { day: "numeric", month: "short" })}{span.end > span.start ? ` to ${fmtDate(span.end, { day: "numeric", month: "short" })}, ${datesBetween(span.start, span.end).length} days` : ", one day"} · {draft.functions.length} {draft.functions.length === 1 ? "service" : "services"}</p>}
       </div>
       {draft.functions.map((f, i) => (
-        <ServiceCard key={f.id} fn={f} index={i} onChange={(p) => setFn(f.id, p)} onRemove={draft.functions.length > 1 ? () => setDraft((d) => ({ functions: d.functions.filter((x) => x.id !== f.id) })) : undefined} showErrors={showErrors} namePlaceholder="Wedding lunch" />
+        <ServiceCard key={f.id} fn={f} index={i} onChange={(p) => setFn(f.id, p)} onRemove={draft.functions.length > 1 ? () => setDraft((d) => ({ functions: d.functions.filter((x) => x.id !== f.id) })) : undefined} showErrors={showErrors} />
       ))}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -97,6 +98,8 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
 }
 
 const extraPresets = ["Service staff", "Transport", "Crockery and cutlery", "Decor", "Live counter setup"];
+/** Once staff and cutlery are priced per event, the booking-wide list keeps only the one-off charges. */
+const bookingPresets = ["Transport", "Decor", "Live counter setup", "Generator"];
 
 /** Summary step: extra charges, discount with approval limit, GST and the total. */
 export function SummaryForm({ draft, setDraft, hideMargin }: { draft: QuoteDraft; setDraft: SetDraft; hideMargin?: boolean }) {
@@ -110,7 +113,8 @@ export function SummaryForm({ draft, setDraft, hideMargin }: { draft: QuoteDraft
   );
   const needsApproval = totals.discountPct > tenant.discountApprovalPct;
   const setExtra = (id: string, patch: { label?: string; amount?: number }) => setDraft((d) => ({ extras: d.extras.map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
-  const unusedPresets = extraPresets.filter((p) => !draft.extras.some((e) => e.label === p));
+  const chargesReady = useStore((s) => s.chargesReady);
+  const unusedPresets = (chargesReady ? bookingPresets : extraPresets).filter((p) => !draft.extras.some((e) => e.label === p));
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px] lg:items-start">
@@ -130,9 +134,11 @@ export function SummaryForm({ draft, setDraft, hideMargin }: { draft: QuoteDraft
           }
         />
 
+        {chargesReady ? <EventCharges draft={draft} setDraft={setDraft} /> : <p className="rounded-lg bg-warning/10 p-3 text-xs text-warning">Staff and cutlery for each event can be priced once the 0018 database update is run.</p>}
+
         <Card className="p-4 md:p-5">
-          <h2 className="font-heading text-base font-semibold">Extra charges</h2>
-          <p className="text-xs text-text-muted">Each one shows as its own line on the quotation.</p>
+          <h2 className="font-heading text-base font-semibold">{chargesReady ? "Charges for the whole booking" : "Extra charges"}</h2>
+          <p className="text-xs text-text-muted">{chargesReady ? "One-off charges not tied to one event, like transport. Each shows as its own line on the quotation." : "Each one shows as its own line on the quotation."}</p>
           <ul className="mt-3 space-y-2">
             {draft.extras.map((e) => (
               <li key={e.id} className="flex items-center gap-2">
@@ -182,10 +188,12 @@ export function SummaryForm({ draft, setDraft, hideMargin }: { draft: QuoteDraft
       <Card className="p-4 md:p-5 lg:sticky lg:top-20">
         <h2 className="font-heading text-base font-semibold">Total</h2>
         <dl className="tnum mt-3 space-y-2 text-sm">
-          {draft.functions.map((f) => {
-            const one = priceQuote({ ...draft, functions: [f], extras: [], discount: { type: "amount", value: 0 }, creditUsed: 0, gstRate: 0, gstInclusive: false }, items, packages, tenant.slabs);
-            return <div key={f.id} className="flex justify-between gap-3"><dt className="min-w-0 truncate text-text-muted">{f.name} · {f.pax} guests</dt><dd>{money(one.food)}</dd></div>;
-          })}
+          {byDay(draft.functions).map(([date, fns]) => (
+            <React.Fragment key={date || "none"}>
+              <div className="pt-1 text-xs font-semibold uppercase tracking-wide text-text-muted">{date ? fmtDate(date, { weekday: "short", day: "numeric", month: "short" }) : "No date yet"}</div>
+              {fns.map((f) => <div key={f.id} className="flex justify-between gap-3 pl-2"><dt className="min-w-0 truncate text-text-muted">{f.name} · {f.pax} guests</dt><dd>{money(priceFunction(f, items, packages, tenant.slabs).eventTotal)}</dd></div>)}
+            </React.Fragment>
+          ))}
           {draft.extras.filter((e) => e.amount).map((e) => <div key={e.id} className="flex justify-between gap-3"><dt className="truncate text-text-muted">{e.label || "Other charge"}</dt><dd>{money(e.amount)}</dd></div>)}
           <div className="flex justify-between border-t pt-2"><dt>Subtotal</dt><dd>{money(totals.subtotal)}</dd></div>
           {totals.discount > 0 && <div className="flex justify-between text-success"><dt>Discount{draft.referralCode ? " (referral)" : ""}</dt><dd>-{money(totals.discount)}</dd></div>}

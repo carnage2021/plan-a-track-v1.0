@@ -123,13 +123,14 @@ export function PaxInput({ value, onChange, compact }: { value: number; onChange
  * Rupees, with paise allowed (a tea cup at ₹1.78). While typing, the text is kept as entered so "1." and "1.7"
  * stay put; once the field is left it shows in Indian grouping.
  */
-export function MoneyInput({ value, onChange, className, placeholder = "0", autoFocus }: { value: number; onChange: (v: number) => void; className?: string; placeholder?: string; autoFocus?: boolean }) {
+export function MoneyInput({ value, onChange, className, placeholder = "0", autoFocus, label }: { value: number; onChange: (v: number) => void; className?: string; placeholder?: string; autoFocus?: boolean; label?: string }) {
   const [text, setText] = React.useState<string | null>(null);
   return (
     <span className={cn("relative block", className)}>
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-muted">₹</span>
       <input
         inputMode="decimal"
+        aria-label={label}
         autoFocus={autoFocus}
         placeholder={placeholder}
         value={text ?? (value ? decimal(value) : "")}

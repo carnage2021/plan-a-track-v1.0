@@ -12,7 +12,8 @@ import { Stepper } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
-import { blankDraft, blankFunction, draftIssues, useQuoteDraft } from "@/lib/draft";
+import { blankDraft, blankFunction, draftIssues, emptyServices, namedServices, useQuoteDraft } from "@/lib/draft";
+import { useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { QuoteDraft } from "@/lib/types";
 import { money, uid } from "@/lib/utils";
@@ -51,6 +52,7 @@ function Builder() {
   const [preview, setPreview] = React.useState<"menu" | "quotation" | null>(null);
   const { totals, needsApproval } = useDraftTotals(draft);
   const issues = draftIssues(draft);
+  const foodTypes = useFoodTypes();
   const revising = useStore((s) => s.quotations.find((q) => q.id === draft.reviseOf));
   // The new version comes after the newest in the group, not after the one the revision started from.
   const nextVersion = useStore((s) => (revising ? Math.max(...s.quotations.filter((q) => q.groupId === revising.groupId).map((q) => q.version)) + 1 : 1));
@@ -66,10 +68,11 @@ function Builder() {
     if (next > 0 && issues.length) {
       setShowErrors(true);
       setDraft({ step: 0 });
-      toast.error(issues[0]);
+      toast.error(issues[0], { description: issues.length > 1 ? `and ${issues.length - 1} more to fill in, marked in red` : undefined });
       return;
     }
-    setDraft({ step: next });
+    // Blank service names take their food type's name, or "Service 7", rather than holding the booking up.
+    setDraft((d) => ({ step: next, functions: namedServices(d.functions, foodTypes) }));
     window.scrollTo({ top: 0 });
   };
 
@@ -144,6 +147,7 @@ function Builder() {
       {step === 2 && (
         <>
           <SummaryForm draft={draft} setDraft={setDraft} />
+          {emptyServices(draft.functions).length > 0 && <p className="mt-4 rounded-lg bg-warning/10 p-3 text-sm text-warning">No menu yet for {emptyServices(draft.functions).join(", ")}. The quotation can be saved like this, or go back to the menu to add dishes.</p>}
           <div className="mt-6 flex flex-wrap justify-end gap-2">
             <Button size="lg" variant="ghost" onClick={() => go(1)}><ArrowLeft strokeWidth={1.75} />Back to menu</Button>
             <Button size="lg" onClick={() => setPreview("quotation")}><Eye strokeWidth={1.75} />Preview</Button>

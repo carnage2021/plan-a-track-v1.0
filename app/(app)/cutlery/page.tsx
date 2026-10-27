@@ -35,6 +35,7 @@ function ruleText(a: Asset, categoryName?: string) {
 function AssetSheet({ asset, onClose }: { asset?: Asset; onClose: () => void }) {
   const menuCategories = useStore((s) => s.categories);
   const saveAsset = useSupply((s) => s.saveAsset);
+  const chargesReady = useStore((s) => s.chargesReady);
   const [form, setForm] = React.useState<Omit<Asset, "id">>(() => asset ?? { name: "", category: "Crockery", totalQty: 0, replacementCost: 0, location: "", ruleBasis: "per_guest", ruleValue: 1 });
   const example = form.ruleBasis === "per_guest" ? `300 guests need ${num(Math.ceil(300 * form.ruleValue))}.` : form.ruleBasis === "per_dish" ? `A menu with 5 such dishes needs ${num(Math.ceil(5 * form.ruleValue))}.` : form.ruleBasis === "per_function" ? `Every function gets ${num(Math.ceil(form.ruleValue))}.` : "Nothing is added automatically.";
   return (
@@ -45,6 +46,7 @@ function AssetSheet({ asset, onClose }: { asset?: Asset; onClose: () => void }) 
         <Field label="Storage location"><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Godown rack 3" /></Field>
         <Field label="Total you own"><Num className="text-left" value={form.totalQty} onChange={(v) => setForm({ ...form, totalQty: Math.round(v) })} /></Field>
         <Field label="Replacement cost each" hint="Used to value breakage and loss."><MoneyInput value={form.replacementCost} onChange={(v) => setForm({ ...form, replacementCost: v })} /></Field>
+        {chargesReady && <Field label="Rent per piece" className="col-span-2" hint="What the client is charged for one piece for one event. Fills in when cutlery is added to an event in a quotation or booking."><MoneyInput label="Rent per piece" value={form.rentRate ?? 0} onChange={(v) => setForm({ ...form, rentRate: v })} /></Field>}
         <Field label="How many does an event need?" className="col-span-2"><Select value={form.ruleBasis} onChange={(e) => setForm({ ...form, ruleBasis: e.target.value as RuleBasis })}>{bases.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select></Field>
         {form.ruleBasis !== "manual" && <Field label="Quantity" hint={example}><Num className="text-left" value={form.ruleValue} onChange={(v) => setForm({ ...form, ruleValue: v })} /></Field>}
         {form.ruleBasis === "per_dish" && (
@@ -60,6 +62,7 @@ export default function CutleryPage() {
   const orders = useStore((s) => s.orders);
   const clients = useStore((s) => s.clients);
   const menuCategories = useStore((s) => s.categories);
+  const chargesReady = useStore((s) => s.chargesReady);
   const [open, setOpen] = React.useState<string | "new" | null>(null);
   const out = new Map<string, number>();
   for (const c of challans) if (c.status === "issued") for (const l of c.lines) out.set(l.assetId, (out.get(l.assetId) ?? 0) + Math.max(0, l.issued - l.rentedQty));
@@ -83,7 +86,7 @@ export default function CutleryPage() {
                 <p className="tnum mb-2 text-xs text-text-muted">{assets.length} items · replacement value {money(value)}</p>
                 <Card className="overflow-x-auto">
                   <table className="w-full min-w-[640px] text-sm">
-                    <thead className="bg-surface-muted text-left text-xs text-text-muted"><tr><th className="px-4 py-3 font-medium">Item</th><th className="px-4 py-3 text-right font-medium">Own</th><th className="px-4 py-3 text-right font-medium">Out now</th><th className="px-4 py-3 font-medium">Requirement rule</th><th className="px-4 py-3 text-right font-medium">Replacement</th></tr></thead>
+                    <thead className="bg-surface-muted text-left text-xs text-text-muted"><tr><th className="px-4 py-3 font-medium">Item</th><th className="px-4 py-3 text-right font-medium">Own</th><th className="px-4 py-3 text-right font-medium">Out now</th><th className="px-4 py-3 font-medium">Requirement rule</th><th className="px-4 py-3 text-right font-medium">Replacement</th>{chargesReady && <th className="px-4 py-3 text-right font-medium">Rent</th>}</tr></thead>
                     <tbody className="tnum divide-y">
                       {assets.map((a) => (
                         <tr key={a.id} tabIndex={0} onClick={() => setOpen(a.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(a.id)} className="cursor-pointer hover:bg-surface-muted/60">
@@ -92,6 +95,7 @@ export default function CutleryPage() {
                           <td className={cn("px-4 py-2.5 text-right", out.get(a.id) ? "text-primary" : "text-text-muted")}>{out.get(a.id) ? num(out.get(a.id)!) : "–"}</td>
                           <td className="px-4 py-2.5 text-text-muted">{ruleText(a, menuCategories.find((c) => c.id === a.ruleCategoryId)?.name)}</td>
                           <td className="px-4 py-2.5 text-right">{rate(a.replacementCost)}</td>
+                          {chargesReady && <td className="px-4 py-2.5 text-right">{a.rentRate ? rate(a.rentRate) : "–"}</td>}
                         </tr>
                       ))}
                     </tbody>

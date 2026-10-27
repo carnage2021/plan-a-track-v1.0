@@ -1,5 +1,10 @@
 import { lineage } from "./categories";
-import type { Discount, EventFunction, ExtraCharge, MenuItem, MenuPackage, Tenant } from "./types";
+import type { Discount, EventCharge, EventFunction, ExtraCharge, MenuItem, MenuPackage, Tenant } from "./types";
+
+/** One charge line's amount, kept to the paisa. */
+export const chargeAmount = (c: Pick<EventCharge, "qty" | "rate">) => Math.round((c.qty || 0) * (c.rate || 0) * 100) / 100;
+/** Staff, cutlery and other charges of one event. */
+export const eventCharges = (f: Pick<EventFunction, "charges">) => (f.charges ?? []).reduce((s, c) => s + chargeAmount(c), 0);
 
 export interface RuleProgress {
   categoryId: string;
@@ -23,6 +28,10 @@ export interface FunctionPrice {
   rules: RuleProgress[];
   /** Dishes charged on top of the package price */
   extraIds: string[];
+  /** Staff, cutlery and other charges of this event */
+  charges: number;
+  /** Food plus the event's charges: what this one event costs the client before discount and GST */
+  eventTotal: number;
 }
 
 export function slabPct(pax: number, slabs: Tenant["slabs"]) {
@@ -31,7 +40,7 @@ export function slabPct(pax: number, slabs: Tenant["slabs"]) {
 }
 
 export function priceFunction(
-  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices">,
+  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices" | "charges">,
   items: MenuItem[],
   packages: MenuPackage[],
   slabs: Tenant["slabs"],
@@ -90,11 +99,16 @@ export function priceFunction(
     cost: costPerPlate * fn.pax + fixedCost,
     rules,
     extraIds,
+    charges: eventCharges(fn),
+    eventTotal: perPlate * fn.pax + fixed + eventCharges(fn),
   };
 }
 
 export interface QuoteTotals {
   food: number;
+  /** Charges on the events (staff, cutlery, other) */
+  charges: number;
+  /** Everything beyond food: the events' charges plus whole-booking charges */
   extras: number;
   subtotal: number;
   discount: number;
@@ -123,7 +137,8 @@ export function priceQuote(q: Priceable, items: MenuItem[], packages: MenuPackag
   const fns = q.functions.map((f) => priceFunction(f, items, packages, slabs));
   const food = fns.reduce((s, f) => s + f.total, 0);
   const cost = fns.reduce((s, f) => s + f.cost, 0);
-  const extras = q.extras.reduce((s, e) => s + (e.amount || 0), 0);
+  const charges = fns.reduce((s, f) => s + f.charges, 0);
+  const extras = charges + q.extras.reduce((s, e) => s + (e.amount || 0), 0);
   const subtotal = food + extras;
   const discount = Math.min(subtotal, q.discount.type === "percent" ? (subtotal * q.discount.value) / 100 : q.discount.value) || 0;
   const discountPct = subtotal ? (discount / subtotal) * 100 : 0;
@@ -135,6 +150,7 @@ export function priceQuote(q: Priceable, items: MenuItem[], packages: MenuPackag
   const grand = Math.round(taxable + gst);
   return {
     food,
+    charges,
     extras,
     subtotal,
     discount,

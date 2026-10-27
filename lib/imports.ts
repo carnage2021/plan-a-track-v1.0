@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { subPath } from "./categories";
 import { defaultFoodTypes } from "./services";
 import { itemRow, clientRow, packageRow, schema } from "./db";
@@ -50,6 +51,77 @@ export function cellText(v: Cell) {
   return String(v).trim();
 }
 
+/** While an upload is saving, closing or reloading the tab asks first, so a file is never saved half way. */
+export function useLeaveGuard(active: boolean) {
+  React.useEffect(() => {
+    if (!active) return;
+    const stop = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", stop);
+    return () => window.removeEventListener("beforeunload", stop);
+  }, [active]);
+}
+
+/** What became of one sheet of an uploaded workbook. */
+export interface SheetNote { name: string; rows: number; skipped?: string; note?: string }
+/** Every usable sheet of a file as one table: the header, its rows, where each row came from, and a note per sheet. */
+export interface Table { head: string[]; rows: string[][]; where: string[]; sheets: SheetNote[] }
+
+/**
+ * Reads an .xlsx or .csv into one table. Every sheet of a workbook is read, not just the first: a sheet counts when
+ * one of its first rows has the template's column names (a title above them is fine). A sheet with rows but no
+ * column names is read with the columns of the sheet before it. `fillDown` fills a blank cell of that column from the
+ * row above (merged cells read as blank), or, at the top of a sheet, from the sheet's own name.
+ */
+export async function readTable(file: File, labels: readonly string[], fillDown?: string): Promise<Table> {
+  let books: { name: string; grid: string[][] }[];
+  if (/\.xlsx$/i.test(file.name)) {
+    const { default: readXlsxFile } = await import("read-excel-file/browser");
+    books = (await readXlsxFile(file)).map((s) => ({ name: s.sheet, grid: (s.data as unknown[][]).map((row) => row.map((c) => cellText(c as Cell))) }));
+  } else books = [{ name: file.name, grid: parseCsv(await file.text()) }];
+
+  const wanted = new Set(labels.map(norm));
+  const found = new Set<string>();
+  const unknown: string[] = [];
+  const rows: string[][] = [], where: string[] = [], sheets: SheetNote[] = [];
+  let last: { name: string; head: string[] } | null = null;
+  const many = books.length > 1;
+
+  for (const { name, grid } of books) {
+    const filled = grid.map((row, i) => ({ row, n: i + 1 })).filter((x) => x.row.some((c) => c.trim()));
+    if (!filled.length) { if (many) sheets.push({ name, rows: 0, skipped: "empty" }); continue; }
+    // The header is the row among the first ten that names the most template columns.
+    let best = -1, score = 0;
+    filled.slice(0, 10).forEach((x, i) => { const s = x.row.filter((c) => wanted.has(norm(c))).length; if (s > score) { score = s; best = i; } });
+    let head: string[], body = filled, note: string | undefined;
+    if (score >= Math.min(2, labels.length)) { head = filled[best].row; body = filled.slice(best + 1); last = { name, head }; }
+    else if (last && Math.max(...filled.map((x) => x.row.length)) <= last.head.length + 1 && filled.filter((x) => x.row.filter((c) => c.trim()).length >= Math.min(3, labels.length)).length >= filled.length / 2) { head = last.head; note = `no column names, read with the columns of "${last.name}"`; }
+    else { sheets.push({ name, rows: filled.length, skipped: `no row with the column names (${labels.slice(0, 3).join(", ")} …)` }); continue; }
+
+    const at = new Map<string, number>();
+    head.forEach((h, i) => { const k = norm(h); if (!k) return; if (wanted.has(k)) { if (!at.has(k)) at.set(k, i); found.add(k); } else if (!unknown.includes(h.trim())) unknown.push(h.trim()); });
+    const fill = fillDown ? norm(fillDown) : "";
+    // At the top of a sheet the sheet's own name stands in, unless it is a default like "Sheet1".
+    let carry = fill && !/^sheet\s*\d*$/i.test(name.trim()) ? name.trim() : "";
+    if (fill && !at.has(fill) && carry) found.add(fill);
+    for (const { row, n } of body) {
+      const out = labels.map((l) => (row[at.get(norm(l)) ?? -1] ?? "").trim());
+      if (fill) { const i = labels.findIndex((l) => norm(l) === fill); if (out[i]) carry = out[i]; else out[i] = carry; }
+      rows.push(out);
+      where.push(many ? `${name} · row ${n}` : `Row ${n}`);
+    }
+    sheets.push({ name, rows: body.length, note });
+  }
+  return { head: [...labels.filter((l) => found.has(norm(l))), ...unknown], rows, where, sheets };
+}
+
+/** One line on which sheets of a workbook were read and which were not, for the screen after an upload. */
+export function sheetSummary(sheets: SheetNote[]) {
+  if (sheets.length < 2) return "";
+  const used = sheets.filter((s) => !s.skipped);
+  const skipped = sheets.filter((s) => s.skipped && s.skipped !== "empty");
+  return [`Read ${used.length} of ${sheets.length} sheets (${used.map((s) => `${s.name}: ${s.rows}`).join(", ")})`, ...skipped.map((s) => `Not read: "${s.name}", ${s.skipped}`), ...used.filter((s) => s.note).map((s) => `"${s.name}": ${s.note}`)].join(". ");
+}
+
 /** Checks one record against its columns: required values, numbers, dates and the allowed choices. */
 export function validate(spec: ListSpec, r: Record<string, string>) {
   const errors: string[] = [];
@@ -80,7 +152,7 @@ export const lists: ListSpec[] = [
       { label: "Unit", example: "plate", options: units },
       { label: "Priced", example: "plate", options: pricing },
       { label: "Cost", kind: "number", example: "45" },
-      { label: "Price", required: true, kind: "number", example: "120" },
+      { label: "Price", kind: "number", example: "120" },
       { label: "Description", example: "Chargrilled cottage cheese with mint chutney" },
       { label: "Photo link", example: "https://example.com/paneer.jpg" },
     ],
@@ -269,14 +341,15 @@ export const lists: ListSpec[] = [
       { label: "Category", example: "Crockery" },
       { label: "Total quantity", required: true, kind: "number", example: "500" },
       { label: "Replacement cost", kind: "number", example: "85" },
+      { label: "Rent per piece", kind: "number", example: "4" },
       { label: "Storage location", example: "Godown rack 3" },
     ],
     existing: () => new Set(useSupply.getState().assets.map((a) => norm(a.name))),
     identity: (r) => norm(r.Item),
     build(records) {
-      return [{ table: "assets", rows: records.map((r) => assetRow({ id: uid(), name: r.Item, category: r.Category || "Crockery", totalQty: num(r["Total quantity"]), replacementCost: num(r["Replacement cost"]), location: r["Storage location"] ?? "", ruleBasis: "manual", ruleValue: 0 })) }];
+      return [{ table: "assets", rows: records.map((r) => assetRow({ id: uid(), name: r.Item, category: r.Category || "Crockery", totalQty: num(r["Total quantity"]), replacementCost: num(r["Replacement cost"]), rentRate: num(r["Rent per piece"]), location: r["Storage location"] ?? "", ruleBasis: "manual", ruleValue: 0 })) }];
     },
-    rows: () => useSupply.getState().assets.map((a) => ({ Item: a.name, Category: a.category, "Total quantity": a.totalQty, "Replacement cost": a.replacementCost, "Storage location": a.location })),
+    rows: () => useSupply.getState().assets.map((a) => ({ Item: a.name, Category: a.category, "Total quantity": a.totalQty, "Replacement cost": a.replacementCost, "Rent per piece": a.rentRate ?? 0, "Storage location": a.location })),
   },
   {
     key: "events",

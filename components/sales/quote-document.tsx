@@ -4,14 +4,15 @@ import { CalendarDays, Clock, MapPin, Users } from "lucide-react";
 import * as React from "react";
 import { DocHeader, DocPayBlock, docFrame, docStyle, useDocs } from "@/components/documents/theme";
 import { VegMark } from "@/components/shared/badges";
-import { priceFunction, priceQuote } from "@/lib/pricing";
+import { chargeAmount, priceFunction, priceQuote } from "@/lib/pricing";
+import { byDay } from "./event-charges";
 import { dishName, docT } from "@/lib/doc-i18n";
 import { additionLine } from "@/lib/packages";
 import { useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import { isWithin, roots } from "@/lib/categories";
 import type { Discount, EventFunction, ExtraCharge, Locale, MenuItem } from "@/lib/types";
-import { fmtDate, fmtTime, money, num } from "@/lib/utils";
+import { fmtDate, fmtTime, money, num, rate } from "@/lib/utils";
 
 export interface DocumentData {
   number?: string;
@@ -109,18 +110,28 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
           <section className="break-inside-avoid">
             <table className="tnum w-full">
               <thead>
-                <tr className="border-b text-left text-xs text-text-muted"><th className="py-2 font-medium">{t("description")}</th><th className="py-2 text-right font-medium">{t("guests")}</th><th className="py-2 text-right font-medium">{t("rate")}</th><th className="py-2 text-right font-medium">{t("amount")}</th></tr>
+                <tr className="border-b text-left text-xs text-text-muted"><th className="py-2 font-medium">{t("description")}</th><th className="py-2 text-right font-medium">{t("qty")}</th><th className="py-2 text-right font-medium">{t("rate")}</th><th className="py-2 text-right font-medium">{t("amount")}</th></tr>
               </thead>
               <tbody className="divide-y">
-                {data.functions.map((f) => {
-                  const price = priceFunction(f, items, packages, tenant.slabs);
-                  return (
-                    <React.Fragment key={f.id}>
-                      <tr><td className="py-2">{f.name} {t("food")}</td><td className="py-2 text-right">{num(f.pax)}</td><td className="py-2 text-right">{money(price.perPlate)}</td><td className="py-2 text-right">{money(price.perPlate * f.pax)}</td></tr>
-                      {price.fixed > 0 && <tr><td className="py-2">{f.name} {t("liveCounters")}</td><td /><td /><td className="py-2 text-right">{money(price.fixed)}</td></tr>}
-                    </React.Fragment>
-                  );
-                })}
+                {/* Priced event by event under each date, so two events on one day each show their own total. */}
+                {byDay(data.functions).map(([date, fns]) => (
+                  <React.Fragment key={date || "none"}>
+                    {date && <tr className="bg-brand/5"><td className="px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand" colSpan={4}>{fmtDate(date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</td></tr>}
+                    {fns.map((f) => {
+                      const price = priceFunction(f, items, packages, tenant.slabs);
+                      const charges = (f.charges ?? []).filter((c) => chargeAmount(c));
+                      return (
+                        <React.Fragment key={f.id}>
+                          <tr><td className="py-2">{f.name} {t("food")}</td><td className="py-2 text-right">{num(f.pax)}</td><td className="py-2 text-right">{money(price.perPlate)}</td><td className="py-2 text-right">{money(price.perPlate * f.pax)}</td></tr>
+                          {price.fixed > 0 && <tr><td className="py-2">{f.name} {t("liveCounters")}</td><td /><td /><td className="py-2 text-right">{money(price.fixed)}</td></tr>}
+                          {charges.map((c) => <tr key={c.id}><td className="py-2 pl-3">{c.label}</td><td className="py-2 text-right">{num(c.qty)}</td><td className="py-2 text-right">{rate(c.rate)}</td><td className="py-2 text-right">{rate(chargeAmount(c))}</td></tr>)}
+                          {(charges.length > 0 || price.fixed > 0) && <tr><td className="py-2 font-medium" colSpan={3}>{f.name} {t("eventTotal")}</td><td className="py-2 text-right font-semibold">{money(price.eventTotal)}</td></tr>}
+                        </React.Fragment>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+                {data.extras.some((e) => e.amount) && data.functions.some((f) => f.charges?.length) && <tr className="bg-brand/5"><td className="px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand" colSpan={4}>{t("otherCharges")}</td></tr>}
                 {data.extras.filter((e) => e.amount).map((e) => <tr key={e.id}><td className="py-2" colSpan={3}>{e.label}</td><td className="py-2 text-right">{money(e.amount)}</td></tr>)}
               </tbody>
               <tfoot>
@@ -161,6 +172,16 @@ export function QuoteDocument({ data, variant = "quotation" }: { data: DocumentD
 }
 
 export function quoteShareText(tenantName: string, d: DocumentData, grand: number) {
-  const lines = d.functions.map((f) => `• ${f.name}: ${fmtDate(f.date, { day: "numeric", month: "short" })}, ${num(f.pax)} guests, ${f.itemIds.length} dishes`);
+  // Each event priced the way the quotation shows it: food, staff, cutlery and other charges, then its total.
+  const { items, packages, tenant } = useStore.getState();
+  const part = (f: EventFunction, kind: "worker" | "cutlery" | "other") => (f.charges ?? []).filter((c) => c.kind === kind).reduce((s, c) => s + chargeAmount(c), 0);
+  const lines = byDay(d.functions).flatMap(([, fns]) => fns).map((f) => {
+    const p = priceFunction(f, items, packages, tenant.slabs);
+    const bits = [`Food ${money(p.perPlate * f.pax + p.fixed)}`, part(f, "worker") && `Service staff ${money(part(f, "worker"))}`, part(f, "cutlery") && `Cutlery ${money(part(f, "cutlery"))}`, part(f, "other") && `Other ${money(part(f, "other"))}`].filter(Boolean);
+    return `• ${f.name}: ${fmtDate(f.date, { day: "numeric", month: "short" })}, ${num(f.pax)} guests, ${f.itemIds.length} dishes
+   ${bits.join(" · ")} = ${money(p.eventTotal)}`;
+  });
+  const others = d.extras.filter((e) => e.amount).map((e) => `• ${e.label}: ${money(e.amount)}`);
+  if (others.length) lines.push(...others);
   return `Namaste ${d.clientName},\n\nHere is your ${d.eventType.toLowerCase()} quotation ${d.number ?? ""} from ${tenantName}.\n\n${lines.join("\n")}\n\nTotal: ${money(grand)} (GST ${d.gstInclusive ? "included" : "extra as shown"})${d.validUntil ? `\nValid until ${fmtDate(d.validUntil)}` : ""}\n\nReply here to confirm or to ask for changes.`;
 }

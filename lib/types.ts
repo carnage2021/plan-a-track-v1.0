@@ -43,6 +43,22 @@ export interface Tenant {
   foodTypes?: FoodType[];
   /** The referral offer; absent until 0014 has been run */
   referral?: ReferralSettings;
+  /** What the client is charged per event for each staff role; absent until 0018 has been run */
+  staffRates?: StaffRate[];
+}
+
+/** A staff role and what one person in it is charged to the client for one event. */
+export interface StaffRate { name: string; rate: number }
+
+/** A charge on one event: service staff by role, cutlery by the piece, or anything else. */
+export interface EventCharge {
+  id: string;
+  kind: "worker" | "cutlery" | "other";
+  /** The staff role name or the cutlery item id it came from */
+  ref?: string;
+  label: string;
+  qty: number;
+  rate: number;
 }
 
 export interface ReferralSettings {
@@ -226,6 +242,8 @@ export interface EventFunction {
   itemNotes?: Record<string, string>;
   /** Per-plate prices changed for this quotation or order only, keyed by item id */
   itemPrices?: Record<string, number>;
+  /** Staff, cutlery and other charges on this event alone */
+  charges?: EventCharge[];
 }
 
 export interface ExtraCharge {

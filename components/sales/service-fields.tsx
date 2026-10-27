@@ -10,7 +10,7 @@ import { blankFunction } from "@/lib/draft";
 import { nextSlot, serviceLine, sessionFor, sessions, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { EventFunction, Session } from "@/lib/types";
-import { isoDate } from "@/lib/utils";
+import { addDays, isoDate, parseDate } from "@/lib/utils";
 import { DateAvailability } from "./enquiry-sheet";
 
 interface CardProps {
@@ -27,7 +27,7 @@ interface CardProps {
 }
 
 /** One catering service: food type, name, date, start and end time, session, guests and venue. */
-export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, showErrors, namePlaceholder = "Welcome drinks" }: CardProps) {
+export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, showErrors, namePlaceholder }: CardProps) {
   const foodTypes = useFoodTypes();
   const packages = useStore((s) => s.packages);
   const ready = useStore((s) => s.servicesReady);
@@ -57,14 +57,14 @@ export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, s
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Field label="Food type" className="col-span-2" hint={ready ? undefined : "Saved once the 0012 database update is run."}>
+        <Field label="Food Service Name" className="col-span-2" hint={ready ? undefined : "Saved once the 0012 database update is run."}>
           <Select value={fn.foodTypeId ?? ""} onChange={(e) => pickFoodType(e.target.value)}>
-            <option value="">Choose food type</option>
+            <option value="">Choose food service</option>
             {foodTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </Select>
         </Field>
-        <Field label="Service name" className="col-span-2" error={showErrors && !fn.name.trim() ? "Give it a name" : ""}>
-          <Input value={fn.name} onChange={(e) => onChange({ name: e.target.value })} placeholder={namePlaceholder} />
+        <Field label="Event Name" className="col-span-2" hint={fn.name.trim() ? undefined : "Left blank, it is named after its food service."}>
+          <Input value={fn.name} onChange={(e) => onChange({ name: e.target.value })} placeholder={namePlaceholder ?? (foodTypes.find((t) => t.id === fn.foodTypeId)?.name || `Service ${index + 1}`)} />
         </Field>
         <Field label="Date" className="col-span-2 sm:col-span-1" error={showErrors && !fn.date ? "Pick a date" : ""}>
           <Input type="date" min={minDate || isoDate(new Date())} max={maxDate || undefined} value={fn.date} onChange={(e) => onChange({ date: e.target.value })} />
@@ -97,10 +97,17 @@ export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, s
 }
 
 /** A new service after the last one: same day, guests and venue, starting an hour after it ends. */
-export function nextService(list: EventFunction[], fallback: { date: string; pax: number; venue: string }) {
+export function nextService(list: EventFunction[], fallback: { date: string; pax: number; venue: string }, lastDay?: string) {
   const last = list[list.length - 1];
-  const slot = last ? nextSlot(last) : { time: "19:00", endTime: "22:00" };
-  return blankFunction("", last?.date ?? fallback.date, last?.pax ?? fallback.pax, last?.venue ?? fallback.venue, slot);
+  const slot = nextSlot(last);
+  let date = last?.date ?? fallback.date;
+  // Late in the day it moves to the next morning, but never past the event's last day.
+  if (slot.nextDay && date) {
+    const next = isoDate(addDays(parseDate(date), 1));
+    if (!lastDay || next <= lastDay) date = next;
+    else Object.assign(slot, { time: "12:00", endTime: "15:00" });
+  }
+  return blankFunction("", date, last?.pax ?? fallback.pax, last?.venue ?? fallback.venue, slot);
 }
 
 /** The list of services with an Add button, for the enquiry form. */
@@ -111,7 +118,7 @@ export function ServiceList({ value, onChange, start, end, fallback, showErrors 
       {value.map((f, i) => (
         <ServiceCard key={f.id} fn={f} index={i} onChange={(p) => set(f.id, p)} onRemove={value.length > 1 ? () => onChange(value.filter((x) => x.id !== f.id)) : undefined} minDate={start} maxDate={end && end > start ? end : start} showErrors={showErrors} />
       ))}
-      <Button onClick={() => onChange([...value, nextService(value, fallback)])}><Plus strokeWidth={1.75} />Add another service</Button>
+      <Button onClick={() => onChange([...value, nextService(value, fallback, end && end > start ? end : start)])}><Plus strokeWidth={1.75} />Add another service</Button>
     </div>
   );
 }

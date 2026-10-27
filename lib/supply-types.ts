@@ -145,6 +145,8 @@ export interface Asset {
   category: string;
   totalQty: number;
   replacementCost: number;
+  /** What the client is charged per piece for one event */
+  rentRate?: number;
   location: string;
   ruleBasis: RuleBasis;
   ruleValue: number;

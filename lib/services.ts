@@ -81,11 +81,16 @@ export function eventSpan(functions: Pick<EventFunction, "date">[]) {
   return { start: dates[0] ?? "", end: dates[dates.length - 1] ?? "" };
 }
 
-/** A start time an hour after the last service ends, for the next service added the same day. */
+/**
+ * The next service's timing: an hour after the last one ends, the same day. When that would start after 10 pm
+ * (or the last one ran past midnight), it goes to 9 am the next day instead of into the small hours.
+ */
 export function nextSlot(last?: Pick<EventFunction, "time" | "endTime">) {
-  if (!last) return { time: "19:00", endTime: "22:00" };
-  const from = last.endTime || last.time;
-  const [h, m] = from.split(":").map(Number);
-  const pad = (n: number) => String(n % 24).padStart(2, "0");
-  return { time: `${pad(h + 1)}:${String(m).padStart(2, "0")}`, endTime: `${pad(h + 3)}:${String(m).padStart(2, "0")}` };
+  if (!last) return { time: "19:00", endTime: "22:00", nextDay: false };
+  const [sh] = last.time.split(":").map(Number);
+  const [eh, em] = (last.endTime || last.time).split(":").map(Number);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const start = eh + 1;
+  if (eh < sh || start > 22) return { time: "09:00", endTime: "12:00", nextDay: true };
+  return { time: `${pad(start)}:${pad(em)}`, endTime: `${pad(Math.min(start + 3, 23))}:${pad(em)}`, nextDay: false };
 }

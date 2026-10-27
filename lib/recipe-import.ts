@@ -53,7 +53,8 @@ export function guessSection(name: string): Section {
 }
 
 export interface RecipeRow {
-  row: number;
+  /** Where it is in the file, e.g. "Row 4" or "Khaman · row 4" */
+  row: string;
   dish: string;
   raw: string;
   qty: string;
@@ -78,12 +79,13 @@ export interface DishPlan {
 export interface Missing { name: string; unit: string; section: Section; dishes: string[] }
 
 /** Checks every row of a recipe sheet against the menu and the inventory. */
-export function analyse(grid: string[][], items: MenuItem[], ingredients: Ingredient[], recipes: RecipeLine[]) {
-  const [head = [], ...body] = grid;
-  const index = new Map(head.map((h, i) => [key(h), i]));
-  const cell = (row: string[], label: string) => (row[index.get(key(label)) ?? -1] ?? "").trim();
-  const unknown = head.filter((h) => h.trim() && !recipeColumns.some((c) => key(c.label) === key(h)));
-  const missingColumns = recipeColumns.filter((c) => c.required && !index.has(key(c.label))).map((c) => c.label);
+export function analyse(table: { head: string[]; rows: string[][]; where: string[] }, items: MenuItem[], ingredients: Ingredient[], recipes: RecipeLine[]) {
+  // Rows come in the template's column order (see readTable); head lists only the columns the file had.
+  const body = table.rows;
+  const at = new Map(recipeColumns.map((c, i) => [c.label as string, i]));
+  const cell = (row: string[], label: string) => (row[at.get(label) ?? -1] ?? "").trim();
+  const unknown = table.head.filter((h) => !recipeColumns.some((c) => c.label === h));
+  const missingColumns = recipeColumns.filter((c) => c.required && !table.head.includes(c.label)).map((c) => c.label);
 
   const itemByName = new Map(items.map((i) => [key(i.name), i]));
   const ingByName = new Map(ingredients.map((i) => [key(i.name), i]));
@@ -92,7 +94,7 @@ export function analyse(grid: string[][], items: MenuItem[], ingredients: Ingred
   const rows: RecipeRow[] = [];
 
   body.forEach((r, i) => {
-    const row: RecipeRow = { row: i + 2, dish: cell(r, "Dish"), raw: cell(r, "Raw material"), qty: cell(r, "Quantity"), unit: cell(r, "Unit"), errors: [] };
+    const row: RecipeRow = { row: table.where[i] ?? `Row ${i + 2}`, dish: cell(r, "Dish"), raw: cell(r, "Raw material"), qty: cell(r, "Quantity"), unit: cell(r, "Unit"), errors: [] };
     rows.push(row);
     const item = itemByName.get(key(row.dish));
     const qty = num(row.qty);
@@ -135,7 +137,18 @@ export function analyse(grid: string[][], items: MenuItem[], ingredients: Ingred
   // A dish with a row in error is held back whole, so no recipe is saved half right.
   for (const row of rows) if (row.errors.length) { const p = [...plans.values()].find((x) => key(x.item.name) === key(row.dish)); if (p) p.blocked = true; }
   const ready = [...plans.values()].filter((p) => !p.blocked && p.lines.size);
-  return { rows, plans: [...plans.values()], ready, missing: [...missing.values()], unknown, missingColumns };
+  // Every dish named in the file that will not be saved, with the reason, so none goes missing unnoticed.
+  const held = new Map<string, { dish: string; reason: string }>();
+  for (const row of rows) {
+    const k = key(row.dish);
+    if (!k || ready.some((p) => key(p.item.name) === k)) continue;
+    const reason = row.errors[0] ?? (row.waiting ? `waiting for raw material "${row.raw}"` : "");
+    const h = held.get(k);
+    if (!h) held.set(k, { dish: row.dish, reason: reason ? `${row.row}: ${reason}` : "" });
+    else if (!h.reason && reason) h.reason = `${row.row}: ${reason}`;
+  }
+  const blankDish = rows.filter((r) => !r.dish).length;
+  return { rows, plans: [...plans.values()], ready, held: [...held.values()], blankDish, missing: [...missing.values()], unknown, missingColumns };
 }
 
 /** What a dish's recipe was before an upload, so the upload can be undone. */

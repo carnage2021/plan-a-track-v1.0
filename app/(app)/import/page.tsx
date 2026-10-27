@@ -8,37 +8,27 @@ import { PageHeader } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, Chip } from "@/components/ui/primitives";
 import { RecipeImport, undoRecipeUpload } from "@/components/import/recipe-import";
-import { cellText, download, lists, parseCsv, toCsv, validate, type ListSpec } from "@/lib/imports";
+import { download, lists, readTable, useLeaveGuard, sheetSummary, toCsv, validate, type ListSpec } from "@/lib/imports";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase/client";
 import { cn, fmtDate, isoDate, localDay } from "@/lib/utils";
 
-interface Parsed { file: string; records: { r: Record<string, string>; errors: string[]; duplicate: boolean }[]; unknown: string[] }
+interface Parsed { file: string; records: { r: Record<string, string>; errors: string[]; duplicate: boolean; where: string }[]; unknown: string[]; sheets: string }
 interface ImportRow { id: string; list: string; file_name: string; row_count: number; ids: Record<string, string[]>; undone: boolean; created_at: string }
 
-/** Reads an .xlsx or .csv file into records keyed by the template's column names. */
+/** Reads every sheet of an .xlsx, or a .csv, into records keyed by the template's column names. */
 async function readFile(file: File, spec: ListSpec): Promise<Parsed> {
-  let grid: string[][];
-  if (/\.xlsx$/i.test(file.name)) {
-    const { readSheet } = await import("read-excel-file/browser");
-    grid = ((await readSheet(file)) as unknown[][]).map((row) => row.map((c) => cellText(c as Date)));
-  } else grid = parseCsv(await file.text());
-  // Blank rows (formatted but empty, often at the bottom of a spreadsheet) are not records.
-  const [head = [], ...body] = grid.filter((row, i) => i === 0 || row.some((c) => c.trim()));
-  // Headers are matched loosely, so "price" and "Price " both find the Price column.
-  const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const index = new Map(head.map((h, i) => [key(h), i]));
-  const unknown = head.filter((h) => h.trim() && !spec.columns.some((c) => key(c.label) === key(h)));
+  const table = await readTable(file, spec.columns.map((c) => c.label));
   const existing = spec.existing();
   const seen = new Set<string>();
-  const records = body.map((row) => {
-    const r = Object.fromEntries(spec.columns.map((c) => [c.label, cellText(row[index.get(key(c.label)) ?? -1])]));
+  const records = table.rows.map((row, i) => {
+    const r = Object.fromEntries(spec.columns.map((c, j) => [c.label, row[j]]));
     const id = spec.identity(r);
     const duplicate = !!id && (existing.has(id) || seen.has(id));
     if (id) seen.add(id);
-    return { r, errors: validate(spec, r), duplicate };
+    return { r, errors: validate(spec, r), duplicate, where: table.where[i] };
   });
-  return { file: file.name, records, unknown };
+  return { file: file.name, records, unknown: table.head.filter((h) => !spec.columns.some((c) => c.label === h)), sheets: sheetSummary(table.sheets) };
 }
 
 export default function ImportPage() {
@@ -48,6 +38,7 @@ export default function ImportPage() {
   const [recipesOpen, setRecipesOpen] = React.useState(false);
   const [parsed, setParsed] = React.useState<Parsed | null>(null);
   const [busy, setBusy] = React.useState(false);
+  useLeaveGuard(busy);
   const [history, setHistory] = React.useState<ImportRow[] | null>(null);
   const input = React.useRef<HTMLInputElement>(null);
 
@@ -140,7 +131,7 @@ export default function ImportPage() {
           <button type="button" onClick={() => input.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void onFile(e.dataTransfer.files[0]); }} className="mt-4 flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center text-text-muted transition-colors hover:border-primary hover:text-primary">
             <Upload className="size-8" strokeWidth={1.5} />
             <span className="font-medium text-text">Drop your Excel or CSV file here, or tap to choose</span>
-            <span className="text-xs">Fill in the template; the first row must be the column names. Rows already in your list are skipped.</span>
+            <span className="text-xs">Fill in the template. Every sheet with the column names is read; rows already in your list are skipped.</span>
           </button>
 
           {parsed && (
@@ -152,6 +143,8 @@ export default function ImportPage() {
                 {parsed.records.some((x) => x.duplicate && !x.errors.length) && <Badge>{parsed.records.filter((x) => x.duplicate && !x.errors.length).length} already there</Badge>}
                 <Button variant="primary" className="ml-auto" loading={busy} disabled={!ok.length} onClick={save}><CheckCircle2 strokeWidth={1.75} />Import {ok.length} rows</Button>
               </div>
+              {parsed.sheets && <p className="rounded-lg bg-surface-muted p-2 text-sm text-text-muted">{parsed.sheets}</p>}
+              {!parsed.records.length && <p className="rounded-lg bg-danger/10 p-3 text-sm text-danger">No rows were found. Each sheet needs a row with the column names from the template ({list.columns.slice(0, 3).map((c) => c.label).join(", ")} …) and the data below it.</p>}
               {parsed.unknown.length > 0 && <p className="rounded-lg bg-warning/10 p-2 text-sm text-warning">Columns not in the template are ignored: {parsed.unknown.join(", ")}</p>}
               <div className="max-h-[28rem] overflow-auto rounded-xl border">
                 <table className="tnum w-full min-w-[640px] text-left text-sm">
@@ -159,7 +152,7 @@ export default function ImportPage() {
                   <tbody className="divide-y">
                     {parsed.records.slice(0, 300).map((x, i) => (
                       <tr key={i} className={cn(x.errors.length ? "bg-danger/5" : x.duplicate ? "text-text-muted" : "")}>
-                        <td className="px-3 py-1.5 text-text-muted">{i + 2}</td>
+                        <td className="whitespace-nowrap px-3 py-1.5 text-text-muted">{x.where}</td>
                         {list.columns.slice(0, 5).map((c) => <td key={c.label} className="max-w-48 truncate py-1.5 pr-3">{x.r[c.label]}</td>)}
                         <td className="py-1.5 pr-3">{x.errors.length ? <span className="text-danger">{x.errors.join("; ")}</span> : x.duplicate ? "Already there, skipped" : <span className="text-success">OK</span>}</td>
                       </tr>

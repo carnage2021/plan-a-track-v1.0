@@ -55,6 +55,8 @@ interface Data {
   packageExtrasReady: boolean;
   /** False until 0014 has added referrals, raw material changes and dish prices */
   referralsReady: boolean;
+  /** 0018 has run: charges per event, staff rates and cutlery rent */
+  chargesReady: boolean;
   /** False until 0015 has added sub-categories */
   subcategoriesReady: boolean;
   /** False until 0016 has added the client's second phone and the coordinator */
@@ -153,7 +155,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -471,8 +473,9 @@ export const useStore = create<Store>()(
             clientId,
             enquiryId,
             eventType: draft.eventType,
-            // Fresh ids: a function row belongs to exactly one quotation version or order.
-            functions: draft.functions.map((f) => ({ ...f, id: uid() })),
+            // Fresh ids: a function row belongs to exactly one quotation version or order. A blank name is never saved.
+            // Blank or zero-quantity charge lines are dropped, so the document only shows what is charged.
+            functions: draft.functions.map((f, i) => ({ ...f, id: uid(), name: f.name.trim() || `Service ${i + 1}`, charges: f.charges?.filter((c) => c.label.trim() && c.qty > 0) })),
             extras: draft.extras.filter((e) => e.label && e.amount).map((e) => ({ ...e, id: uid() })),
             discount: draft.discount,
             gstRate: s.tenant.gstRate,

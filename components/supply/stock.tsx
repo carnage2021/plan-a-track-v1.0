@@ -12,7 +12,7 @@ import { Modal, Sheet } from "@/components/ui/sheet";
 import { fmtQty } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import { sections, units, type Ingredient, type MovementType, type Section } from "@/lib/supply-types";
-import { cn, daysFromToday, fmtDate, money } from "@/lib/utils";
+import { cn, daysFromToday, fmtDate, money, rate } from "@/lib/utils";
 import { Num, useStock } from "./common";
 
 const movementLabel: Record<MovementType, string> = { opening: "Opening stock", purchase: "Purchase", issue: "Issued to event", return: "Returned from event", wastage: "Wastage", adjustment: "Stock-take adjustment", transfer: "Transfer" };
@@ -62,7 +62,7 @@ function IngredientForm({ open, onOpenChange, ingredient, storeId }: { open: boo
             <ul className="tnum mt-2 divide-y text-sm">
               {ledger.slice(0, 40).map((m) => (
                 <li key={m.id} className="flex items-center justify-between gap-3 py-2">
-                  <span className="min-w-0"><span className="block truncate">{movementLabel[m.type]}{m.note ? ` · ${m.note}` : ""}</span><span className="block text-xs text-text-muted">{fmtDate(m.at, { day: "numeric", month: "short" })}{m.rate ? ` · ${money(m.rate)} per ${ingredient.unit}` : ""}</span></span>
+                  <span className="min-w-0"><span className="block truncate">{movementLabel[m.type]}{m.note ? ` · ${m.note}` : ""}</span><span className="block text-xs text-text-muted">{fmtDate(m.at, { day: "numeric", month: "short" })}{m.rate ? ` · ${rate(m.rate)} per ${ingredient.unit}` : ""}</span></span>
                   <span className={cn("shrink-0 font-medium", m.qty < 0 ? "text-danger" : "text-success")}>{m.qty > 0 ? "+" : ""}{fmtQty(m.qty)} {ingredient.unit}</span>
                 </li>
               ))}
@@ -227,7 +227,7 @@ export function StockTab() {
                   <td className="px-4 py-2.5"><span className="font-medium">{i.name}</span><span className="ml-2 inline-flex gap-1 align-middle">{low && <Badge tone="warning">Low</Badge>}{expiresIn !== null && expiresIn <= 7 && <Badge tone="danger">{expiresIn < 0 ? "Expired" : `Expires in ${expiresIn}d`}</Badge>}</span><span className="block text-xs text-text-muted">{sections.find((s) => s.id === i.section)?.label}{i.location ? ` · ${i.location}` : ""}</span></td>
                   <td className={cn("px-4 py-2.5 text-right font-medium", low && "text-warning")}>{fmtQty(qty)} {i.unit}</td>
                   <td className="px-4 py-2.5 text-right text-text-muted">{i.reorderLevel ? fmtQty(i.reorderLevel) : "–"}</td>
-                  <td className="px-4 py-2.5 text-right">{money(i.lastRate)}</td>
+                  <td className="px-4 py-2.5 text-right">{rate(i.lastRate)}</td>
                   <td className="px-4 py-2.5 text-right">{money(Math.max(0, qty) * i.lastRate)}</td>
                 </tr>
               ))}

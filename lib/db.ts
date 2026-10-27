@@ -34,8 +34,9 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
 /** Set when the phase 3 migration (0003_supply.sql) has been run, so its columns can be written;
  * services once 0012 has added food types, sessions and end times; packageExtras once 0013 has added
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
- * per-quotation dish prices; subcategories once 0015 has added parent categories. */
-export const schema = { supply: false, services: false, packageExtras: false, referrals: false, subcategories: false };
+ * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
+ * added the client's second phone and the coordinator. */
+export const schema = { supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -127,6 +128,7 @@ export const clientRow = (c: Client): Row => ({
   tags: c.tags,
   language: c.language,
   ...(clientDates ? { birthday: c.birthday || null, anniversary: c.anniversary || null } : {}),
+  ...(schema.contacts ? { alt_phone: c.altPhone || null } : {}),
 });
 
 export const categoryRow = (c: MenuCategory, sort: number): Row => ({ id: c.id, name: c.name, icon: c.icon, sort_order: sort, ...(schema.subcategories ? { parent_id: c.parentId ?? null } : {}) });
@@ -179,6 +181,7 @@ export const enquiryRow = (e: Enquiry): Row => ({
   assigned_to: e.assignedTo || null,
   follow_up_at: e.followUpAt || null,
   lost_reason: e.lostReason ?? null,
+  ...(schema.contacts ? { coordinator_id: e.coordinatorId || null } : {}),
   ...(schema.services ? { event_end_date: e.endDate && e.endDate > e.date ? e.endDate : null, services: e.services ?? [] } : {}),
 });
 
@@ -199,6 +202,7 @@ const quotationRow = (q: Quotation): Row => ({
   notes: q.notes,
   created_by: q.createdBy || null,
   ...(schema.referrals ? { referral_code: q.referralCode || null, credit_used: q.creditUsed ?? 0 } : {}),
+  ...(schema.contacts ? { coordinator_id: q.coordinatorId || null } : {}),
 });
 
 const orderRow = (o: Order): Row => ({
@@ -217,6 +221,7 @@ const orderRow = (o: Order): Row => ({
   cancel_note: o.cancelNote ?? null,
   ...(schema.supply ? { commission_pct: o.commissionPct } : {}),
   ...(schema.referrals ? { referral_code: o.referralCode || null, credit_used: o.creditUsed ?? 0, referral_rewarded: !!o.referralRewarded, raw_overrides: o.rawOverrides ?? {} } : {}),
+  ...(schema.contacts ? { coordinator_id: o.coordinatorId || null } : {}),
 });
 
 export const paymentRow = (p: Payment, orderId: string, recordedBy?: string): Row => ({
@@ -307,6 +312,12 @@ export interface Loaded {
   referralsReady: boolean;
   /** False until 0015 has added sub-categories */
   subcategoriesReady: boolean;
+  /** False until 0016 has added the client's second phone and the coordinator */
+  contactsReady: boolean;
+  /** The account's own event types, in order; empty means the standard list */
+  eventTypes: { id: string; name: string }[];
+  /** False until 0017 has added event types */
+  eventTypesReady: boolean;
   /** The branch this person is tied to, if the owner assigned one */
   myBranch: string;
 }
@@ -325,6 +336,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   schema.subcategories = !(await sb.from("menu_categories").select("parent_id").limit(1)).error;
   // Asked of the database, not read off a loaded client, so an account with no clients yet still saves them.
   clientDates = !(await sb.from("clients").select("birthday").limit(1)).error;
+  schema.contacts = !(await sb.from("enquiries").select("coordinator_id").limit(1)).error;
+  const eventRows = await sb.from("event_types").select("id,name,sort_order").order("sort_order").order("created_at");
   const branchesEnabled = !branchProbe.error;
   const branchList = ((branchRows.data ?? []) as Row[]).map((b) => ({ id: b.id as string, name: b.name as string, address: b.address as string }));
   const myBranch = (profile.branch_id as string | null) ?? "";
@@ -383,7 +396,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       ...rowsOf(invites, "Loading invites").filter((i) => !i.accepted_at).map((i) => ({ id: i.id, name: i.name, phone: i.phone, role: i.role as Role, invited: true })),
     ],
     clients: rowsOf(clients, "Loading clients").map((c) => {
-      return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined, referralCode: c.referral_code ?? undefined, referredBy: c.referred_by ?? undefined, credit: Number(c.credit ?? 0) };
+      return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined, referralCode: c.referral_code ?? undefined, referredBy: c.referred_by ?? undefined, credit: Number(c.credit ?? 0), altPhone: c.alt_phone ?? undefined };
     }),
     categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon, parentId: c.parent_id ?? undefined })),
     items: rowsOf(items, "Loading the menu").map((i) => ({
@@ -440,6 +453,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       createdAt: localDay(e.created_at),
       endDate: e.event_end_date ? day(e.event_end_date) : undefined,
       services: Array.isArray(e.services) && e.services.length ? e.services : undefined,
+      coordinatorId: e.coordinator_id ?? undefined,
     })),
     quotations: rowsOf(quotations, "Loading quotations").filter(inBranch).map((q) => ({
       id: q.id,
@@ -461,6 +475,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       createdAt: localDay(q.created_at),
       referralCode: q.referral_code ?? undefined,
       creditUsed: Number(q.credit_used ?? 0),
+      coordinatorId: q.coordinator_id ?? undefined,
     })),
     orders: rowsOf(orders, "Loading orders").filter(inBranch).map((o) => ({
       id: o.id,
@@ -485,6 +500,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       creditUsed: Number(o.credit_used ?? 0),
       referralRewarded: !!o.referral_rewarded,
       rawOverrides: o.raw_overrides && Object.keys(o.raw_overrides).length ? o.raw_overrides : undefined,
+      coordinatorId: o.coordinator_id ?? undefined,
     })),
     branches: branchList,
     branchesEnabled,
@@ -493,6 +509,9 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     packageExtrasReady: schema.packageExtras,
     referralsReady: schema.referrals,
     subcategoriesReady: schema.subcategories,
+    contactsReady: schema.contacts,
+    eventTypes: eventRows.error ? [] : ((eventRows.data ?? []) as Row[]).map((e) => ({ id: e.id as string, name: e.name as string })),
+    eventTypesReady: !eventRows.error,
   };
 }
 

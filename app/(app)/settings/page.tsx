@@ -1,12 +1,13 @@
 "use client";
 
-import { Building, Building2, CreditCard, DatabaseBackup, FileText, Globe, Hash, History, Landmark, Palette, ShieldCheck, SlidersHorizontal, Ticket, Users } from "lucide-react";
+import { Building, Building2, CreditCard, DatabaseBackup, FileText, Globe, Hash, History, Landmark, Palette, PartyPopper, ShieldCheck, SlidersHorizontal, Ticket, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import { AccessForm, ActivityForm, DataForm } from "@/components/settings/access-forms";
 import { PlanBillingForm } from "@/components/shell/platform-ui";
 import { BranchForm } from "@/components/settings/branch-form";
 import { ReferralForm } from "@/components/settings/referral-form";
+import { EventTypesForm } from "@/components/settings/event-types-form";
 import { DocumentsForm, PublicMenuForm } from "@/components/settings/doc-forms";
 import { BrandForm, BusinessForm, NumberingForm, RulesForm, TaxBankForm, TeamForm } from "@/components/settings/tenant-forms";
 import { PageHeader } from "@/components/shared/blocks";
@@ -19,6 +20,7 @@ const sections = [
   { id: "numbering", label: "Numbering and terms", icon: Hash, Form: NumberingForm },
   { id: "documents", label: "Documents", icon: FileText, Form: DocumentsForm },
   { id: "public", label: "Public menu", icon: Globe, Form: PublicMenuForm },
+  { id: "events", label: "Event types", icon: PartyPopper, Form: EventTypesForm },
   { id: "rules", label: "Pricing rules", icon: SlidersHorizontal, Form: RulesForm },
   { id: "referrals", label: "Referrals", icon: Ticket, Form: ReferralForm },
   { id: "team", label: "Team", icon: Users, Form: TeamForm },

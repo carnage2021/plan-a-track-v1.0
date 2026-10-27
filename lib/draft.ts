@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useStore } from "./store";
 import type { EventFunction, QuoteDraft } from "./types";
+import { firstEventType } from "./event-types";
 import { sessionFor } from "./services";
 import { uid } from "./utils";
 
@@ -12,7 +13,7 @@ export function blankFunction(name = "Main function", date = "", pax = 200, venu
 }
 
 export function blankDraft(): QuoteDraft {
-  return { clientName: "", clientPhone: "", eventType: "Wedding", functions: [blankFunction()], extras: [], discount: { type: "amount", value: 0 }, step: 0 };
+  return { clientName: "", clientPhone: "", eventType: firstEventType(), functions: [blankFunction()], extras: [], discount: { type: "amount", value: 0 }, step: 0 };
 }
 
 /**

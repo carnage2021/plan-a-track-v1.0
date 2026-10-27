@@ -8,7 +8,7 @@ import { priceQuote } from "@/lib/pricing";
 import { serviceLine, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { EventFunction, Order } from "@/lib/types";
-import { cn, initials, money, num, parseDate } from "@/lib/utils";
+import { cn, decimal, initials, money, num, parseDate } from "@/lib/utils";
 import { StatusBadge } from "./badges";
 
 export function PageHeader({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: React.ReactNode; children?: React.ReactNode }) {
@@ -119,16 +119,27 @@ export function PaxInput({ value, onChange, compact }: { value: number; onChange
 }
 
 /** Rupee prefix, Indian digit grouping, numeric keypad on mobile. */
+/**
+ * Rupees, with paise allowed (a tea cup at ₹1.78). While typing, the text is kept as entered so "1." and "1.7"
+ * stay put; once the field is left it shows in Indian grouping.
+ */
 export function MoneyInput({ value, onChange, className, placeholder = "0", autoFocus }: { value: number; onChange: (v: number) => void; className?: string; placeholder?: string; autoFocus?: boolean }) {
+  const [text, setText] = React.useState<string | null>(null);
   return (
     <span className={cn("relative block", className)}>
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-muted">₹</span>
       <input
-        inputMode="numeric"
+        inputMode="decimal"
         autoFocus={autoFocus}
         placeholder={placeholder}
-        value={value ? num(value) : ""}
-        onChange={(e) => onChange(Number(e.target.value.replace(/\D/g, "")) || 0)}
+        value={text ?? (value ? decimal(value) : "")}
+        onChange={(e) => {
+          // Digits and one decimal point, at most two places after it.
+          const clean = e.target.value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1").replace(/^(\d*\.\d{0,2}).*$/, "$1");
+          setText(clean);
+          onChange(Number(clean) || 0);
+        }}
+        onBlur={() => setText(null)}
         className="tnum h-11 w-full rounded-lg border bg-surface-muted/60 pl-7 pr-3 text-sm font-medium placeholder:text-text-muted focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 md:h-9"
       />
     </span>

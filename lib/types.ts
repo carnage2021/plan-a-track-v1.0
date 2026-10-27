@@ -107,6 +107,8 @@ export interface Client {
   /** ISO dates; the year is ignored for greetings */
   birthday?: string;
   anniversary?: string;
+  /** A second phone number; absent until 0016 has been run */
+  altPhone?: string;
   /** The code this client shares with friends; absent until 0014 has been run */
   referralCode?: string;
   /** The client whose code brought this one in */
@@ -138,6 +140,8 @@ export interface Enquiry {
   endDate?: string;
   /** The catering services asked for, each with its own date, food type and timings */
   services?: EventFunction[];
+  /** Team member coordinating with the client; follows the enquiry into its quotation and booking */
+  coordinatorId?: string;
 }
 
 export interface MenuCategory {
@@ -260,6 +264,7 @@ export interface Quotation {
   referralCode?: string;
   /** Referral credit taken off this quotation, in rupees */
   creditUsed?: number;
+  coordinatorId?: string;
 }
 
 export type OrderStatus = "tentative" | "confirmed" | "in_progress" | "completed" | "cancelled";
@@ -308,6 +313,8 @@ export interface Order {
   referralRewarded?: boolean;
   /** Raw material changed by hand for this event: ingredient id to quantity; 0 removes it */
   rawOverrides?: Record<string, number>;
+  /** Team member coordinating the event with the client */
+  coordinatorId?: string;
 }
 
 /** Work in progress in the quotation builder or booking mode */
@@ -325,4 +332,9 @@ export interface QuoteDraft {
   savedAt?: string;
   referralCode?: string;
   creditUsed?: number;
+  /** Client contact details, saved to the client */
+  clientEmail?: string;
+  clientAltPhone?: string;
+  clientAddress?: string;
+  coordinatorId?: string;
 }

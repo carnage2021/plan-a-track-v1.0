@@ -16,7 +16,8 @@ export function Num({ value, onChange, className, ...rest }: { value: number; on
   return (
     <input
       inputMode="decimal"
-      value={text ?? (value ? String(value) : "")}
+      // Rounded for show, so 6.3 − 6 reads 0.3 and not 0.30000000000000027.
+      value={text ?? (value ? String(Math.round(value * 1000) / 1000) : "")}
       placeholder="0"
       onChange={(e) => {
         const next = e.target.value.replace(/[^\d.]/g, "");

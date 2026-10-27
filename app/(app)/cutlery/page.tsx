@@ -15,7 +15,7 @@ import { useStore } from "@/lib/store";
 import { challanLoss } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { Asset, RuleBasis } from "@/lib/supply-types";
-import { cn, fmtDate, money, num } from "@/lib/utils";
+import { cn, fmtDate, money, num, rate } from "@/lib/utils";
 
 const categories = ["Crockery", "Cutlery", "Glassware", "Serving", "Kitchen", "Furniture", "Linen", "Other"];
 const bases: { id: RuleBasis; label: string }[] = [
@@ -91,7 +91,7 @@ export default function CutleryPage() {
                           <td className="px-4 py-2.5 text-right font-medium">{num(a.totalQty)}</td>
                           <td className={cn("px-4 py-2.5 text-right", out.get(a.id) ? "text-primary" : "text-text-muted")}>{out.get(a.id) ? num(out.get(a.id)!) : "–"}</td>
                           <td className="px-4 py-2.5 text-text-muted">{ruleText(a, menuCategories.find((c) => c.id === a.ruleCategoryId)?.name)}</td>
-                          <td className="px-4 py-2.5 text-right">{money(a.replacementCost)}</td>
+                          <td className="px-4 py-2.5 text-right">{rate(a.replacementCost)}</td>
                         </tr>
                       ))}
                     </tbody>

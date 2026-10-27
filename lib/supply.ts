@@ -7,7 +7,8 @@ import type { EventFunction, MenuItem, Order } from "./types";
 /** Rounds a quantity up to something a store keeper would actually weigh out. */
 export function roundQty(qty: number, unit: string) {
   const step = unit === "pcs" || unit === "dozen" || unit === "packet" || unit === "bunch" ? 1 : qty < 1 ? 0.05 : qty < 10 ? 0.1 : 0.5;
-  return Math.ceil(qty / step - 1e-9) * step;
+  // Cleaned to three places, since steps like 0.05 × 6 come out as 0.30000000000000004.
+  return Math.round(Math.ceil(qty / step - 1e-9) * step * 1000) / 1000;
 }
 
 export const fmtQty = (qty: number) => (Number.isInteger(qty) ? String(qty) : qty.toFixed(qty < 1 ? 2 : 1).replace(/\.?0+$/, ""));

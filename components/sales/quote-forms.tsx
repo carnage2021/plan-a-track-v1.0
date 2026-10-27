@@ -12,7 +12,8 @@ import { datesBetween, eventSpan } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { QuoteDraft } from "@/lib/types";
 import { cn, fmtDate, money, uid } from "@/lib/utils";
-import { eventTypes } from "./enquiry-sheet";
+import { useEventTypes } from "@/lib/event-types";
+import { ContactFields, withCurrent } from "./enquiry-sheet";
 import { nextService, ServiceCard } from "./service-fields";
 import { ExtraDishes, ReferralCard } from "./summary-extras";
 
@@ -27,6 +28,9 @@ const functionNames: Record<string, string[]> = {
 /** Step 1: who the client is and which functions the event has. */
 export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft; setDraft: SetDraft; showErrors?: boolean }) {
   const clients = useStore((s) => s.clients);
+  const users = useStore((s) => s.users);
+  const eventTypes = useEventTypes();
+  const contactsReady = useStore((s) => s.contactsReady);
   const match = clients.find((c) => c.id === draft.clientId);
   const suggestions = draft.clientName.length >= 2 && !match ? clients.filter((c) => c.name.toLowerCase().includes(draft.clientName.toLowerCase())).slice(0, 4) : [];
   const setFn = (id: string, patch: Partial<QuoteDraft["functions"][number]>) => setDraft((d) => ({ functions: d.functions.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
@@ -47,7 +51,7 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
               <ul className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-xl border bg-surface shadow-sheet">
                 {suggestions.map((c) => (
                   <li key={c.id}>
-                    <button type="button" className="flex h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm hover:bg-surface-muted" onClick={() => setDraft({ clientId: c.id, clientName: c.name, clientPhone: c.phone })}>
+                    <button type="button" className="flex h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm hover:bg-surface-muted" onClick={() => setDraft({ clientId: c.id, clientName: c.name, clientPhone: c.phone, clientEmail: c.email ?? "", clientAltPhone: c.altPhone ?? "", clientAddress: c.address ?? "" })}>
                       <span className="truncate">{c.name}</span><span className="tnum text-xs text-text-muted">{c.phone}</span>
                     </button>
                   </li>
@@ -59,8 +63,16 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
             <Input inputMode="tel" value={draft.clientPhone} onChange={(e) => setDraft({ clientPhone: e.target.value })} placeholder="98250 12345" />
           </Field>
           <Field label="Event type">
-            <Select value={draft.eventType} onChange={(e) => setDraft({ eventType: e.target.value })}>{eventTypes.map((t) => <option key={t}>{t}</option>)}</Select>
+            <Select value={draft.eventType} onChange={(e) => setDraft({ eventType: e.target.value })}>{withCurrent(eventTypes, draft.eventType).map((t) => <option key={t}>{t}</option>)}</Select>
           </Field>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <ContactFields
+            value={{ email: draft.clientEmail, altPhone: draft.clientAltPhone, address: draft.clientAddress, coordinatorId: draft.coordinatorId }}
+            onChange={(p) => setDraft({ ...("email" in p ? { clientEmail: p.email } : {}), ...("altPhone" in p ? { clientAltPhone: p.altPhone } : {}), ...("address" in p ? { clientAddress: p.address } : {}), ...("coordinatorId" in p ? { coordinatorId: p.coordinatorId } : {}) })}
+            users={users}
+            ready={contactsReady}
+          />
         </div>
         {match && <p className="mt-2 flex items-center gap-2 text-xs text-text-muted">Existing client{match.tags.map((t) => <Badge key={t} tone={t === "vip" ? "gold" : "info"}>{t === "vip" ? "VIP" : "Repeat client"}</Badge>)}</p>}
       </Card>

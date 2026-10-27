@@ -11,13 +11,13 @@ import { useStore } from "@/lib/store";
 import { festivalsOn } from "@/lib/festivals";
 import { tithiLabel } from "@/lib/tithi";
 import { blankFunction } from "@/lib/draft";
+import { useEventTypes } from "@/lib/event-types";
 import { useFoodTypes } from "@/lib/services";
-import type { Diet, Enquiry, EventFunction, LeadSource } from "@/lib/types";
+import type { Diet, Enquiry, EventFunction, LeadSource, TeamUser } from "@/lib/types";
 import { useUi } from "@/lib/ui";
 import { ServiceList } from "./service-fields";
 import { addDays, fmtDate, isoDate, num } from "@/lib/utils";
 
-export const eventTypes = ["Wedding", "Engagement", "Reception", "Birthday", "Anniversary", "Baby Shower", "Housewarming", "Corporate", "Religious", "Other"];
 const sources: { id: LeadSource; label: string }[] = [
   { id: "phone", label: "Phone call" },
   { id: "whatsapp", label: "WhatsApp" },
@@ -55,7 +55,7 @@ export function DateAvailability({ date }: { date: string; pax?: number }) {
   );
 }
 
-type Form = Omit<Enquiry, "id" | "createdAt" | "clientId" | "services"> & { name: string; phone: string; services: EventFunction[] };
+type Form = Omit<Enquiry, "id" | "createdAt" | "clientId" | "services"> & { name: string; phone: string; services: EventFunction[]; email: string; altPhone: string; address: string };
 
 /** Remounts each time it opens so the form starts from the enquiry being edited, or blank. */
 export function EnquirySheet() {
@@ -71,14 +71,17 @@ function EnquirySheetForm() {
   const users = useStore((s) => s.users);
   const currentUserId = useStore((s) => s.currentUserId);
   const ensureClient = useStore((s) => s.ensureClient);
+  const updateClientContact = useStore((s) => s.updateClientContact);
+  const contactsReady = useStore((s) => s.contactsReady);
   const saveEnquiry = useStore((s) => s.saveEnquiry);
   const foodTypes = useFoodTypes();
+  const eventTypes = useEventTypes();
 
   const blank = React.useCallback(
     (): Form => ({
       name: "",
       phone: "",
-      eventType: "Wedding",
+      eventType: eventTypes[0],
       date: date ?? "",
       venue: "",
       pax: 200,
@@ -90,13 +93,16 @@ function EnquirySheetForm() {
       assignedTo: users.find((u) => u.role === "sales" && !u.invited)?.id ?? currentUserId,
       followUpAt: isoDate(addDays(new Date(), 1)),
       services: [blankFunction("", date ?? "", 200, "")],
+      email: "",
+      altPhone: "",
+      address: "",
     }),
-    [date, users, currentUserId],
+    [date, users, currentUserId, eventTypes],
   );
   const [form, setForm] = React.useState<Form>(() =>
     existing
       ? // An enquiry saved before services existed becomes one service on its date.
-        { ...existing, name: client?.name ?? "", phone: client?.phone ?? "", services: existing.services?.length ? existing.services : [blankFunction(existing.eventType, existing.date, existing.pax, existing.venue)] }
+        { ...existing, name: client?.name ?? "", phone: client?.phone ?? "", email: client?.email ?? "", altPhone: client?.altPhone ?? "", address: client?.address ?? "", services: existing.services?.length ? existing.services : [blankFunction(existing.eventType, existing.date, existing.pax, existing.venue)] }
       : blank(),
   );
   const [touched, setTouched] = React.useState(false);
@@ -116,14 +122,17 @@ function EnquirySheetForm() {
     phone: form.phone.replace(/\D/g, "").length >= 10 ? "" : "Enter a 10-digit mobile number",
     date: form.date ? "" : "Pick the event date",
     services: form.services.every((x) => x.date) ? "" : "Every service needs a date",
+    email: !form.email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) ? "" : "Check the email address",
+    altPhone: !form.altPhone.trim() || form.altPhone.replace(/\D/g, "").length >= 10 ? "" : "Enter a 10-digit number, or leave it empty",
   };
-  const valid = !errors.name && !errors.phone && !errors.date && !errors.services;
+  const valid = !errors.name && !errors.phone && !errors.date && !errors.services && !errors.email && !errors.altPhone;
 
   const save = () => {
     setTouched(true);
     if (!valid) return;
-    const { name, phone, services, ...rest } = form;
+    const { name, phone, services, email, altPhone, address, ...rest } = form;
     const clientId = existing?.clientId ?? ensureClient(name, phone);
+    updateClientContact(clientId, { email, altPhone, address });
     // A service with no name takes its food type's name.
     const named = services.map((x, i) => ({ ...x, name: x.name.trim() || foodTypes.find((t) => t.id === x.foodTypeId)?.name || `Service ${i + 1}` }));
     saveEnquiry({ ...rest, services: named, clientId, id: existing?.id });
@@ -153,9 +162,10 @@ function EnquirySheetForm() {
           <Field label="Mobile number" error={touched ? errors.phone : ""} className="col-span-2 sm:col-span-1">
             <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} inputMode="tel" placeholder="98250 12345" disabled={!!existing} />
           </Field>
+          <ContactFields value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} users={users} ready={contactsReady} errors={touched ? errors : undefined} />
           <Field label="Event type">
             <Select value={form.eventType} onChange={(e) => set("eventType", e.target.value)}>
-              {eventTypes.map((t) => <option key={t}>{t}</option>)}
+              {withCurrent(eventTypes, form.eventType).map((t) => <option key={t}>{t}</option>)}
             </Select>
           </Field>
           <Field label="Venue">
@@ -210,5 +220,37 @@ function EnquirySheetForm() {
     </Sheet>
   );
 }
+
+/**
+ * Email, second number and home address of the client, and the team member coordinating with them. Shared by
+ * the enquiry form and the quotation and booking forms.
+ */
+export function ContactFields({ value, onChange, users, ready, errors }: { value: { email?: string; altPhone?: string; address?: string; coordinatorId?: string }; onChange: (patch: { email?: string; altPhone?: string; address?: string; coordinatorId?: string }) => void; users: TeamUser[]; ready: boolean; errors?: { email?: string; altPhone?: string } }) {
+  const team = users.filter((u) => !u.invited);
+  return (
+    <>
+      <Field label="Email" error={errors?.email} className="col-span-2 sm:col-span-1">
+        <Input type="email" inputMode="email" value={value.email ?? ""} onChange={(e) => onChange({ email: e.target.value })} placeholder="client@example.com" />
+      </Field>
+      <Field label="Alternate number" error={errors?.altPhone} className="col-span-2 sm:col-span-1" hint={ready ? undefined : "Saved once the 0016 database update is run."}>
+        <Input inputMode="tel" value={value.altPhone ?? ""} onChange={(e) => onChange({ altPhone: e.target.value })} placeholder="Another number to reach them" />
+      </Field>
+      <Field label="Residential address" className="col-span-2">
+        <Textarea rows={2} value={value.address ?? ""} onChange={(e) => onChange({ address: e.target.value })} placeholder="House, society, area, city" />
+      </Field>
+      <Field label="Coordinator" className="col-span-2 sm:col-span-1" hint={ready ? "From your team; the client deals with them for this event." : "Saved once the 0016 database update is run."}>
+        <Select value={value.coordinatorId ?? ""} onChange={(e) => onChange({ coordinatorId: e.target.value || undefined })}>
+          <option value="">Not chosen yet</option>
+          {team.map((u) => <option key={u.id} value={u.id}>{u.name}{u.role !== "owner" ? ` · ${roleLabel[u.role]}` : " · owner"}</option>)}
+        </Select>
+      </Field>
+    </>
+  );
+}
+
+const roleLabel: Record<TeamUser["role"], string> = { owner: "owner", sales: "sales", operations: "operations", kitchen: "kitchen", store: "store", accountant: "accounts" };
+
+/** The account's event types, plus the one already chosen if it has since been removed from the list. */
+export const withCurrent = (list: string[], current?: string) => (current && !list.includes(current) ? [current, ...list] : list);
 
 export const leadSourceLabel = (s: LeadSource) => sources.find((x) => x.id === s)?.label ?? s;

@@ -16,6 +16,18 @@ export function num(n: number) {
   return inr.format(n);
 }
 
+const inrPaise = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
+
+/** A number with its paise kept when it has any: 1,250 or 1.78. */
+export function decimal(n: number) {
+  return inrPaise.format(n);
+}
+
+/** A unit rate in rupees with its paise, e.g. ₹1.78 per piece; totals use money(). */
+export function rate(amount: number) {
+  return `₹${inrPaise.format(amount)}`;
+}
+
 /** Short form for stat cards: ₹4.2L, ₹1.1Cr */
 export function moneyShort(amount: number) {
   if (amount >= 1e7) return `₹${(amount / 1e7).toFixed(2).replace(/\.?0+$/, "")}Cr`;

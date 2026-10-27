@@ -57,6 +57,12 @@ interface Data {
   referralsReady: boolean;
   /** False until 0015 has added sub-categories */
   subcategoriesReady: boolean;
+  /** False until 0016 has added the client's second phone and the coordinator */
+  contactsReady: boolean;
+  /** The account's own event types, in order; empty means the standard list */
+  eventTypes: { id: string; name: string }[];
+  /** False until 0017 has added event types */
+  eventTypesReady: boolean;
   tenantId: string;
   tenant: Tenant;
   users: TeamUser[];
@@ -96,6 +102,10 @@ interface Actions {
   removeUser: (id: string) => void;
   ensureClient: (name: string, phone: string, id?: string) => string;
   saveClient: (client: Client) => void;
+  /** Saves the account's event types as given: new ones are added, names and order updated, missing ones removed. */
+  setEventTypes: (next: { id: string; name: string }[]) => Promise<void>;
+  /** Fills in or corrects a client's email, second phone and address; blanks leave what is there. */
+  updateClientContact: (clientId: string, contact: { email?: string; altPhone?: string; address?: string }) => void;
   saveEnquiry: (enquiry: Omit<Enquiry, "id" | "createdAt"> & { id?: string }) => string;
   moveEnquiry: (id: string, stage: EnquiryStage, lostReason?: string) => void;
   saveItem: (item: Omit<MenuItem, "id"> & { id?: string }) => void;
@@ -143,7 +153,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, subcategoriesReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -267,6 +277,34 @@ export const useStore = create<Store>()(
         background((sb) => run(sb.from("clients").update(clientRow(client)).eq("id", client.id), "Saving the client"));
       },
 
+      setEventTypes: async (next) => {
+        const before = get().eventTypes;
+        const clean = next.map((e) => ({ ...e, name: e.name.trim() })).filter((e) => e.name);
+        set({ eventTypes: clean });
+        try {
+          await write(async (sb) => {
+            const gone = before.filter((b) => !clean.some((e) => e.id === b.id)).map((b) => b.id);
+            if (gone.length) await run(sb.from("event_types").delete().in("id", gone), "Removing event types");
+            // Names are unique per account, so renames and swaps go through a temporary name first.
+            const renamed = clean.filter((e) => before.some((b) => b.id === e.id && b.name !== e.name));
+            for (const e of renamed) await run(sb.from("event_types").update({ name: `${e.id}~` }).eq("id", e.id), "Renaming event types");
+            if (clean.length) await run(sb.from("event_types").upsert(clean.map((e, i) => ({ id: e.id, name: e.name, sort_order: i }))), "Saving event types");
+          });
+        } catch (e) {
+          set({ eventTypes: before });
+          throw e;
+        }
+      },
+      updateClientContact: (clientId, contact) => {
+        const client = get().clients.find((c) => c.id === clientId);
+        if (!client) return;
+        const next = { ...client };
+        for (const k of ["email", "altPhone", "address"] as const) {
+          const v = contact[k]?.trim();
+          if (v && v !== client[k]) next[k] = v;
+        }
+        if (JSON.stringify(next) !== JSON.stringify(client)) get().saveClient(next);
+      },
       saveEnquiry: (enquiry) => {
         const id = enquiry.id ?? uid();
         const saved: Enquiry = { ...enquiry, id, createdAt: get().enquiries.find((e) => e.id === id)?.createdAt ?? today() };
@@ -415,6 +453,7 @@ export const useStore = create<Store>()(
 
       createQuotation: async (draft, status) => {
         const clientId = get().ensureClient(draft.clientName, draft.clientPhone, draft.clientId);
+        get().updateClientContact(clientId, { email: draft.clientEmail, altPhone: draft.clientAltPhone, address: draft.clientAddress });
         const s = get();
         const previous = s.quotations.find((q) => q.id === draft.reviseOf);
         const id = uid();
@@ -445,6 +484,7 @@ export const useStore = create<Store>()(
             createdAt: today(),
             referralCode: draft.referralCode?.trim().toUpperCase() || undefined,
             creditUsed: draft.creditUsed || 0,
+            coordinatorId: draft.coordinatorId || undefined,
           };
           await insertQuotation(sb, q);
           if (previous) await run(sb.from("quotations").update({ status: "superseded" }).eq("group_id", previous.groupId).neq("id", id), "Closing the older version");
@@ -491,6 +531,7 @@ export const useStore = create<Store>()(
             createdAt: today(),
             referralCode: q.referralCode,
             creditUsed: q.creditUsed || 0,
+            coordinatorId: q.coordinatorId,
           };
           await insertOrder(sb, o);
           // Booking spends the client's referral credit, and ties a referred client to whoever referred them.

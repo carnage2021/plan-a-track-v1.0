@@ -14,7 +14,7 @@ import { fmtQty, poTotal } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { PoStatus, PurchaseOrder } from "@/lib/supply-types";
 import { printLight } from "@/lib/ui";
-import { cn, fmtDate, fmtTime, isoDate, money, whatsappLink } from "@/lib/utils";
+import { cn, fmtDate, fmtTime, isoDate, money, rate, whatsappLink } from "@/lib/utils";
 import { Num } from "./common";
 import { logWhatsApp } from "@/lib/messages";
 import { useAccess } from "@/lib/access";
@@ -118,7 +118,7 @@ function PoSheet({ po, onClose }: { po: PurchaseOrder; onClose: () => void }) {
                       <td className="py-2">{ing(l.ingredientId)?.name}<span className="block text-xs text-text-muted">{l.deliverOn ? fmtDate(l.deliverOn, { day: "numeric", month: "short" }) : ""}{l.deliverTime ? `, ${fmtTime(l.deliverTime)}` : ""} · {l.deliverPlace}</span></td>
                       <td className="py-2 text-right">{fmtQty(l.qty)} {ing(l.ingredientId)?.unit}</td>
                       <td className={cn("py-2 text-right", short && "text-warning", excess && "text-info")}>{l.receivedQty === null ? "–" : fmtQty(l.receivedQty)}{short ? " short" : excess ? " excess" : ""}</td>
-                      <td className={cn("py-2 text-right", l.receivedRate !== null && l.receivedRate !== l.rate && "text-warning")}>{money(l.receivedRate ?? l.rate)}</td>
+                      <td className={cn("py-2 text-right", l.receivedRate !== null && l.receivedRate !== l.rate && "text-warning")}>{rate(l.receivedRate ?? l.rate)}</td>
                       <td className="py-2 text-right">{money((l.receivedQty ?? l.qty) * (l.receivedRate ?? l.rate))}</td>
                     </tr>
                   );

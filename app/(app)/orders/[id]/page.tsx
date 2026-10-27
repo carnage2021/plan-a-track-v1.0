@@ -101,6 +101,7 @@ function OrderView({ order }: { order: Order }) {
   const client = clients.find((c) => c.id === order.clientId);
   const referrer = referrerOf(clients, order.referralCode, order.clientId);
   const manager = users.find((u) => u.id === order.managerId);
+  const coordinator = users.find((u) => u.id === order.coordinatorId);
   const quote = quotations.find((q) => q.id === order.quotationId);
   const functions = [...order.functions].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
   const startTab = useSearchParams().get("tab") ?? "overview";
@@ -224,6 +225,20 @@ function OrderView({ order }: { order: Order }) {
                   <Avatar name={manager.name} />
                   <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{manager.name}</p><p className="text-xs text-text-muted">Event manager</p></div>
                 </div>
+              )}
+              {coordinator && (
+                <div className="mt-3 flex items-center gap-3">
+                  <Avatar name={coordinator.name} />
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{coordinator.name}</p><p className="tnum text-xs text-text-muted">Coordinator{coordinator.phone ? ` · ${coordinator.phone}` : ""}</p></div>
+                  {coordinator.phone && <Button variant="ghost" size="icon" asChild aria-label="Call coordinator"><a href={`tel:${coordinator.phone.replace(/\s/g, "")}`}><Phone strokeWidth={1.75} /></a></Button>}
+                </div>
+              )}
+              {(client?.altPhone || client?.email || client?.address) && (
+                <p className="tnum mt-3 space-y-0.5 rounded-lg bg-surface-muted p-3 text-xs text-text-muted">
+                  {client.altPhone && <span className="block">Alternate number: <a className="text-primary hover:underline" href={`tel:${client.altPhone.replace(/\s/g, "")}`}>{client.altPhone}</a></span>}
+                  {client.email && <span className="block">Email: <a className="text-primary hover:underline" href={`mailto:${client.email}`}>{client.email}</a></span>}
+                  {client.address && <span className="block">Address: {client.address}</span>}
+                </p>
               )}
               {(order.referralCode || (order.creditUsed ?? 0) > 0) && (
                 <div className="mt-3 space-y-1 rounded-lg bg-surface-muted p-3 text-xs">

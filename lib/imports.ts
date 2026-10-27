@@ -12,7 +12,7 @@ import { uid } from "./utils";
 // Phase 7 (plan A3): every master list can come from an Excel or CSV file, checked row by row before
 // anything is saved. Each import remembers what it created so the last one can be undone.
 
-export type ListKey = "menu" | "packages" | "vendors" | "workers" | "clients" | "ingredients" | "cutlery";
+export type ListKey = "menu" | "packages" | "vendors" | "workers" | "clients" | "ingredients" | "cutlery" | "events";
 type Cell = string | number | boolean | Date | null | undefined;
 export interface Column { label: string; required?: boolean; example: string; kind?: "number" | "date"; options?: Record<string, string> }
 /* eslint-disable @typescript-eslint/no-explicit-any -- rows go straight to PostgREST */
@@ -277,6 +277,19 @@ export const lists: ListSpec[] = [
       return [{ table: "assets", rows: records.map((r) => assetRow({ id: uid(), name: r.Item, category: r.Category || "Crockery", totalQty: num(r["Total quantity"]), replacementCost: num(r["Replacement cost"]), location: r["Storage location"] ?? "", ruleBasis: "manual", ruleValue: 0 })) }];
     },
     rows: () => useSupply.getState().assets.map((a) => ({ Item: a.name, Category: a.category, "Total quantity": a.totalQty, "Replacement cost": a.replacementCost, "Storage location": a.location })),
+  },
+  {
+    key: "events",
+    label: "Event types",
+    columns: [{ label: "Event type", required: true, example: "Wedding" }],
+    // An account still on the standard list has none of its own, so every row comes in.
+    existing: () => new Set(useStore.getState().eventTypes.map((e) => norm(e.name))),
+    identity: (r) => norm(r["Event type"]),
+    build(records) {
+      const start = useStore.getState().eventTypes.length;
+      return [{ table: "event_types", rows: records.map((r, i) => ({ id: uid(), name: r["Event type"].trim(), sort_order: start + i })) }];
+    },
+    rows: () => useStore.getState().eventTypes.map((e) => ({ "Event type": e.name })),
   },
 ];
 

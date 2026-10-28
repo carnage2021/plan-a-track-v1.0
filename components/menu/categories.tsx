@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, CornerDownRight, PencilLine, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowDownAZ, ArrowUp, CornerDownRight, GripVertical, PencilLine, Plus, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -208,11 +208,25 @@ export function CategoriesEditor({ canEdit }: { canEdit: boolean }) {
     reorderCategories(treeOrder(ids.map((id) => categories.find((x) => x.id === id)!)).map((x) => x.c.id));
   };
 
+  /** Dragging: a category drops onto another at the same level and takes its place; everything inside moves with it. */
+  const [drag, setDrag] = React.useState<MenuCategory | null>(null);
+  const [over, setOver] = React.useState("");
+  const sameLevel = (a: MenuCategory, b: MenuCategory) => (a.parentId ?? "") === (b.parentId ?? "");
+  const place = (c: MenuCategory, target: MenuCategory) => {
+    if (c.id === target.id || !sameLevel(c, target)) return;
+    const ids = categories.map((x) => x.id).filter((id) => id !== c.id);
+    const down = tree.findIndex((x) => x.c.id === c.id) < tree.findIndex((x) => x.c.id === target.id);
+    ids.splice(ids.indexOf(target.id) + (down ? 1 : 0), 0, c.id);
+    reorderCategories(treeOrder(ids.map((id) => categories.find((x) => x.id === id)!)).map((x) => x.c.id));
+  };
+  /** Every level in alphabetical order, sub-categories too. */
+  const sortAZ = () => reorderCategories(treeOrder([...categories].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))).map((x) => x.c.id));
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-2xl text-sm text-text-muted">The order here is the order on the menu screen, in packages and on every menu card and quotation. {subReady ? "Put sub-categories inside a category, like Main course › Sabji › Paneer sabji." : "Run the 0015 database update to add sub-categories."}</p>
-        {canEdit && <Button variant="primary" onClick={() => setEditing({})}><Plus strokeWidth={2} />Add category</Button>}
+        <p className="max-w-2xl text-sm text-text-muted">Drag a row, or use the arrows, to change the order. The order here is the order on the menu screen, in packages and on every menu card and quotation. {subReady ? "Put sub-categories inside a category, like Main course › Sabji › Paneer sabji." : "Run the 0015 database update to add sub-categories."}</p>
+        {canEdit && <div className="flex flex-wrap gap-2"><Button onClick={sortAZ}><ArrowDownAZ strokeWidth={1.75} />Sort A to Z</Button><Button variant="primary" onClick={() => setEditing({})}><Plus strokeWidth={2} />Add category</Button></div>}
       </div>
       <Card className="divide-y overflow-hidden">
         {tree.map(({ c, depth }) => {
@@ -224,11 +238,24 @@ export function CategoriesEditor({ canEdit }: { canEdit: boolean }) {
           const level = tree.filter((x) => (x.c.parentId ?? "") === (c.parentId ?? ""));
           const at = level.findIndex((x) => x.c.id === c.id);
           return (
-            <div key={c.id} className={cn("flex items-center gap-3 py-2.5 pr-3 md:pr-4", depth > 0 && "bg-surface-muted/40")} style={{ paddingLeft: 12 + depth * 28 }}>
+            <div
+              key={c.id}
+              draggable={canEdit}
+              onDragStart={(e) => { setDrag(c); e.dataTransfer.effectAllowed = "move"; }}
+              onDragOver={(e) => { if (drag && drag.id !== c.id && sameLevel(drag, c)) { e.preventDefault(); setOver(c.id); } }}
+              onDragLeave={() => setOver((o) => (o === c.id ? "" : o))}
+              onDrop={(e) => { e.preventDefault(); if (drag) place(drag, c); setDrag(null); setOver(""); }}
+              onDragEnd={() => { setDrag(null); setOver(""); }}
+              className={cn("flex items-center gap-3 py-2.5 pr-3 md:pr-4", depth > 0 && "bg-surface-muted/40", canEdit && "cursor-grab active:cursor-grabbing", drag?.id === c.id && "opacity-50", over === c.id && "bg-primary-soft ring-2 ring-inset ring-primary")}
+              style={{ paddingLeft: 12 + depth * 28 }}
+            >
               {canEdit && (
+                <span className="flex shrink-0 items-center">
+                <GripVertical className="size-4 text-text-muted" strokeWidth={1.75} aria-hidden />
                 <span className="flex shrink-0 flex-col">
                   <button type="button" disabled={at === 0} onClick={() => move(c, -1)} aria-label={`Move ${c.name} up`} className="grid size-6 place-items-center rounded text-text-muted hover:bg-surface-muted hover:text-text disabled:opacity-30"><ArrowUp className="size-4" strokeWidth={1.75} /></button>
                   <button type="button" disabled={at === level.length - 1} onClick={() => move(c, 1)} aria-label={`Move ${c.name} down`} className="grid size-6 place-items-center rounded text-text-muted hover:bg-surface-muted hover:text-text disabled:opacity-30"><ArrowDown className="size-4" strokeWidth={1.75} /></button>
+                </span>
                 </span>
               )}
               {depth > 0 && <CornerDownRight className="size-4 shrink-0 text-text-muted" strokeWidth={1.75} />}

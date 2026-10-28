@@ -69,8 +69,8 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <ContactFields
-            value={{ email: draft.clientEmail, altPhone: draft.clientAltPhone, address: draft.clientAddress, coordinatorId: draft.coordinatorId }}
-            onChange={(p) => setDraft({ ...("email" in p ? { clientEmail: p.email } : {}), ...("altPhone" in p ? { clientAltPhone: p.altPhone } : {}), ...("address" in p ? { clientAddress: p.address } : {}), ...("coordinatorId" in p ? { coordinatorId: p.coordinatorId } : {}) })}
+            value={{ email: draft.clientEmail, altPhone: draft.clientAltPhone, address: draft.clientAddress, coordinatorId: draft.coordinatorId, coordinator: draft.coordinator }}
+            onChange={(p) => setDraft({ ...("email" in p ? { clientEmail: p.email } : {}), ...("altPhone" in p ? { clientAltPhone: p.altPhone } : {}), ...("address" in p ? { clientAddress: p.address } : {}), ...("coordinatorId" in p ? { coordinatorId: p.coordinatorId } : {}), ...("coordinator" in p ? { coordinator: p.coordinator } : {}) })}
             users={users}
             ready={contactsReady}
           />

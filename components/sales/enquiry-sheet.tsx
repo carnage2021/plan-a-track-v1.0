@@ -13,7 +13,7 @@ import { tithiLabel } from "@/lib/tithi";
 import { blankFunction } from "@/lib/draft";
 import { useEventTypes } from "@/lib/event-types";
 import { useFoodTypes } from "@/lib/services";
-import type { Diet, Enquiry, EventFunction, LeadSource, TeamUser } from "@/lib/types";
+import type { Coordinator, Diet, Enquiry, EventFunction, LeadSource, TeamUser } from "@/lib/types";
 import { useUi } from "@/lib/ui";
 import { ServiceList } from "./service-fields";
 import { addDays, fmtDate, isoDate, num } from "@/lib/utils";
@@ -225,8 +225,10 @@ function EnquirySheetForm() {
  * Email, second number and home address of the client, and the team member coordinating with them. Shared by
  * the enquiry form and the quotation and booking forms.
  */
-export function ContactFields({ value, onChange, users, ready, errors }: { value: { email?: string; altPhone?: string; address?: string; coordinatorId?: string }; onChange: (patch: { email?: string; altPhone?: string; address?: string; coordinatorId?: string }) => void; users: TeamUser[]; ready: boolean; errors?: { email?: string; altPhone?: string } }) {
+export function ContactFields({ value, onChange, users, ready, errors }: { value: { email?: string; altPhone?: string; address?: string; coordinatorId?: string; coordinator?: Coordinator }; onChange: (patch: { email?: string; altPhone?: string; address?: string; coordinatorId?: string; coordinator?: Coordinator }) => void; users: TeamUser[]; ready: boolean; errors?: { email?: string; altPhone?: string } }) {
   const team = users.filter((u) => !u.invited);
+  const listId = React.useId();
+  const co = coordinatorOf(value, users) ?? { name: "", phone: "", email: "" };
   return (
     <>
       <Field label="Email" error={errors?.email} className="col-span-2 sm:col-span-1">
@@ -238,11 +240,24 @@ export function ContactFields({ value, onChange, users, ready, errors }: { value
       <Field label="Residential address" className="col-span-2">
         <Textarea rows={2} value={value.address ?? ""} onChange={(e) => onChange({ address: e.target.value })} placeholder="House, society, area, city" />
       </Field>
-      <Field label="Coordinator" className="col-span-2 sm:col-span-1" hint={ready ? "From your team; the client deals with them for this event." : "Saved once the 0016 database update is run."}>
-        <Select value={value.coordinatorId ?? ""} onChange={(e) => onChange({ coordinatorId: e.target.value || undefined })}>
-          <option value="">Not chosen yet</option>
-          {team.map((u) => <option key={u.id} value={u.id}>{u.name}{u.role !== "owner" ? ` · ${roleLabel[u.role]}` : " · owner"}</option>)}
-        </Select>
+      <Field label="Coordinator name" className="col-span-2 sm:col-span-1" hint={ready ? "Type any name, or pick from your team." : "Saved once the 0016 database update is run."}>
+        <Input
+          list={listId}
+          value={co.name}
+          onChange={(e) => {
+            // Picking a team member links them and fills their phone; any other name is kept as typed.
+            const u = team.find((x) => x.name.toLowerCase() === e.target.value.trim().toLowerCase());
+            onChange({ coordinatorId: u?.id, coordinator: { ...co, name: e.target.value, phone: u && !co.phone ? u.phone : co.phone } });
+          }}
+          placeholder="Type a name or pick from your team"
+        />
+        <datalist id={listId}>{team.map((u) => <option key={u.id} value={u.name}>{u.role === "owner" ? "owner" : roleLabel[u.role]}</option>)}</datalist>
+      </Field>
+      <Field label="Coordinator phone" className="col-span-2 sm:col-span-1">
+        <Input inputMode="tel" value={co.phone} onChange={(e) => onChange({ coordinator: { ...co, phone: e.target.value } })} placeholder="Mobile number" />
+      </Field>
+      <Field label="Coordinator email" className="col-span-2 sm:col-span-1">
+        <Input type="email" inputMode="email" value={co.email} onChange={(e) => onChange({ coordinator: { ...co, email: e.target.value } })} placeholder="coordinator@example.com" />
       </Field>
     </>
   );
@@ -254,3 +269,10 @@ const roleLabel: Record<TeamUser["role"], string> = { owner: "owner", sales: "sa
 export const withCurrent = (list: string[], current?: string) => (current && !list.includes(current) ? [current, ...list] : list);
 
 export const leadSourceLabel = (s: LeadSource) => sources.find((x) => x.id === s)?.label ?? s;
+
+/** The coordinator as saved, or, for records made before names could be typed, the linked team member. */
+export function coordinatorOf(r: { coordinatorId?: string; coordinator?: Coordinator }, users: TeamUser[]): Coordinator | undefined {
+  if (r.coordinator?.name.trim()) return r.coordinator;
+  const u = users.find((x) => x.id === r.coordinatorId);
+  return u ? { name: u.name, phone: u.phone, email: "" } : undefined;
+}

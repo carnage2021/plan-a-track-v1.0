@@ -7,6 +7,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { ReceiptPreview, modeLabel, receiptText } from "@/components/sales/payment-sheet";
 import { TableQr } from "@/components/documents/table-qr";
+import { coordinatorOf } from "@/components/sales/enquiry-sheet";
 import { EventSheet } from "@/components/sales/event-sheet";
 import { NamePlates } from "@/components/sales/name-plates";
 import { QuoteDocument } from "@/components/sales/quote-document";
@@ -101,7 +102,7 @@ function OrderView({ order }: { order: Order }) {
   const client = clients.find((c) => c.id === order.clientId);
   const referrer = referrerOf(clients, order.referralCode, order.clientId);
   const manager = users.find((u) => u.id === order.managerId);
-  const coordinator = users.find((u) => u.id === order.coordinatorId);
+  const coordinator = coordinatorOf(order, users);
   const quote = quotations.find((q) => q.id === order.quotationId);
   const functions = [...order.functions].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
   const startTab = useSearchParams().get("tab") ?? "overview";
@@ -229,7 +230,7 @@ function OrderView({ order }: { order: Order }) {
               {coordinator && (
                 <div className="mt-3 flex items-center gap-3">
                   <Avatar name={coordinator.name} />
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{coordinator.name}</p><p className="tnum text-xs text-text-muted">Coordinator{coordinator.phone ? ` · ${coordinator.phone}` : ""}</p></div>
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{coordinator.name}</p><p className="tnum truncate text-xs text-text-muted">Coordinator{coordinator.phone ? ` · ${coordinator.phone}` : ""}{coordinator.email ? ` · ${coordinator.email}` : ""}</p></div>
                   {coordinator.phone && <Button variant="ghost" size="icon" asChild aria-label="Call coordinator"><a href={`tel:${coordinator.phone.replace(/\s/g, "")}`}><Phone strokeWidth={1.75} /></a></Button>}
                 </div>
               )}

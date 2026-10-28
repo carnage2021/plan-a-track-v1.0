@@ -102,6 +102,8 @@ export interface DocSettings {
   signaturePath?: string;
 }
 
+export interface Coordinator { name: string; phone: string; email: string }
+
 export interface TeamUser {
   id: string;
   name: string;
@@ -158,6 +160,8 @@ export interface Enquiry {
   services?: EventFunction[];
   /** Team member coordinating with the client; follows the enquiry into its quotation and booking */
   coordinatorId?: string;
+  /** The coordinator's name, phone and email as typed (or filled from the team) */
+  coordinator?: Coordinator;
 }
 
 export interface MenuCategory {
@@ -283,6 +287,8 @@ export interface Quotation {
   /** Referral credit taken off this quotation, in rupees */
   creditUsed?: number;
   coordinatorId?: string;
+  /** The coordinator's name, phone and email as typed (or filled from the team) */
+  coordinator?: Coordinator;
 }
 
 export type OrderStatus = "tentative" | "confirmed" | "in_progress" | "completed" | "cancelled";
@@ -333,6 +339,8 @@ export interface Order {
   rawOverrides?: Record<string, number>;
   /** Team member coordinating the event with the client */
   coordinatorId?: string;
+  /** The coordinator's name, phone and email as typed (or filled from the team) */
+  coordinator?: Coordinator;
 }
 
 /** Work in progress in the quotation builder or booking mode */
@@ -355,4 +363,6 @@ export interface QuoteDraft {
   clientAltPhone?: string;
   clientAddress?: string;
   coordinatorId?: string;
+  /** The coordinator's name, phone and email as typed (or filled from the team) */
+  coordinator?: Coordinator;
 }

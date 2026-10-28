@@ -488,6 +488,7 @@ export const useStore = create<Store>()(
             referralCode: draft.referralCode?.trim().toUpperCase() || undefined,
             creditUsed: draft.creditUsed || 0,
             coordinatorId: draft.coordinatorId || undefined,
+            coordinator: draft.coordinator?.name.trim() ? draft.coordinator : undefined,
           };
           await insertQuotation(sb, q);
           if (previous) await run(sb.from("quotations").update({ status: "superseded" }).eq("group_id", previous.groupId).neq("id", id), "Closing the older version");
@@ -535,6 +536,7 @@ export const useStore = create<Store>()(
             referralCode: q.referralCode,
             creditUsed: q.creditUsed || 0,
             coordinatorId: q.coordinatorId,
+            coordinator: q.coordinator,
           };
           await insertOrder(sb, o);
           // Booking spends the client's referral credit, and ties a referred client to whoever referred them.

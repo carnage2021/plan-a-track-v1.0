@@ -34,14 +34,14 @@ function Builder() {
     const quote = s.quotations.find((q) => q.id === reviseId);
     if (quote) {
       const c = s.clients.find((x) => x.id === quote.clientId);
-      return { ...blankDraft(), clientId: quote.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: quote.coordinatorId, eventType: quote.eventType, functions: quote.functions, extras: quote.extras, discount: quote.discount, reviseOf: quote.id, enquiryId: quote.enquiryId, referralCode: quote.referralCode, creditUsed: quote.creditUsed, step: 1 };
+      return { ...blankDraft(), clientId: quote.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: quote.coordinatorId, coordinator: quote.coordinator, eventType: quote.eventType, functions: quote.functions, extras: quote.extras, discount: quote.discount, reviseOf: quote.id, enquiryId: quote.enquiryId, referralCode: quote.referralCode, creditUsed: quote.creditUsed, step: 1 };
     }
     const enquiry = s.enquiries.find((e) => e.id === enquiryId);
     if (enquiry) {
       const c = s.clients.find((x) => x.id === enquiry.clientId);
       // The services asked for in the enquiry become the quotation's functions, menus still to pick.
       const functions = enquiry.services?.length ? enquiry.services.map((f) => ({ ...f, id: uid(), itemIds: [] })) : [blankFunction(enquiry.eventType, enquiry.date, enquiry.pax, enquiry.venue)];
-      return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: enquiry.coordinatorId, eventType: enquiry.eventType, enquiryId, functions, step: 1 };
+      return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: enquiry.coordinatorId, coordinator: enquiry.coordinator, eventType: enquiry.eventType, enquiryId, functions, step: 1 };
     }
     return blankDraft();
   }, [enquiryId, reviseId]);

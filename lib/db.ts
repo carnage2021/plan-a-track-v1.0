@@ -36,7 +36,7 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
  * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
  * added the client's second phone and the coordinator. */
-export const schema = { supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false };
+export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -184,6 +184,7 @@ export const enquiryRow = (e: Enquiry): Row => ({
   follow_up_at: e.followUpAt || null,
   lost_reason: e.lostReason ?? null,
   ...(schema.contacts ? { coordinator_id: e.coordinatorId || null } : {}),
+  ...(schema.coordinator ? { coordinator: e.coordinator ?? null } : {}),
   ...(schema.services ? { event_end_date: e.endDate && e.endDate > e.date ? e.endDate : null, services: e.services ?? [] } : {}),
 });
 
@@ -205,6 +206,7 @@ const quotationRow = (q: Quotation): Row => ({
   created_by: q.createdBy || null,
   ...(schema.referrals ? { referral_code: q.referralCode || null, credit_used: q.creditUsed ?? 0 } : {}),
   ...(schema.contacts ? { coordinator_id: q.coordinatorId || null } : {}),
+  ...(schema.coordinator ? { coordinator: q.coordinator ?? null } : {}),
 });
 
 const orderRow = (o: Order): Row => ({
@@ -224,6 +226,7 @@ const orderRow = (o: Order): Row => ({
   ...(schema.supply ? { commission_pct: o.commissionPct } : {}),
   ...(schema.referrals ? { referral_code: o.referralCode || null, credit_used: o.creditUsed ?? 0, referral_rewarded: !!o.referralRewarded, raw_overrides: o.rawOverrides ?? {} } : {}),
   ...(schema.contacts ? { coordinator_id: o.coordinatorId || null } : {}),
+  ...(schema.coordinator ? { coordinator: o.coordinator ?? null } : {}),
 });
 
 export const paymentRow = (p: Payment, orderId: string, recordedBy?: string): Row => ({
@@ -340,6 +343,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   // Asked of the database, not read off a loaded client, so an account with no clients yet still saves them.
   clientDates = !(await sb.from("clients").select("birthday").limit(1)).error;
   schema.contacts = !(await sb.from("enquiries").select("coordinator_id").limit(1)).error;
+  schema.coordinator = !(await sb.from("enquiries").select("coordinator").limit(1)).error;
   const eventRows = await sb.from("event_types").select("id,name,sort_order").order("sort_order").order("created_at");
   const branchesEnabled = !branchProbe.error;
   const branchList = ((branchRows.data ?? []) as Row[]).map((b) => ({ id: b.id as string, name: b.name as string, address: b.address as string }));
@@ -458,6 +462,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       endDate: e.event_end_date ? day(e.event_end_date) : undefined,
       services: Array.isArray(e.services) && e.services.length ? e.services : undefined,
       coordinatorId: e.coordinator_id ?? undefined,
+      coordinator: e.coordinator ?? undefined,
     })),
     quotations: rowsOf(quotations, "Loading quotations").filter(inBranch).map((q) => ({
       id: q.id,
@@ -480,6 +485,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       referralCode: q.referral_code ?? undefined,
       creditUsed: Number(q.credit_used ?? 0),
       coordinatorId: q.coordinator_id ?? undefined,
+      coordinator: q.coordinator ?? undefined,
     })),
     orders: rowsOf(orders, "Loading orders").filter(inBranch).map((o) => ({
       id: o.id,
@@ -505,6 +511,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       referralRewarded: !!o.referral_rewarded,
       rawOverrides: o.raw_overrides && Object.keys(o.raw_overrides).length ? o.raw_overrides : undefined,
       coordinatorId: o.coordinator_id ?? undefined,
+      coordinator: o.coordinator ?? undefined,
     })),
     branches: branchList,
     branchesEnabled,

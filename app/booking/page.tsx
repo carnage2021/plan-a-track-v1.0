@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import { PdfDownloads } from "@/components/documents/doc-actions";
 import { MenuSelector } from "@/components/menu/menu-selector";
 import { PaymentSheet } from "@/components/sales/payment-sheet";
 import { QuoteDocument } from "@/components/sales/quote-document";
@@ -41,6 +42,10 @@ function Booked({ order, onNew }: { order: Order; onNew: () => void }) {
           <div><dt className="text-xs text-text-muted">Balance</dt><dd className="font-heading text-lg font-bold">{money(due)}</dd></div>
         </dl>
         {paid === 0 && <p className="mt-3 rounded-lg bg-warning/10 p-3 text-xs text-warning">The date is held as tentative. Record the advance to confirm it.</p>}
+      </Card>
+      <Card className="mt-4 p-4 text-left">
+        <p className="mb-2 text-sm font-medium">Booking confirmation PDF</p>
+        <PdfDownloads kind="confirmation" id={order.id} lang={client?.language ?? "en"} functions={order.functions} />
       </Card>
       <div className="mt-6 flex flex-col gap-2">
         {due > 0 && <Button variant={paid === 0 ? "primary" : "secondary"} size="lg" onClick={() => openPayment(order.id)}><Wallet strokeWidth={1.75} />{paid === 0 ? "Record the advance" : "Record another payment"}</Button>}

@@ -78,6 +78,9 @@ async function nextNumber(docType: string) {
   return res.data as number;
 }
 
+/** "19:00" -> "18:00"; never before midnight. */
+const hourBefore = (t: string) => { const [h, m] = (t || "12:00").split(":").map(Number); return `${String(Math.max(0, h - 1)).padStart(2, "0")}:${String(m || 0).padStart(2, "0")}`; };
+
 export const useSupply = create<SupplyStore>()((set, get) => {
   /** Dish costs follow ingredient rates: recompute and save any dish whose recipe uses these ingredients. */
   const recost = (ingredientIds: string[]) => {
@@ -261,17 +264,19 @@ export const useSupply = create<SupplyStore>()((set, get) => {
       const main = useStore.getState();
       const order = main.orders.find((o) => o.id === orderId);
       if (!order) return 0;
-      const client = main.clients.find((c) => c.id === order.clientId);
       const drafts: Omit<OutsourceOrder, "number">[] = [];
       for (const fn of order.functions) {
         const byVendor = new Map<string, typeof main.items>();
         for (const item of main.items) if (fn.itemIds.includes(item.id) && item.outsourced && item.agencyId) byVendor.set(item.agencyId, [...(byVendor.get(item.agencyId) ?? []), item]);
+        const manager = main.users.find((u) => u.id === order.managerId);
         for (const [vendorId, dishes] of byVendor) {
           // One agency order per function and agency; never a second one while the first is live.
           if (get().outsourceOrders.some((o) => o.functionId === fn.id && o.vendorId === vendorId && o.status !== "cancelled")) continue;
           drafts.push({
-            id: uid(), orderId, functionId: fn.id, vendorId, status: "draft", deliverOn: fn.date, deliverTime: fn.time, deliverPlace: fn.venue,
-            contact: main.users.find((u) => u.id === order.managerId)?.name ?? "", notes: client ? `${client.name}, ${fn.name}` : fn.name,
+            // Delivered an hour before the service starts (the same day; just after midnight stays at 00:00), and the
+            // vendor sees only the event name, never the client: the client is the caterer's own.
+            id: uid(), orderId, functionId: fn.id, vendorId, status: "draft", deliverOn: fn.date, deliverTime: hourBefore(fn.time), deliverPlace: fn.venue,
+            contact: [manager?.name, manager?.phone].filter(Boolean).join(", "), notes: fn.name,
             lines: dishes.map((d) => ({ id: uid(), itemId: d.id, qty: d.pricingType === "plate" ? fn.pax : 1, agencyRate: d.agencyRate, clientRate: d.price })),
           });
         }

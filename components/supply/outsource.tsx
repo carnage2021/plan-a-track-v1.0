@@ -18,6 +18,7 @@ import type { Order } from "@/lib/types";
 import { cn, fmtDate, fmtTime, isoDate, money, num, whatsappLink } from "@/lib/utils";
 import { Num } from "./common";
 import { logWhatsApp } from "@/lib/messages";
+import { DownloadPdf } from "@/components/documents/doc-actions";
 
 const flow: OutsourceStatus[] = ["draft", "sent", "accepted", "preparing", "dispatched", "delivered"];
 const label: Record<OutsourceStatus, string> = { draft: "Draft", sent: "Sent", accepted: "Accepted", preparing: "In preparation", dispatched: "Dispatched", delivered: "Delivered", cancelled: "Cancelled" };
@@ -94,6 +95,7 @@ function OutsourceCard({ o, order }: { o: OutsourceOrder; order: Order }) {
             <a href={whatsappLink(vendor?.phone ?? "", text)} target="_blank" rel="noreferrer" onClick={() => { if (o.status === "draft") patch(o.id, { status: "sent" }); logWhatsApp("outsource_order", vendor?.name ?? "", vendor?.phone ?? "", text, o.orderId)(); }}><Send strokeWidth={1.75} />{o.status === "draft" ? "Send on WhatsApp" : "Send again"}</a>
           </Button>
         )}
+        <DownloadPdf kind="workorder" id={o.id} lang="en" variant="ghost" label="Work order PDF" />
         {next[o.status] && <Button variant={o.status === "sent" ? "secondary" : "primary"} onClick={advance}><Truck strokeWidth={1.75} />{next[o.status]}</Button>}
         {o.status === "delivered" && !billed && <Button onClick={() => { addBill({ vendorId: o.vendorId, outsourceId: o.id, billNo: "", date: isoDate(new Date()), amount: totals.cost, note: o.number }); toast.success(`${money(totals.cost)} added to ${vendor?.name}'s ledger`); }}>Add to vendor ledger</Button>}
       </div>

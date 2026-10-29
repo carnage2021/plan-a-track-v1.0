@@ -13,6 +13,7 @@ const en = {
   reason: "Reason", amountCredited: "Amount credited", refunded: "Refunded", adjusted: "Adjusted against the bill", against: "Against order",
   scanToPay: "Scan to pay", bank: "Bank", upi: "UPI", for: "For", signatory: "Authorised signatory", sac: "SAC",
   morning: "Morning", afternoon: "Afternoon", evening: "Evening", night: "Night", to: "to", referralCredit: "Referral credit",
+  day: "Day", events: "events", eventOne: "event", days: "days", counters: "Counters and add-ons", venue: "Venue", dayTotal: "Day total", beforeTax: "before discount and GST", bookingSummary: "Booking summary", wholeBooking: "Grand total for the whole booking", clientSignature: "Client's signature", coordinator: "Coordinator", eventDates: "Event dates", totalGuests: "Total guests", foodService: "Food service",
 };
 type Key = keyof typeof en;
 
@@ -26,6 +27,7 @@ const hi: Record<Key, string> = {
   reason: "कारण", amountCredited: "क्रेडिट राशि", refunded: "वापस किया", adjusted: "बिल में समायोजित", against: "ऑर्डर के विरुद्ध",
   scanToPay: "भुगतान के लिए स्कैन करें", bank: "बैंक", upi: "यूपीआई", for: "की ओर से", signatory: "अधिकृत हस्ताक्षरकर्ता", sac: "SAC",
   morning: "सुबह", afternoon: "दोपहर", evening: "शाम", night: "रात", to: "से", referralCredit: "रेफ़रल क्रेडिट",
+  day: "दिन", events: "कार्यक्रम", eventOne: "कार्यक्रम", days: "दिन", counters: "काउंटर और ऐड-ऑन", venue: "स्थान", dayTotal: "दिन का कुल", beforeTax: "छूट और GST से पहले", bookingSummary: "बुकिंग सारांश", wholeBooking: "पूरी बुकिंग का कुल", clientSignature: "ग्राहक के हस्ताक्षर", coordinator: "समन्वयक", eventDates: "कार्यक्रम की तारीखें", totalGuests: "कुल मेहमान", foodService: "भोजन सेवा",
 };
 
 const gu: Record<Key, string> = {
@@ -38,6 +40,7 @@ const gu: Record<Key, string> = {
   reason: "કારણ", amountCredited: "ક્રેડિટ રકમ", refunded: "પરત કરેલ", adjusted: "બિલમાં સરભર", against: "ઓર્ડર સામે",
   scanToPay: "ચુકવણી માટે સ્કેન કરો", bank: "બેંક", upi: "યુપીઆઈ", for: "વતી", signatory: "અધિકૃત સહી કરનાર", sac: "SAC",
   morning: "સવાર", afternoon: "બપોર", evening: "સાંજ", night: "રાત", to: "થી", referralCredit: "રેફરલ ક્રેડિટ",
+  day: "દિવસ", events: "પ્રસંગ", eventOne: "પ્રસંગ", days: "દિવસ", counters: "કાઉન્ટર અને ઍડ-ઓન", venue: "સ્થળ", dayTotal: "દિવસનો કુલ", beforeTax: "ડિસ્કાઉન્ટ અને GST પહેલાં", bookingSummary: "બુકિંગ સારાંશ", wholeBooking: "સંપૂર્ણ બુકિંગનો કુલ", clientSignature: "ગ્રાહકની સહી", coordinator: "કોઓર્ડિનેટર", eventDates: "પ્રસંગની તારીખો", totalGuests: "કુલ મહેમાન", foodService: "ભોજન સેવા",
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, hi, gu };

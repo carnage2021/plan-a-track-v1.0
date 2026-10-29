@@ -36,7 +36,7 @@ import { ExtraDishes } from "@/components/sales/summary-extras";
 import { printLight, printThermal, useUi } from "@/lib/ui";
 import { fmtDate, money, num, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
-import { DocLangPicker, DownloadPdf } from "@/components/documents/doc-actions";
+import { DocLangPicker, DownloadPdf, PdfDownloads } from "@/components/documents/doc-actions";
 
 const laterTabs: { id: string; label: string; phase: number }[] = [];
 
@@ -106,7 +106,11 @@ function OrderView({ order }: { order: Order }) {
   const quote = quotations.find((q) => q.id === order.quotationId);
   const functions = [...order.functions].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
   const startTab = useSearchParams().get("tab") ?? "overview";
-  const agencyCount = useSupply((s) => s.outsourceOrders.filter((o) => o.orderId === order.id && o.status !== "cancelled").length);
+  // Filtered outside the selector: a selector that returns a new array each time makes React render forever.
+  const allOutsource = useSupply((s) => s.outsourceOrders);
+  const workOrders = React.useMemo(() => allOutsource.filter((o) => o.orderId === order.id && o.status !== "cancelled"), [allOutsource, order.id]);
+  const agencyCount = workOrders.length;
+  const vendors = useSupply((s) => s.vendors);
   const [paxFn, setPaxFn] = React.useState<EventFunction | null>(null);
   const [cancel, setCancel] = React.useState(false);
   const [cancelNote, setCancelNote] = React.useState("");
@@ -348,6 +352,35 @@ function OrderView({ order }: { order: Order }) {
         </TabsContent>
 
         <TabsContent value="documents">
+          <Card className="mb-4 space-y-3 p-4 md:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-heading text-base font-semibold">Download PDF</h2>
+                <p className="text-xs text-text-muted">The booking confirmation with every event, menu and price, in full or one day at a time.</p>
+              </div>
+              <DocLangPicker value={docLang} onChange={setDocLang} />
+            </div>
+            <PdfDownloads kind="confirmation" id={order.id} lang={docLang} functions={order.functions} />
+            <div className="border-t pt-3">
+              <p className="mb-2 text-xs font-medium text-text-muted">Bills for the client (not tax invoices)</p>
+              <div className="flex flex-wrap gap-2">
+                <DownloadPdf kind="bill" id={order.id} lang={docLang} label="Bill · per plate, no dish prices" />
+                <DownloadPdf kind="itemised" id={order.id} lang={docLang} label="Itemised bill · every dish priced" />
+              </div>
+            </div>
+            <div className="border-t pt-3">
+              <p className="mb-2 text-xs font-medium text-text-muted">Menu card, without prices</p>
+              <PdfDownloads kind="menu" id={order.id} lang={docLang} functions={order.functions} />
+            </div>
+            {workOrders.length > 0 && (
+              <div className="border-t pt-3">
+                <p className="mb-2 text-xs font-medium text-text-muted">Work orders for third-party agencies (for the vendor only, never the client)</p>
+                <div className="flex flex-wrap gap-2">
+                  {workOrders.map((w) => <DownloadPdf key={w.id} kind="workorder" id={w.id} lang="en" variant="ghost" label={`${w.number} · ${vendors.find((v) => v.id === w.vendorId)?.name ?? "Agency"} · ${order.functions.find((f) => f.id === w.functionId)?.name ?? ""}`} />)}
+                </div>
+              </div>
+            )}
+          </Card>
           <Card>
             <ul className="divide-y">
               {quote && <li><Link href={`/quotations/${quote.id}`} className="flex h-14 items-center gap-3 px-4 text-sm hover:bg-surface-muted/60 md:px-5"><FileText className="size-5 text-text-muted" strokeWidth={1.75} /><span className="flex-1">Quotation</span><span className="tnum text-xs text-text-muted">{quote.number}</span></Link></li>}

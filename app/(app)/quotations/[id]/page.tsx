@@ -10,13 +10,13 @@ import { Badge, StatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Skeleton } from "@/components/ui/primitives";
-import { marginTone, priceQuote } from "@/lib/pricing";
+import { priceQuote } from "@/lib/pricing";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { QuoteStatus, Quotation } from "@/lib/types";
 import { printLight } from "@/lib/ui";
 import { cn, daysFromToday, fmtDate, money, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
-import { DocLangPicker, DownloadPdf } from "@/components/documents/doc-actions";
+import { DocLangPicker, PdfDownloads } from "@/components/documents/doc-actions";
 import type { Locale } from "@/lib/types";
 
 function QuotationDetail() {
@@ -88,7 +88,8 @@ function QuotationDetail() {
             <p className="truncate text-sm text-text-muted">{client?.name} · {quote.eventType}</p>
           </div>
         </div>
-        <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden"><DocLangPicker value={docLang} onChange={setDocLang} /><DownloadPdf kind="quote" id={quote.id} lang={docLang} variant="ghost" /></div>
+        <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden"><DocLangPicker value={docLang} onChange={setDocLang} /></div>
+        <PdfDownloads kind="quote" id={quote.id} lang={docLang} functions={quote.functions} className="mb-3" />
         <QuoteDocument data={{ ...doc, lang: docLang }} />
       </div>
 
@@ -114,17 +115,6 @@ function QuotationDetail() {
             )}
           </div>
         </Card>
-
-        {user.role !== "operations" && (
-          <Card className="p-4">
-            <h2 className="font-heading text-base font-semibold">Staff only</h2>
-            <dl className="tnum mt-2 space-y-1 text-sm">
-              <div className="flex justify-between"><dt className="text-text-muted">Food cost</dt><dd>{money(totals.cost)}</dd></div>
-              <div className="flex justify-between"><dt className="text-text-muted">Before GST</dt><dd>{money(totals.taxable)}</dd></div>
-              <div className="flex items-center justify-between"><dt className="text-text-muted">Margin</dt><dd><Badge tone={marginTone(totals.marginPct)}>{Math.round(totals.marginPct)}%</Badge></dd></div>
-            </dl>
-          </Card>
-        )}
 
         <Card className="p-4">
           <h2 className="font-heading text-base font-semibold">Versions</h2>

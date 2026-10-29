@@ -112,6 +112,10 @@ Seven main phases: sales, supply, staff, kitchen, operations, billing, and repor
   - all editable per booking, and shown on the quotation, the WhatsApp text and the invoice.
 - **Coordinator (0019):** typed name, phone and email; team members are suggested.
 - **Optional menu price;** the labels "Food Service Name" and "Event Name".
+- **Settings → Your data → Delete all data** (owner only, type DELETE): `app/api/reset-data` clears the business's records by `tenant_id`; the account, settings, team and numbering stay.
+- **PDF downloads** (`components/documents/event-pdf.tsx`): a designed A4 quotation, confirmation or menu card, in full or one PDF per day (`?day=`), with page numbers. On the quotation page, the booking-done screen and Order → Documents.
+- **Bills and work orders** (`components/documents/order-docs.tsx`): a per-plate bill and an itemised bill (plain bills, not tax invoices), and a work order PDF for each third-party agency order. Work orders never show the client; delivery is set an hour before the session.
+- **The "Staff only" margin box** is removed from the quotation page.
 
 ## Rules for working on it
 

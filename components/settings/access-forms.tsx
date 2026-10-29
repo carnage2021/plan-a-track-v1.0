@@ -1,17 +1,17 @@
 "use client";
 
-import { Download, History, RotateCcw } from "lucide-react";
+import { Download, History, RotateCcw, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import * as React from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/shared/badges";
 import { MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
-import { Field, Select } from "@/components/ui/input";
+import { Field, Input, Select } from "@/components/ui/input";
 import { Skeleton, ToggleRow } from "@/components/ui/primitives";
 import type { TenantAccess } from "@/lib/access";
 import { navItems } from "@/lib/nav";
-import { useStore } from "@/lib/store";
+import { useCurrentUser, useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase/client";
 import type { Role } from "@/lib/types";
 import { cn, fmtDate, isoDate, localDay } from "@/lib/utils";
@@ -133,6 +133,53 @@ const exportTables = [
 ];
 
 /** One file with everything this caterer has stored, for their own records or to move elsewhere. */
+/**
+ * Clears the business's records (clients, bookings, payments, menu, stock, staff ...) for a fresh start. The account,
+ * settings, team logins and numbering stay. Owner only, and only after typing DELETE.
+ */
+function DeleteAllData({ onDownload, downloading }: { onDownload: () => void; downloading: boolean }) {
+  const isOwner = useCurrentUser().role === "owner";
+  const [open, setOpen] = React.useState(false);
+  const [typed, setTyped] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  if (!isOwner) return null;
+  const run = async () => {
+    setBusy(true);
+    try {
+      const { data } = await supabase().auth.getSession();
+      const res = await fetch("/api/reset-data", { method: "POST", headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Please try again.");
+      toast.success("All data deleted", { description: "Your account, settings and team logins are kept. Reloading…" });
+      // A full reload so every screen starts from the now empty account.
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (e) {
+      toast.error("The data was not deleted", { description: e instanceof Error ? e.message : undefined });
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-xl border border-danger/40 bg-danger/5 p-4">
+      <p className="text-sm font-medium text-danger">Delete all data</p>
+      <p className="mt-1 text-xs text-text-muted">Removes every client, enquiry, quotation, booking, payment, invoice, dish, category, package, recipe, stock record, vendor, worker and expense. Your account, business settings, team logins, branches and event types stay. This cannot be undone, so download everything first.</p>
+      {!open ? (
+        <Button variant="danger" className="mt-3" onClick={() => setOpen(true)}><Trash2 strokeWidth={1.75} />Delete all data</Button>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <Button onClick={onDownload} loading={downloading}><Download strokeWidth={1.75} />Download a copy first</Button>
+          <Field label="Type DELETE to confirm">
+            <Input aria-label="Type DELETE to confirm" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="DELETE" autoComplete="off" className="max-w-48" />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="danger" loading={busy} disabled={typed.trim() !== "DELETE"} onClick={run}><Trash2 strokeWidth={1.75} />Delete everything now</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => { setOpen(false); setTyped(""); }}>Cancel</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DataForm() {
   const name = useStore((s) => s.tenant.name);
   const [busy, setBusy] = React.useState(false);
@@ -166,6 +213,7 @@ export function DataForm() {
         <p className="text-xs text-text-muted">Clients, orders, payments, menu, recipes, stock, vendors, staff, invoices and the rest, in one JSON file. Photos stay in storage and are listed by their paths.</p>
         <Button variant="primary" className="mt-3" loading={busy} onClick={download}><Download strokeWidth={1.75} />Download everything</Button>
       </div>
+      <DeleteAllData onDownload={download} downloading={busy} />
       <div className="rounded-xl bg-surface-muted p-4 text-sm">
         <p className="font-medium">Backups</p>
         <p className="mt-1 text-text-muted">The database is backed up daily by Supabase on paid plans, with point-in-time recovery as an add-on. On the free plan, download this file regularly as your own backup.</p>

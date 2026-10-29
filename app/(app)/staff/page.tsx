@@ -18,7 +18,7 @@ import { useCurrentUser, useStore } from "@/lib/store";
 import { useSupply } from "@/lib/supply-store";
 import type { PaymentMode } from "@/lib/types";
 import { printLight } from "@/lib/ui";
-import { cn, fmtDate, isoDate, money } from "@/lib/utils";
+import { cn, fmtDate, isoDate, missingFirst, money } from "@/lib/utils";
 import { useAccess } from "@/lib/access";
 
 function WorkerSheet({ worker, onClose }: { worker?: Worker; onClose: () => void }) {
@@ -76,7 +76,8 @@ function Workers() {
   const [open, setOpen] = React.useState<string | "new" | null>(null);
   const today = isoDate(new Date());
   const roles = [...new Set(workers.map((w) => w.role))];
-  const shown = workers.filter((w) => role === "all" || w.role === role);
+  const unpaid = (w: Worker) => !(w.rateDay > 0 || w.rateEvent > 0 || w.monthlySalary > 0);
+  const shown = missingFirst(workers, (w) => w.name, unpaid).filter((w) => role === "all" || w.role === role);
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -92,7 +93,7 @@ function Workers() {
             <button key={w.id} type="button" onClick={() => setOpen(w.id)} className={cn("flex items-start gap-3 rounded-xl border bg-surface p-4 text-left shadow-card hover:border-primary/40", !w.active && "opacity-60")}>
               <Avatar name={w.name} dot={!w.active ? "danger" : onLeave ? "warning" : "success"} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-heading text-base font-semibold">{w.name}</span>
+                <span className="block truncate font-heading text-base font-semibold">{w.name}{unpaid(w) && <Badge tone="warning" className="ml-2 align-middle">No rate</Badge>}</span>
                 <span className="tnum block truncate text-xs text-text-muted">{w.role} · {typeLabel[w.type]}{w.phone ? ` · ${w.phone}` : ""}</span>
                 <span className="mt-2 flex flex-wrap gap-1">{w.skills.filter(Boolean).slice(0, 3).map((s) => <Badge key={s}>{s}</Badge>)}{onLeave && <Badge tone="warning">On leave today</Badge>}{open > 0 && <Badge tone="primary">{open} open tasks</Badge>}</span>
               </span>

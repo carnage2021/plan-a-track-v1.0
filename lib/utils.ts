@@ -115,3 +115,11 @@ export function whatsappLink(phone: string, text: string) {
   const full = digits.length === 10 ? `91${digits}` : digits;
   return `https://wa.me/${full}?text=${encodeURIComponent(text)}`;
 }
+
+/**
+ * Rows still missing a detail (no price, no phone) come first so they get filled in; the rest, and each row once it
+ * is complete, follow A to Z by name.
+ */
+export function missingFirst<T>(rows: T[], name: (r: T) => string, missing: (r: T) => boolean) {
+  return [...rows].sort((a, b) => Number(missing(b)) - Number(missing(a)) || name(a).localeCompare(name(b), undefined, { sensitivity: "base" }));
+}

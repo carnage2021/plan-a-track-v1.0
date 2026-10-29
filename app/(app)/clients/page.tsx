@@ -45,7 +45,8 @@ function useClientRows() {
             lastDate: dates[dates.length - 1],
           };
         })
-        .sort((a, b) => (b.lastDate ?? "").localeCompare(a.lastDate ?? "") || a.c.name.localeCompare(b.c.name)),
+        // Clients with no phone first, so they get completed; then A to Z.
+        .sort((a, b) => Number(!b.c.phone.trim()) - Number(!a.c.phone.trim()) || a.c.name.localeCompare(b.c.name, undefined, { sensitivity: "base" })),
     [clients, orders, enquiries, quotations, items, packages, tenant.slabs],
   );
 }
@@ -190,7 +191,7 @@ function Clients() {
               <tbody className="tnum divide-y">
                 {shown.map((r) => (
                   <tr key={r.c.id} tabIndex={0} onClick={() => open(r.c.id)} onKeyDown={(e) => e.key === "Enter" && open(r.c.id)} className="cursor-pointer hover:bg-surface-muted/60">
-                    <td className="px-4 py-3"><span className="flex items-center gap-3"><Avatar name={r.c.name} /><span className="min-w-0"><span className="flex items-center gap-1.5 font-medium">{r.c.name}<Tags c={r.c} /></span><span className="block text-xs text-text-muted">{r.c.phone}</span></span></span></td>
+                    <td className="px-4 py-3"><span className="flex items-center gap-3"><Avatar name={r.c.name} /><span className="min-w-0"><span className="flex items-center gap-1.5 font-medium">{r.c.name}<Tags c={r.c} />{!r.c.phone.trim() && <Badge tone="warning">No phone</Badge>}</span><span className="block text-xs text-text-muted">{r.c.phone}</span></span></span></td>
                     <td className="px-4 py-3 text-text-muted">{typeLabel[r.c.type]}</td>
                     <td className="px-4 py-3 text-right">{r.orders.length || "–"}</td>
                     <td className="px-4 py-3 text-right">{r.billed ? money(r.billed) : "–"}</td>
@@ -206,7 +207,7 @@ function Clients() {
               <li key={r.c.id}>
                 <button type="button" onClick={() => open(r.c.id)} className="flex w-full items-center gap-3 rounded-xl border bg-surface p-4 text-left shadow-card">
                   <Avatar name={r.c.name} />
-                  <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-1.5 font-medium">{r.c.name}<Tags c={r.c} /></span><span className="tnum block text-xs text-text-muted">{typeLabel[r.c.type]} · {r.orders.length} orders</span></span>
+                  <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-1.5 font-medium">{r.c.name}<Tags c={r.c} />{!r.c.phone.trim() && <Badge tone="warning">No phone</Badge>}</span><span className="tnum block text-xs text-text-muted">{typeLabel[r.c.type]} · {r.orders.length} orders</span></span>
                   <span className={cn("tnum shrink-0 text-sm font-semibold", r.due > 0 && "text-warning")}>{r.due ? `${money(r.due)} due` : r.billed ? "Paid" : ""}</span>
                 </button>
               </li>

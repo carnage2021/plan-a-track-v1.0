@@ -12,7 +12,7 @@ import { Modal, Sheet } from "@/components/ui/sheet";
 import { fmtQty } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import { sections, units, type Ingredient, type MovementType, type Section } from "@/lib/supply-types";
-import { cn, daysFromToday, fmtDate, money, rate } from "@/lib/utils";
+import { cn, daysFromToday, fmtDate, missingFirst, money, rate } from "@/lib/utils";
 import { Num, useStock } from "./common";
 
 const movementLabel: Record<MovementType, string> = { opening: "Opening stock", purchase: "Purchase", issue: "Issued to event", return: "Returned from event", wastage: "Wastage", adjustment: "Stock-take adjustment", transfer: "Transfer" };
@@ -188,7 +188,7 @@ export function StockTab() {
     return { i, qty, low: i.reorderLevel > 0 && qty < i.reorderLevel, expiresIn };
   });
   const lowCount = rows.filter((r) => r.low).length;
-  const shown = rows.filter((r) => (section === "all" ? true : section === "low" ? r.low : r.i.section === section)).filter((r) => !query.trim() || r.i.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const shown = missingFirst(rows, (r) => r.i.name, (r) => !(r.i.lastRate > 0)).filter((r) => (section === "all" ? true : section === "low" ? r.low : r.i.section === section)).filter((r) => !query.trim() || r.i.name.toLowerCase().includes(query.trim().toLowerCase()));
   const value = rows.reduce((s, r) => s + Math.max(0, r.qty) * r.i.lastRate, 0);
 
   return (
@@ -224,7 +224,7 @@ export function StockTab() {
             <tbody className="tnum divide-y">
               {shown.map(({ i, qty, low, expiresIn }) => (
                 <tr key={i.id} tabIndex={0} onClick={() => setEditing(i)} onKeyDown={(e) => e.key === "Enter" && setEditing(i)} className="cursor-pointer hover:bg-surface-muted/60">
-                  <td className="px-4 py-2.5"><span className="font-medium">{i.name}</span><span className="ml-2 inline-flex gap-1 align-middle">{low && <Badge tone="warning">Low</Badge>}{expiresIn !== null && expiresIn <= 7 && <Badge tone="danger">{expiresIn < 0 ? "Expired" : `Expires in ${expiresIn}d`}</Badge>}</span><span className="block text-xs text-text-muted">{sections.find((s) => s.id === i.section)?.label}{i.location ? ` · ${i.location}` : ""}</span></td>
+                  <td className="px-4 py-2.5"><span className="font-medium">{i.name}</span><span className="ml-2 inline-flex gap-1 align-middle">{!(i.lastRate > 0) && <Badge tone="warning">No rate</Badge>}{low && <Badge tone="warning">Low</Badge>}{expiresIn !== null && expiresIn <= 7 && <Badge tone="danger">{expiresIn < 0 ? "Expired" : `Expires in ${expiresIn}d`}</Badge>}</span><span className="block text-xs text-text-muted">{sections.find((s) => s.id === i.section)?.label}{i.location ? ` · ${i.location}` : ""}</span></td>
                   <td className={cn("px-4 py-2.5 text-right font-medium", low && "text-warning")}>{fmtQty(qty)} {i.unit}</td>
                   <td className="px-4 py-2.5 text-right text-text-muted">{i.reorderLevel ? fmtQty(i.reorderLevel) : "–"}</td>
                   <td className="px-4 py-2.5 text-right">{rate(i.lastRate)}</td>

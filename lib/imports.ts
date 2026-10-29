@@ -9,6 +9,7 @@ import { useStore } from "./store";
 import { assetRow, ingredientRow, vendorRow } from "./supply-db";
 import { useSupply } from "./supply-store";
 import { uid } from "./utils";
+import { baseUnit } from "./recipe-import";
 
 // Phase 7 (plan A3): every master list can come from an Excel or CSV file, checked row by row before
 // anything is saved. Each import remembers what it created so the last one can be undone.
@@ -322,7 +323,12 @@ export const lists: ListSpec[] = [
       const store = useSupply.getState().stores[0];
       const newStore = store ? [] : [{ id: uid(), name: "Main store" }];
       const storeId = store?.id ?? newStore[0].id;
-      const ingredients: Row[] = records.map((r) => ({ ...ingredientRow({ id: uid(), name: r.Name, unit: r.Unit || "kg", section: pick(col(this, "Section"), r.Section, "grocery") as "grocery", reorderLevel: num(r["Reorder level"]), lastRate: num(r["Last rate"]), location: "" }), _stock: num(r["Current stock"]) }));
+      const ingredients: Row[] = records.map((r) => {
+        // Grams and ml come in as kg and litres: 500 in g is 0.5 kg, and a rate per gram becomes a rate per kg.
+        const b = baseUnit(r.Unit || "kg");
+        r = { ...r, "Current stock": String(num(r["Current stock"]) * b.factor), "Reorder level": String(num(r["Reorder level"]) * b.factor), "Last rate": String(num(r["Last rate"]) / b.factor) };
+        return { ...ingredientRow({ id: uid(), name: r.Name, unit: b.unit, section: pick(col(this, "Section"), r.Section, "grocery") as "grocery", reorderLevel: num(r["Reorder level"]), lastRate: num(r["Last rate"]), location: "" }), _stock: num(r["Current stock"]) };
+      });
       const opening = ingredients.filter((i) => i._stock > 0).map((i) => ({ id: uid(), ingredient_id: i.id, store_id: storeId, movement: "opening", qty: i._stock, rate: i.last_rate, note: "Opening stock from import" }));
       return [{ table: "stores", rows: newStore }, { table: "ingredients", rows: ingredients.map((i) => Object.fromEntries(Object.entries(i).filter(([k]) => k !== "_stock"))) }, { table: "stock_movements", rows: opening }];
     },

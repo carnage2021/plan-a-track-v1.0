@@ -54,7 +54,7 @@ lib/store.ts      main store: load, every write, the write queue
 lib/db.ts         row mappers (app object <-> table row) and the database feature checks
 lib/pricing.ts    all money maths (per plate, packages, event charges, discount, GST)
 lib/imports.ts    Excel/CSV import: all sheets, every list's columns and checks
-supabase/migrations/  0001 to 0019, run by hand in the Supabase SQL editor, in order
+supabase/migrations/  0001 to 0020, run by hand in the Supabase SQL editor, in order
 docs/import-examples/ example .xlsx files and a bilingual (English and Gujarati) import guide PDF for caterers
 ```
 
@@ -116,6 +116,8 @@ Seven main phases: sales, supply, staff, kitchen, operations, billing, and repor
 - **PDF downloads** (`components/documents/event-pdf.tsx`): a designed A4 quotation, confirmation or menu card, in full or one PDF per day (`?day=`), with page numbers. On the quotation page, the booking-done screen and Order → Documents.
 - **Bills and work orders** (`components/documents/order-docs.tsx`): a per-plate bill and an itemised bill (plain bills, not tax invoices), and a work order PDF for each third-party agency order. Work orders never show the client; delivery is set an hour before the session.
 - **The "Staff only" margin box** is removed from the quotation page.
+- **Missing details first:** imported lists (cutlery, raw materials, dishes, vendors, workers, clients) show rows with no price, rate or phone first, with an amber tag, then A to Z (`missingFirst` in `lib/utils.ts`).
+- **Raw materials in kg and litres only (0020):** g and ml are not offered; imports convert with `baseUnit` in `lib/recipe-import.ts` (500 g becomes 0.5 kg, rates x1000). Quantity columns hold 6 decimal places.
 
 ## Rules for working on it
 

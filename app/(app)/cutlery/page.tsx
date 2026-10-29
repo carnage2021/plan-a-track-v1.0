@@ -15,7 +15,8 @@ import { useStore } from "@/lib/store";
 import { challanLoss } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { Asset, RuleBasis } from "@/lib/supply-types";
-import { cn, fmtDate, money, num, rate } from "@/lib/utils";
+import { cn, fmtDate, missingFirst, money, num, rate } from "@/lib/utils";
+import { Badge } from "@/components/shared/badges";
 
 const categories = ["Crockery", "Cutlery", "Glassware", "Serving", "Kitchen", "Furniture", "Linen", "Other"];
 const bases: { id: RuleBasis; label: string }[] = [
@@ -88,9 +89,9 @@ export default function CutleryPage() {
                   <table className="w-full min-w-[640px] text-sm">
                     <thead className="bg-surface-muted text-left text-xs text-text-muted"><tr><th className="px-4 py-3 font-medium">Item</th><th className="px-4 py-3 text-right font-medium">Own</th><th className="px-4 py-3 text-right font-medium">Out now</th><th className="px-4 py-3 font-medium">Requirement rule</th><th className="px-4 py-3 text-right font-medium">Replacement</th>{chargesReady && <th className="px-4 py-3 text-right font-medium">Rent</th>}</tr></thead>
                     <tbody className="tnum divide-y">
-                      {assets.map((a) => (
+                      {missingFirst(assets, (a) => a.name, (a) => !(a.replacementCost > 0)).map((a) => (
                         <tr key={a.id} tabIndex={0} onClick={() => setOpen(a.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(a.id)} className="cursor-pointer hover:bg-surface-muted/60">
-                          <td className="px-4 py-2.5"><span className="font-medium">{a.name}</span><span className="block text-xs text-text-muted">{a.category}{a.location ? ` · ${a.location}` : ""}</span></td>
+                          <td className="px-4 py-2.5"><span className="font-medium">{a.name}</span>{!(a.replacementCost > 0) && <Badge tone="warning" className="ml-2 align-middle">No price</Badge>}<span className="block text-xs text-text-muted">{a.category}{a.location ? ` · ${a.location}` : ""}</span></td>
                           <td className="px-4 py-2.5 text-right font-medium">{num(a.totalQty)}</td>
                           <td className={cn("px-4 py-2.5 text-right", out.get(a.id) ? "text-primary" : "text-text-muted")}>{out.get(a.id) ? num(out.get(a.id)!) : "–"}</td>
                           <td className="px-4 py-2.5 text-text-muted">{ruleText(a, menuCategories.find((c) => c.id === a.ruleCategoryId)?.name)}</td>

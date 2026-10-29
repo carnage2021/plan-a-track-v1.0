@@ -202,4 +202,5 @@ export const vendorTypes: { id: VendorType; label: string }[] = [
   { id: "hospitality", label: "PRO / hospitality" },
 ];
 
-export const units = ["kg", "g", "l", "ml", "pcs", "dozen", "packet", "bunch"];
+// Weight is always kept in kg and liquid in litres: 500 g is saved as 0.5 kg (see baseUnit).
+export const units = ["kg", "l", "pcs", "dozen", "packet", "bunch"];

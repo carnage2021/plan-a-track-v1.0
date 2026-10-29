@@ -30,6 +30,14 @@ const aliases: Record<string, string> = {
 };
 export const normUnit = (u: string) => aliases[key(u)] ?? key(u);
 
+/** The unit a raw material is kept in, and what one of the given unit is in it: grams go to kg, ml to litres. */
+export function baseUnit(u: string) {
+  const n = normUnit(u);
+  if (n === "g") return { unit: "kg", factor: 0.001 };
+  if (n === "ml") return { unit: "l", factor: 0.001 };
+  return { unit: n || "kg", factor: 1 };
+}
+
 /** How many of `to` make one `from`, for the units that convert; null when they do not. */
 const factors: Record<string, Record<string, number>> = {
   kg: { g: 1000 }, g: { kg: 0.001 },
@@ -117,7 +125,7 @@ export function analyse(table: { head: string[]; rows: string[][]; where: string
     const ing = ingByName.get(key(row.raw));
     if (!ing) {
       // Not in the inventory yet: listed once, with the unit the sheet uses.
-      const m = missing.get(key(row.raw)) ?? { name: row.raw, unit: row.unit ? normUnit(row.unit) : "kg", section: guessSection(row.raw), dishes: [] };
+      const m = missing.get(key(row.raw)) ?? { name: row.raw, unit: row.unit ? baseUnit(row.unit).unit : "kg", section: guessSection(row.raw), dishes: [] };
       if (!m.dishes.includes(item.name)) m.dishes.push(item.name);
       missing.set(key(row.raw), m);
       row.waiting = true;

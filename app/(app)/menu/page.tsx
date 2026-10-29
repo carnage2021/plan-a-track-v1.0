@@ -22,7 +22,7 @@ import { marginTone } from "@/lib/pricing";
 import { useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { MenuItem, MenuPackage } from "@/lib/types";
-import { cn, money } from "@/lib/utils";
+import { cn, missingFirst, money } from "@/lib/utils";
 import { useAccess } from "@/lib/access";
 
 function Menu() {
@@ -50,11 +50,12 @@ function Menu() {
   const [raise, setRaise] = React.useState(false);
   const [pct, setPct] = React.useState("5");
 
-  const visible = items
+  const listed = items
     .filter((i) => category === "all" || isWithin(i.categoryId, category))
     .filter((i) => !query.trim() || i.name.toLowerCase().includes(query.trim().toLowerCase()) || i.nameLocal.includes(query.trim()))
     .filter((i) => !noPhoto || !i.photo)
     .filter((i) => !offOnly || !i.active);
+  const visible = missingFirst(listed, (i) => i.name, (i) => !(i.price > 0));
   const missing = items.filter((i) => !i.photo).length;
 
   /** Every bulk change can be undone from the toast instead of asking for confirmation first. */
@@ -130,7 +131,7 @@ function Menu() {
                           </button>
                         )}
                         <div className="flex flex-1 flex-col px-1 pb-1 pt-3">
-                          <h3 className="truncate font-heading text-base font-semibold">{i.name}</h3>
+                          <h3 className="truncate font-heading text-base font-semibold">{i.name}</h3>{!(i.price > 0) && <Badge tone="warning" className="mt-1">No price</Badge>}
                           <p className="truncate text-xs text-text-muted">{i.nameLocal || "No local name"}</p>
                           <div className="mt-2 flex items-end justify-between gap-2">
                             <div className="tnum min-w-0">

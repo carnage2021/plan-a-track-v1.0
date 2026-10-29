@@ -16,7 +16,7 @@ import { agencyScore, vendorBalance, vendorsFor } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import { vendorTypes, type Vendor, type VendorType } from "@/lib/supply-types";
 import type { PaymentMode } from "@/lib/types";
-import { cn, fmtDate, isoDate, money } from "@/lib/utils";
+import { cn, fmtDate, isoDate, missingFirst, money } from "@/lib/utils";
 
 const typeLabel = (t: VendorType) => vendorTypes.find((x) => x.id === t)?.label ?? t;
 
@@ -173,7 +173,7 @@ export default function VendorsPage() {
   const [type, setType] = React.useState<VendorType | "all">("all");
   const [query, setQuery] = React.useState("");
   const [open, setOpen] = React.useState<string | "new" | null>(null);
-  const shown = vendors.filter((v) => (type === "all" || v.type === type) && (!query.trim() || v.name.toLowerCase().includes(query.trim().toLowerCase())));
+  const shown = missingFirst(vendors, (v) => v.name, (v) => !v.phone.trim()).filter((v) => (type === "all" || v.type === type) && (!query.trim() || v.name.toLowerCase().includes(query.trim().toLowerCase())));
   const current = vendors.find((v) => v.id === open);
 
   return (
@@ -202,7 +202,7 @@ export default function VendorsPage() {
                   <button type="button" onClick={() => setOpen(v.id)} className="flex w-full items-start gap-3 rounded-xl p-4 text-left hover:bg-surface-muted/40">
                     <Avatar name={v.name} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-heading text-base font-semibold">{v.name}</span>
+                      <span className="block truncate font-heading text-base font-semibold">{v.name}{!v.phone.trim() && <Badge tone="warning" className="ml-2 align-middle">No phone</Badge>}</span>
                       <span className="tnum block truncate text-xs text-text-muted">{typeLabel(v.type)}{v.phone ? ` · ${v.phone}` : ""}</span>
                       <span className="mt-2 flex flex-wrap items-center gap-2"><Stars value={v.rating} />{supplies > 0 && <Badge>{supplies} {v.type === "food_agency" ? "dishes" : "items"}</Badge>}{score && <Badge tone={score.score >= 80 ? "success" : "warning"}>{score.score}/100 on time</Badge>}</span>
                     </span>

@@ -171,9 +171,10 @@ export default function CalendarPage() {
                   const festivals = festivalsOn(d);
                   return (
                     <button key={d} type="button" onClick={() => setSelected(d)} aria-pressed={selected === d} aria-label={`${fmtDate(d)}${festivals.length ? `, ${festivals.join(", ")}` : ""}, ${events.length} events`} className={cn("flex min-h-20 flex-col border-b border-r p-1 text-left transition-colors duration-150 hover:bg-surface-muted/60 md:min-h-32 md:p-1.5", festivals.length > 0 && "bg-accent-gold/5", selected === d && "bg-primary-soft hover:bg-primary-soft", outside && "text-text-muted/60 opacity-70")}>
-                      <span className="flex flex-col items-start md:flex-row md:justify-between md:gap-1">
-                        <span className={cn("tnum grid size-6 shrink-0 place-items-center rounded-full text-xs font-medium", d === today && "bg-primary text-primary-fg")}>{parseDate(d).getDate()}</span>
-                        <TithiTag date={d} className="max-md:max-w-full max-md:text-[10px] max-md:leading-4 max-md:tracking-tight" />
+                      {/* Tithi on the left, the date on the right; the tithi a step smaller than the date. */}
+                      <span className="flex items-start justify-between gap-1">
+                        <TithiTag date={d} className="min-w-0 text-[10px] leading-6 tracking-tight md:text-xs md:leading-7 md:tracking-normal" />
+                        <span className={cn("tnum grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold md:size-7 md:text-sm", d === today && "bg-primary text-primary-fg")}>{parseDate(d).getDate()}</span>
                       </span>
                       <FestivalTags date={d} className="mt-0.5" />
                       <span className="mt-1 hidden flex-1 flex-col gap-0.5 md:flex">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building, Building2, HandPlatter, CreditCard, DatabaseBackup, FileText, Globe, Hash, History, Landmark, Palette, PartyPopper, ShieldCheck, SlidersHorizontal, Ticket, Users } from "lucide-react";
+import { Building, Building2, HandPlatter, Images, CreditCard, DatabaseBackup, FileText, Globe, Hash, History, Landmark, Palette, PartyPopper, ShieldCheck, SlidersHorizontal, Ticket, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import { AccessForm, ActivityForm, DataForm } from "@/components/settings/access-forms";
@@ -9,6 +9,7 @@ import { BranchForm } from "@/components/settings/branch-form";
 import { ReferralForm } from "@/components/settings/referral-form";
 import { EventTypesForm } from "@/components/settings/event-types-form";
 import { StaffRatesForm } from "@/components/settings/staff-rates-form";
+import { SamplePhotosForm } from "@/components/sales/sample-photos";
 import { DocumentsForm, PublicMenuForm } from "@/components/settings/doc-forms";
 import { BrandForm, BusinessForm, NumberingForm, RulesForm, TaxBankForm, TeamForm } from "@/components/settings/tenant-forms";
 import { PageHeader } from "@/components/shared/blocks";
@@ -23,6 +24,7 @@ const sections = [
   { id: "public", label: "Public menu", icon: Globe, Form: PublicMenuForm },
   { id: "events", label: "Event types", icon: PartyPopper, Form: EventTypesForm },
   { id: "staff-rates", label: "Service staff rates", icon: HandPlatter, Form: StaffRatesForm },
+  { id: "photos", label: "Sample photos", icon: Images, Form: SamplePhotosForm },
   { id: "rules", label: "Pricing rules", icon: SlidersHorizontal, Form: RulesForm },
   { id: "referrals", label: "Referrals", icon: Ticket, Form: ReferralForm },
   { id: "team", label: "Team", icon: Users, Form: TeamForm },

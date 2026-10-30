@@ -5,9 +5,9 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
-import { Card, Chip } from "@/components/ui/primitives";
+import { Card, Chip, Switch } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/sheet";
-import { branch, fullPath, isWithin, treeOrder } from "@/lib/categories";
+import { branch, fullPath, isWithin, pricedAtBooking, treeOrder } from "@/lib/categories";
 import { categoryIcon, categoryIconNames } from "@/lib/icons";
 import { useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
@@ -23,12 +23,16 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
   const updateTenant = useStore((s) => s.updateTenant);
   const servicesReady = useStore((s) => s.servicesReady);
   const subReady = useStore((s) => s.subcategoriesReady);
+  const mainReady = useStore((s) => s.mainRateReady);
   const isOwner = useCurrentUser().role === "owner";
   const foodTypes = useFoodTypes();
   const current = editing.category;
   const [name, setName] = React.useState(current?.name ?? "");
   const [icon, setIcon] = React.useState(current?.icon ?? categories.find((c) => c.id === editing.parentId)?.icon ?? "Utensils");
   const [parentId, setParentId] = React.useState(current ? (current.parentId ?? "") : (editing.parentId ?? ""));
+  const [atBooking, setAtBooking] = React.useState(!!current?.atBooking);
+  // A sub-category of a main course category is main course too.
+  const inherited = !!parentId && pricedAtBooking(parentId);
   // A new top-level category shows for every food type unless the owner unticks some.
   const [types, setTypes] = React.useState<string[]>(() => foodTypes.filter((t) => !current || t.categoryIds.includes(current.id)).map((t) => t.id));
   const canTypes = isOwner && servicesReady && !parentId;
@@ -40,7 +44,7 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
 
   const save = () => {
     if (error) return;
-    const id = saveCategory({ id: current?.id, name: name.trim(), icon, parentId: parentId || undefined });
+    const id = saveCategory({ id: current?.id, name: name.trim(), icon, parentId: parentId || undefined, atBooking: atBooking && !inherited ? true : undefined });
     if (canTypes) {
       const next = foodTypes.map((t) => {
         const has = t.categoryIds.includes(id);
@@ -72,6 +76,16 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
               {parents.map(({ c, depth }) => <option key={c.id} value={c.id}>{"   ".repeat(depth)}{depth ? "› " : ""}{c.name}</option>)}
             </Select>
           </Field>
+        )}
+        {mainReady && (
+          inherited ? (
+            <p className="rounded-lg bg-primary-soft px-3 py-2 text-xs text-primary">Main course: {fullPath(parentId)} is priced at booking, so dishes here are too.</p>
+          ) : (
+            <label className="flex items-start justify-between gap-3 rounded-xl border p-3">
+              <span><span className="block text-sm font-medium">Main course, price at booking</span><span className="block text-xs text-text-muted">Dishes here have only a name, no price. The main course rate per plate is typed in at the end of each booking. Tick it for Sweets, Breads, Sabji, Rice, Dal, Kadhi and so on.</span></span>
+              <Switch checked={atBooking} label="Main course, price at booking" onCheckedChange={setAtBooking} />
+            </label>
+          )
         )}
         <div>
           <span className="mb-1 block text-xs font-medium text-text-muted">Icon</span>
@@ -261,7 +275,7 @@ export function CategoriesEditor({ canEdit }: { canEdit: boolean }) {
               {depth > 0 && <CornerDownRight className="size-4 shrink-0 text-text-muted" strokeWidth={1.75} />}
               <span className={cn("grid shrink-0 place-items-center rounded-xl bg-primary-soft text-primary", depth ? "size-8" : "size-10")}><Icon className={depth ? "size-4" : "size-5"} strokeWidth={1.75} /></span>
               <span className="min-w-0 flex-1">
-                <span className={cn("block truncate", depth ? "text-sm font-medium" : "font-medium")}>{c.name}</span>
+                <span className={cn("block truncate", depth ? "text-sm font-medium" : "font-medium")}>{c.name}{c.atBooking && <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 align-middle text-[11px] font-medium text-primary">Main course · rate at booking</span>}</span>
                 <span className="tnum block truncate text-xs text-text-muted">
                   {subs > 0 ? `${all} ${all === 1 ? "dish" : "dishes"} (${own} here) · ${subs} sub-${subs === 1 ? "category" : "categories"}` : `${own} ${own === 1 ? "dish" : "dishes"}`}
                   {depth === 0 && (types.length ? ` · ${types.length === foodTypes.length ? "every food type" : types.join(", ")}` : " · no food type")}

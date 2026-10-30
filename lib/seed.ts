@@ -20,10 +20,11 @@ export const categories: MenuCategory[] = [
   { id: "beverages", name: "Welcome drinks", icon: "GlassWater" },
   { id: "starters", name: "Starters", icon: "Salad" },
   { id: "chaat", name: "Chaat and live counters", icon: "Flame" },
-  { id: "mains", name: "Main course", icon: "CookingPot" },
-  { id: "breads", name: "Breads", icon: "Wheat" },
-  { id: "rice", name: "Rice", icon: "Soup" },
-  { id: "sweets", name: "Sweets", icon: "Candy" },
+  // Main course categories: their dishes are priced together at booking, by the main course rate per plate.
+  { id: "mains", name: "Main course", icon: "CookingPot", atBooking: true },
+  { id: "breads", name: "Breads", icon: "Wheat", atBooking: true },
+  { id: "rice", name: "Rice", icon: "Soup", atBooking: true },
+  { id: "sweets", name: "Sweets", icon: "Candy", atBooking: true },
   { id: "desserts", name: "Dessert counters", icon: "IceCreamCone" },
   { id: "sides", name: "Accompaniments", icon: "Utensils" },
 ];

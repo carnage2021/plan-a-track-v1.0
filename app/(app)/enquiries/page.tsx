@@ -41,7 +41,7 @@ function LeadCard({ enquiry, onMove, dragging }: { enquiry: Enquiry; onMove: (st
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="-mr-1.5 -mt-1.5" aria-label={`Actions for ${client?.name}`}><MoreVertical strokeWidth={1.75} /></Button></DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuItem onSelect={() => openEnquiry(enquiry.id)}><PencilLine strokeWidth={1.75} />Edit enquiry</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => router.push(`/quotations/new?enquiry=${enquiry.id}`)}><FileText strokeWidth={1.75} />Create quotation</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => router.push(`/booking?enquiry=${enquiry.id}`)}><FileText strokeWidth={1.75} />Create quotation</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Move to</DropdownMenuLabel>
             {stages.filter((s) => s !== enquiry.stage).map((s) => <DropdownMenuItem key={s} onSelect={() => onMove(s)}><span className={cn("mx-1.5 size-2 rounded-full", dot[statusToneOf(s)])} />{t(s)}</DropdownMenuItem>)}

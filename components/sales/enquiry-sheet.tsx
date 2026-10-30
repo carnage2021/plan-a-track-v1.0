@@ -164,7 +164,7 @@ function EnquirySheetForm() {
           </Field>
           <ContactFields value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} users={users} ready={contactsReady} errors={touched ? errors : undefined} />
           <Field label="Event type">
-            <Select value={form.eventType} onChange={(e) => set("eventType", e.target.value)}>
+            <Select creatable value={form.eventType} onChange={(e) => set("eventType", e.target.value)}>
               {withCurrent(eventTypes, form.eventType).map((t) => <option key={t}>{t}</option>)}
             </Select>
           </Field>

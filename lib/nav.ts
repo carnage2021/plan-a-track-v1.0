@@ -9,7 +9,6 @@ import {
   QrCode,
   ScanLine,
   FileSpreadsheet,
-  FileText,
   HandCoins,
   Home,
   MessageCircle,
@@ -41,7 +40,6 @@ export const navItems: NavItem[] = [
   { key: "calendar", href: "/calendar", icon: CalendarDays, roles: ["owner", "sales", "operations", "kitchen"] },
   { key: "enquiries", href: "/enquiries", icon: MessagesSquare, roles: ["owner", "sales"] },
   { key: "clients", href: "/clients", icon: Contact, roles: ["owner", "sales", "accountant"] },
-  { key: "quotations", href: "/quotations", icon: FileText, roles: ["owner", "sales"] },
   { key: "orders", href: "/orders", icon: ClipboardList, roles: ["owner", "sales", "operations", "accountant"] },
   { key: "menu", href: "/menu", icon: UtensilsCrossed, roles: ["owner", "sales", "kitchen"] },
   { key: "kitchen", href: "/kitchen", icon: ChefHat, roles: ["owner", "operations", "kitchen"] },
@@ -71,7 +69,9 @@ export function navFor(role: Role, access?: TenantAccess, planModules?: string[]
 }
 
 /** The nav item a path belongs to, if any. */
-export const navItemFor = (pathname: string) => [...navItems].sort((a, b) => b.href.length - a.href.length).find((n) => isActive(pathname, n.href));
+export const navItemFor = (pathname: string) =>
+  // Quotations live inside Orders now, so a quotation's page follows the Orders access.
+  isActive(pathname, "/quotations") ? navItems.find((n) => n.key === "orders") : [...navItems].sort((a, b) => b.href.length - a.href.length).find((n) => isActive(pathname, n.href));
 
 export function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);

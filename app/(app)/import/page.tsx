@@ -67,6 +67,10 @@ export default function ImportPage() {
     const done: Record<string, string[]> = {};
     try {
       for (const step of list.build(ok.map((x) => x.r))) {
+        if (step.update?.ids.length) {
+          const { error } = await sb.from(step.table).update(step.update.values).in("id", step.update.ids);
+          if (error) throw new Error(error.message);
+        }
         for (let i = 0; i < step.rows.length; i += 200) {
           const chunk = step.rows.slice(i, i + 200);
           const { error } = await sb.from(step.table).insert(chunk);
@@ -141,7 +145,7 @@ export default function ImportPage() {
                 <Badge tone="success">{ok.length} ready</Badge>
                 {parsed.records.some((x) => x.errors.length) && <Badge tone="danger">{parsed.records.filter((x) => x.errors.length).length} with problems</Badge>}
                 {parsed.records.some((x) => x.duplicate && !x.errors.length) && <Badge>{parsed.records.filter((x) => x.duplicate && !x.errors.length).length} already there</Badge>}
-                <Button variant="primary" className="ml-auto" loading={busy} disabled={!ok.length} onClick={save}><CheckCircle2 strokeWidth={1.75} />Import {ok.length} rows</Button>
+                <Button variant="primary" className="ml-auto" loading={busy} disabled={!ok.length} onClick={save}><CheckCircle2 strokeWidth={1.75} />Import {ok.length} {ok.length === 1 ? "row" : "rows"}</Button>
               </div>
               {parsed.sheets && <p className="rounded-lg bg-surface-muted p-2 text-sm text-text-muted">{parsed.sheets}</p>}
               {!parsed.records.length && <p className="rounded-lg bg-danger/10 p-3 text-sm text-danger">No rows were found. Each sheet needs a row with the column names from the template ({list.columns.slice(0, 3).map((c) => c.label).join(", ")} …) and the data below it.</p>}

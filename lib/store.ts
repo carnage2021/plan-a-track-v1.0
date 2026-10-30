@@ -37,6 +37,7 @@ import type {
   Role,
   TeamUser,
   Tenant,
+  SamplePhoto,
 } from "./types";
 import { addDays, financialYear, isoDate, money, uid } from "./utils";
 
@@ -65,6 +66,12 @@ interface Data {
   eventTypes: { id: string; name: string }[];
   /** False until 0017 has added event types */
   eventTypesReady: boolean;
+  samplePhotos: SamplePhoto[];
+  /** 0021 has run: sample photos for staff uniforms, cutlery and decoration */
+  samplePhotosReady: boolean;
+  mainRateReady: boolean;
+  addSamplePhoto: (p: Omit<SamplePhoto, "id">) => void;
+  removeSamplePhoto: (id: string) => void;
   tenantId: string;
   tenant: Tenant;
   users: TeamUser[];
@@ -155,7 +162,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -279,6 +286,17 @@ export const useStore = create<Store>()(
         background((sb) => run(sb.from("clients").update(clientRow(client)).eq("id", client.id), "Saving the client"));
       },
 
+      addSamplePhoto: (p) => {
+        const photo = { ...p, id: uid() };
+        set((s) => ({ samplePhotos: [...s.samplePhotos, photo] }));
+        background((sb) => run(sb.from("sample_photos").insert({ id: photo.id, kind: photo.kind, name: photo.name, photo_url: photo.photoUrl, note: photo.note, sort_order: get().samplePhotos.length }), "Saving the photo"));
+      },
+
+      removeSamplePhoto: (id) => {
+        set((s) => ({ samplePhotos: s.samplePhotos.filter((p) => p.id !== id) }));
+        background((sb) => run(sb.from("sample_photos").delete().eq("id", id), "Removing the photo"));
+      },
+
       setEventTypes: async (next) => {
         const before = get().eventTypes;
         const clean = next.map((e) => ({ ...e, name: e.name.trim() })).filter((e) => e.name);
@@ -370,7 +388,7 @@ export const useStore = create<Store>()(
       saveCategory: (category) => {
         const s = get();
         const id = category.id ?? uid();
-        const saved: MenuCategory = { id, name: category.name, icon: category.icon, parentId: category.parentId };
+        const saved: MenuCategory = { id, name: category.name, icon: category.icon, parentId: category.parentId, atBooking: category.atBooking };
         const exists = s.categories.some((c) => c.id === id);
         const moved = exists && s.categories.find((c) => c.id === id)?.parentId !== saved.parentId;
         // A new sub-category goes at the end of its parent's branch; the list stays in tree order.

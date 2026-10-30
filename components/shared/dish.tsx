@@ -6,6 +6,7 @@ import * as React from "react";
 import { mediaUrl } from "@/lib/db";
 import { BLUR, categoryIcon } from "@/lib/icons";
 import { useStore } from "@/lib/store";
+import { pricedAtBooking } from "@/lib/categories";
 import type { MenuItem } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
 import { Badge, VegMark } from "./badges";
@@ -28,7 +29,8 @@ export function DishImage({ item, sizes = "(max-width: 768px) 50vw, 320px", clas
   );
 }
 
-export function priceLabel(item: Pick<MenuItem, "price" | "pricingType" | "unit">) {
+export function priceLabel(item: Pick<MenuItem, "price" | "pricingType" | "unit"> & { categoryId?: string }) {
+  if (item.categoryId && pricedAtBooking(item.categoryId)) return "Rate at booking";
   if (item.pricingType === "counter") return `${money(item.price)} per counter`;
   if (item.pricingType === "flat") return `${money(item.price)} flat`;
   return `${money(item.price)} per ${item.unit}`;

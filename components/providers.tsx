@@ -3,6 +3,7 @@
 import { NextIntlClientProvider } from "next-intl";
 import * as React from "react";
 import { Toaster } from "sonner";
+import { TitleCase } from "@/components/shell/title-case";
 import { useStore } from "@/lib/store";
 import { useMediaQuery, useTheme } from "@/lib/ui";
 import en from "@/messages/en.json";
@@ -28,6 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <NextIntlClientProvider locale={locale} messages={messages[locale]} timeZone="Asia/Kolkata">
       {children}
+      <TitleCase />
       <Toaster
         theme={theme}
         position={desktop ? "bottom-right" : "bottom-center"}

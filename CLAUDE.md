@@ -54,7 +54,7 @@ lib/store.ts      main store: load, every write, the write queue
 lib/db.ts         row mappers (app object <-> table row) and the database feature checks
 lib/pricing.ts    all money maths (per plate, packages, event charges, discount, GST)
 lib/imports.ts    Excel/CSV import: all sheets, every list's columns and checks
-supabase/migrations/  0001 to 0020, run by hand in the Supabase SQL editor, in order
+supabase/migrations/  0001 to 0022, run by hand in the Supabase SQL editor, in order
 docs/import-examples/ example .xlsx files and a bilingual (English and Gujarati) import guide PDF for caterers
 ```
 
@@ -118,6 +118,10 @@ Seven main phases: sales, supply, staff, kitchen, operations, billing, and repor
 - **The "Staff only" margin box** is removed from the quotation page.
 - **Missing details first:** imported lists (cutlery, raw materials, dishes, vendors, workers, clients) show rows with no price, rate or phone first, with an amber tag, then A to Z (`missingFirst` in `lib/utils.ts`).
 - **Raw materials in kg and litres only (0020):** g and ml are not offered; imports convert with `baseUnit` in `lib/recipe-import.ts` (500 g becomes 0.5 kg, rates x1000). Quantity columns hold 6 decimal places.
+- **Interface polish:** the calendar shows the tithi left and the date right; every `Select` in `components/ui/input.tsx` is searchable (`creatable` lets a new value be typed: event type, staff role); times are picked as 12-hour with AM/PM (`TimeInput`); `components/shell/title-case.tsx` title-cases headings, buttons, labels, tabs and menus as they render (mark user text with `data-no-title-case`).
+- **Sample photos (0021):** staff uniforms (the dress, not people), cutlery and decoration, by import ("Sample photos") or Settings. In Step 3 a staff or cutlery line shows the photo with the same name, and "Show photos to client" opens a full-screen gallery (`components/sales/sample-photos.tsx`).
+- **One booking flow:** booking mode (`app/booking`) is the only builder. It ends with Confirm booking or Save as quotation. Saved quotations are in Orders → Quotations (`components/sales/quotation-list.tsx`) with Approve, which converts to an order. Enquiry "Create quotation" and quotation Revise open `/booking?enquiry=` / `/booking?revise=`; the old `/quotations` and `/quotations/new` pages redirect. Quotation pages follow the Orders access.
+- **Main course priced at booking (0022):** a category ticked "Main course, price at booking" (sub-categories follow, `pricedAtBooking` in `lib/categories.ts`) has dishes with no price. In Step 3 each event built dish by dish asks for its main course rate per plate (`EventFunction.mainRate`); `priceFunction` adds it to `perPlate` (not slab-discounted), so every document, bill and invoice carries it. A package event's price covers the main course. Saving or confirming is blocked until each rate is in. The menu import has a "Main course" Yes/No column.
 
 ## Rules for working on it
 

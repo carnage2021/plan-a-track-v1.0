@@ -61,8 +61,8 @@ function MenuSuggest() {
   const s = useSuggestion(pax, budget, diet);
   const start = () => {
     const fn = { ...blankFunction(eventType, "", pax), packageId: s.pkg?.id, itemIds: s.ids };
-    saveDraft("builder", { ...blankDraft(), eventType, functions: [fn], step: 0 });
-    router.push("/quotations/new");
+    saveDraft("booking", { ...blankDraft(), eventType, functions: [fn], step: 0 });
+    router.push("/booking");
   };
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr] lg:items-start">

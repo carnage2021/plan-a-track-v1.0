@@ -81,7 +81,7 @@ export function fmtDate(iso: string, opts: Intl.DateTimeFormatOptions = { day: "
 export function fmtTime(time: string) {
   if (!time) return "";
   const [h, m] = time.split(":").map(Number);
-  const suffix = h >= 12 ? "pm" : "am";
+  const suffix = h >= 12 ? "PM" : "AM";
   return `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""} ${suffix}`;
 }
 

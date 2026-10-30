@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { subPath } from "./categories";
+import { subPath, pricedAtBooking } from "./categories";
 import { defaultFoodTypes } from "./services";
 import { itemRow, clientRow, packageRow, schema } from "./db";
 import { useStaff } from "./staff";
@@ -14,13 +14,13 @@ import { baseUnit } from "./recipe-import";
 // Phase 7 (plan A3): every master list can come from an Excel or CSV file, checked row by row before
 // anything is saved. Each import remembers what it created so the last one can be undone.
 
-export type ListKey = "menu" | "packages" | "vendors" | "workers" | "clients" | "ingredients" | "cutlery" | "events";
+export type ListKey = "menu" | "packages" | "vendors" | "workers" | "clients" | "ingredients" | "cutlery" | "events" | "photos";
 type Cell = string | number | boolean | Date | null | undefined;
 export interface Column { label: string; required?: boolean; example: string; kind?: "number" | "date"; options?: Record<string, string> }
 /* eslint-disable @typescript-eslint/no-explicit-any -- rows go straight to PostgREST */
 type Row = Record<string, any>;
-/** Rows to insert, by table, in the order they must go in. */
-export type Plan = { table: string; rows: Row[] }[];
+/** Rows to insert, by table, in the order they must go in; `update` changes rows already there (not undone). */
+export type Plan = { table: string; rows: Row[]; update?: { ids: string[]; values: Row } }[];
 
 export interface ListSpec {
   key: ListKey;
@@ -43,7 +43,10 @@ const vendorTypes = { rawmaterial: "raw_material", grocery: "raw_material", food
 const workerTypes = { salaried: "salaried", staff: "salaried", monthly: "salaried", daily: "daily", dailywage: "daily", contractor: "contractor" };
 const sections = { grocery: "grocery", vegetables: "vegetables", vegetable: "vegetables", dairy: "dairy", dryfruits: "dry_fruits", other: "other" };
 const pricing = { plate: "plate", perplate: "plate", counter: "counter", percounter: "counter", flat: "flat" };
+const yesNo = { yes: "yes", y: "yes", true: "yes", "1": "yes", haa: "yes", ha: "yes", no: "no", n: "no", false: "no", "0": "no", na: "no" };
 const units = { plate: "plate", kg: "kg", piece: "piece", glass: "glass" };
+const photoKinds = { staffuniform: "staff", staff: "staff", uniform: "staff", dress: "staff", cutlery: "cutlery", crockery: "cutlery", utensils: "cutlery", decoration: "decor", decor: "decor", setup: "decor", decorationsetup: "decor" };
+const photoKind = (v: string) => (photoKinds[norm(v) as keyof typeof photoKinds] ?? "decor") as "staff" | "cutlery" | "decor";
 
 /** Turns a cell into text the same way whether it came from Excel or CSV; dates become YYYY-MM-DD. */
 export function cellText(v: Cell) {
@@ -154,6 +157,7 @@ export const lists: ListSpec[] = [
       { label: "Priced", example: "plate", options: pricing },
       { label: "Cost", kind: "number", example: "45" },
       { label: "Price", kind: "number", example: "120" },
+      { label: "Main course", example: "No", options: yesNo },
       { label: "Description", example: "Chargrilled cottage cheese with mint chutney" },
       { label: "Photo link", example: "https://example.com/paneer.jpg" },
     ],
@@ -173,8 +177,12 @@ export const lists: ListSpec[] = [
         newCats.push({ id, name: name.trim(), icon: s.categories.find((c) => c.id === parent)?.icon ?? "Utensils", sort_order: s.categories.length + newCats.length, ...(schema.subcategories ? { parent_id: parent || null } : {}) });
         return id;
       };
+      // "Main course: Yes" makes the dish's category priced at booking (its dishes need no price); one already in
+      // the account is switched over, a new one is made that way.
+      const mainCats = new Set<string>();
       const items = records.map((r) => {
         let categoryId = find("", r.Category);
+        if (schema.mainRate && pick(col(this, "Main course"), r["Main course"], "no") === "yes") mainCats.add(categoryId);
         // Without sub-categories in the database, a sub-category path is ignored and the dish sits in its category.
         if (schema.subcategories) for (const part of (r["Sub-category"] ?? "").split(/[>›/]/).map((x) => x.trim()).filter(Boolean)) categoryId = find(categoryId, part);
         return itemRow({
@@ -183,13 +191,15 @@ export const lists: ListSpec[] = [
           photo: r["Photo link"] || undefined, description: r.Description ?? "", active: true, outsourced: false, seasonal: false, bestseller: false, recipeBase: 100, bufferPct: 5, agencyRate: 0,
         });
       });
-      return [{ table: "menu_categories", rows: newCats }, { table: "menu_items", rows: items }];
+      for (const c of newCats) if (mainCats.has(c.id)) c.priced_at_booking = true;
+      const switchOver = [...mainCats].filter((id) => s.categories.some((c) => c.id === id && !c.atBooking));
+      return [{ table: "menu_categories", rows: newCats, update: { ids: switchOver, values: { priced_at_booking: true } } }, { table: "menu_items", rows: items }];
     },
     rows: () => {
       const s = useStore.getState();
       // The category is the top-level one; anything below it goes in Sub-category as "Sabji > Paneer sabji".
       const top = (id: string) => { let c = s.categories.find((x) => x.id === id); for (let n = 0; c?.parentId && n < 20; n++) c = s.categories.find((x) => x.id === c!.parentId) ?? c; return c?.name ?? ""; };
-      return s.items.map((i) => ({ Name: i.name, "Local name": i.nameLocal, Category: top(i.categoryId), "Sub-category": subPath(i.categoryId).replace(/ › /g, " > "), Diet: i.diet, Cuisine: i.cuisine, Unit: i.unit, Priced: i.pricingType, Cost: i.cost, Price: i.price, Description: i.description, "Photo link": i.photo ?? "" }));
+      return s.items.map((i) => ({ Name: i.name, "Local name": i.nameLocal, Category: top(i.categoryId), "Sub-category": subPath(i.categoryId).replace(/ › /g, " > "), Diet: i.diet, Cuisine: i.cuisine, Unit: i.unit, Priced: i.pricingType, Cost: i.cost, Price: i.price, "Main course": pricedAtBooking(i.categoryId) ? "Yes" : "No", Description: i.description, "Photo link": i.photo ?? "" }));
     },
   },
   {
@@ -369,6 +379,27 @@ export const lists: ListSpec[] = [
       return [{ table: "event_types", rows: records.map((r, i) => ({ id: uid(), name: r["Event type"].trim(), sort_order: start + i })) }];
     },
     rows: () => useStore.getState().eventTypes.map((e) => ({ "Event type": e.name })),
+  },
+  {
+    key: "photos",
+    label: "Sample photos",
+    // Photos the client sees while choosing extras: staff uniforms (the dress, not the people), cutlery, decoration.
+    columns: [
+      { label: "Type", required: true, example: "Staff uniform", options: photoKinds },
+      { label: "Name", required: true, example: "Waiter" },
+      { label: "Photo link", required: true, example: "https://example.com/waiter-uniform.jpg" },
+      { label: "Note", example: "Black waistcoat, white shirt" },
+    ],
+    existing: () => new Set(useStore.getState().samplePhotos.map((p) => `${p.kind}:${norm(p.name)}:${p.photoUrl}`)),
+    identity: (r) => `${photoKind(r.Type)}:${norm(r.Name)}:${r["Photo link"].trim()}`,
+    check(r) {
+      return r["Photo link"] && !/^https?:\/\/\S+$/i.test(r["Photo link"].trim()) ? ["Photo link must be a web address starting with http"] : [];
+    },
+    build(records) {
+      const start = useStore.getState().samplePhotos.length;
+      return [{ table: "sample_photos", rows: records.map((r, i) => ({ id: uid(), kind: photoKind(r.Type), name: r.Name.trim(), photo_url: r["Photo link"].trim(), note: r.Note ?? "", sort_order: start + i })) }];
+    },
+    rows: () => useStore.getState().samplePhotos.map((p) => ({ Type: p.kind === "staff" ? "Staff uniform" : p.kind === "cutlery" ? "Cutlery" : "Decoration", Name: p.name, "Photo link": p.photoUrl, Note: p.note })),
   },
 ];
 

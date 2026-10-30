@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Copy, Plus, Trash2, Users, UtensilsCrossed } from "lucide-react";
+import { CalendarDays, CookingPot, Copy, Plus, Trash2, Users, UtensilsCrossed } from "lucide-react";
 import * as React from "react";
 import { MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,8 @@ import { useStore } from "@/lib/store";
 import { assetRequirement } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { Asset } from "@/lib/supply-types";
-import type { EventCharge, EventFunction, QuoteDraft } from "@/lib/types";
+import type { EventCharge, EventFunction, QuoteDraft, SamplePhoto } from "@/lib/types";
+import { PhotoThumb, SamplePhotoGallery, ShowPhotosButton } from "./sample-photos";
 import { cn, fmtDate, money, num, rate, uid } from "@/lib/utils";
 
 type SetDraft = (patch: Partial<QuoteDraft> | ((d: QuoteDraft) => Partial<QuoteDraft>)) => void;
@@ -38,12 +39,17 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
   const packages = useStore((s) => s.packages);
   const assets = useSupply((s) => s.assets);
   const rates = React.useMemo(() => tenant.staffRates ?? [], [tenant.staffRates]);
+  // Sample photos to show the client: a uniform for each staff role, a photo for each cutlery item.
+  const photos = useStore((s) => s.samplePhotos);
+  const [gallery, setGallery] = React.useState<{ open: boolean; start?: SamplePhoto }>({ open: false });
+  const photoOf = (c: EventCharge) => (c.kind === "other" ? undefined : photos.find((p) => p.kind === (c.kind === "worker" ? "staff" : "cutlery") && p.name.trim().toLowerCase() === c.label.trim().toLowerCase()));
   const roles = React.useMemo(() => [...new Set([...rates.map((r) => r.name), ...workerRoles])], [rates]);
   const rateOf = (role: string) => rates.find((r) => r.name.toLowerCase() === role.toLowerCase())?.rate ?? 0;
 
   const setCharges = (fnId: string, next: (c: EventCharge[]) => EventCharge[]) =>
     setDraft((d) => ({ functions: d.functions.map((f) => (f.id === fnId ? { ...f, charges: next(f.charges ?? []) } : f)) }));
   const patch = (fnId: string, id: string, p: Partial<EventCharge>) => setCharges(fnId, (list) => list.map((c) => (c.id === id ? { ...c, ...p } : c)));
+  const setMainRate = (fnId: string, mainRate: number) => setDraft((d) => ({ functions: d.functions.map((f) => (f.id === fnId ? { ...f, mainRate: mainRate || undefined } : f)) }));
 
   const workerLine = (role: string, pax: number): EventCharge => ({ id: uid(), kind: "worker", ref: role, label: role, qty: headcount(role, pax), rate: rateOf(role) });
   const cutleryLine = (a: Asset, f: EventFunction): EventCharge => ({ id: uid(), kind: "cutlery", ref: a.id, label: a.name, qty: assetRequirement(a, f, items), rate: a.rentRate ?? 0 });
@@ -73,10 +79,14 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
   const days = byDay(draft.functions);
   return (
     <div className="space-y-4">
-      <div className="px-1">
-        <h2 className="font-heading text-base font-semibold">Staff, cutlery and charges for each event</h2>
-        <p className="text-xs text-text-muted">Prices come from your rates in Settings and Cutlery; change any line for this booking only.</p>
+      <div className="flex flex-wrap items-end justify-between gap-2 px-1">
+        <div>
+          <h2 className="font-heading text-base font-semibold">Staff, cutlery and charges for each event</h2>
+          <p className="text-xs text-text-muted">Prices come from your rates in Settings and Cutlery; change any line for this booking only.</p>
+        </div>
+        <ShowPhotosButton onClick={() => setGallery({ open: true })} />
       </div>
+      <SamplePhotoGallery open={gallery.open} start={gallery.start} onOpenChange={(open) => setGallery({ open })} />
       {days.map(([date, fns]) => {
         const dayTotal = fns.reduce((s, f) => s + priceFunction(f, items, packages, tenant.slabs).eventTotal, 0);
         return (
@@ -106,13 +116,24 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
                         <tr><th className="py-1.5 font-medium">Item</th><th className="w-24 py-1.5 font-medium">Qty</th><th className="w-32 py-1.5 font-medium">Rate</th><th className="w-28 py-1.5 text-right font-medium">Amount</th><th className="w-10" /></tr>
                       </thead>
                       <tbody className="divide-y">
-                        <tr>
-                          <td className="py-2"><span className="inline-flex items-center gap-2"><UtensilsCrossed className="size-4 text-text-muted" strokeWidth={1.75} />Food</span></td>
-                          <td className="py-2 text-text-muted">{num(f.pax)}</td>
-                          <td className="py-2 text-text-muted">{money(price.perPlate)} / plate</td>
-                          <td className="py-2 text-right">{money(price.perPlate * f.pax)}</td>
-                          <td />
-                        </tr>
+                        {(!price.needsMainRate || price.perPlate - price.mainRate > 0) && (
+                          <tr>
+                            <td className="py-2"><span className="inline-flex items-center gap-2"><UtensilsCrossed className="size-4 text-text-muted" strokeWidth={1.75} />{price.needsMainRate ? "Other dishes" : "Food"}</span></td>
+                            <td className="py-2 text-text-muted">{num(f.pax)}</td>
+                            <td className="py-2 text-text-muted">{money(price.perPlate - price.mainRate)} / plate</td>
+                            <td className="py-2 text-right">{money((price.perPlate - price.mainRate) * f.pax)}</td>
+                            <td />
+                          </tr>
+                        )}
+                        {price.needsMainRate && (
+                          <tr className={cn(!f.mainRate && "bg-warning/10")}>
+                            <td className="py-1.5 pr-2"><span className="inline-flex items-center gap-2 font-medium"><CookingPot className="size-4 text-primary" strokeWidth={1.75} />Main course</span></td>
+                            <td className="py-1.5 text-text-muted">{num(f.pax)}</td>
+                            <td className="py-1.5 pr-2"><MoneyInput label={`Main course rate per plate for ${f.name}`} value={f.mainRate ?? 0} onChange={(v) => setMainRate(f.id, v)} /></td>
+                            <td className="py-1.5 text-right">{money(price.mainRate * f.pax)}</td>
+                            <td />
+                          </tr>
+                        )}
                         {price.fixed > 0 && <tr><td className="py-2 text-text-muted" colSpan={3}>Counters and add-ons</td><td className="py-2 text-right">{money(price.fixed)}</td><td /></tr>}
                         {charges.map((c) => (
                           <tr key={c.id}>
@@ -120,7 +141,7 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
                               {c.kind === "other" ? (
                                 <Input aria-label={`Charge name for ${f.name}`} value={c.label} onChange={(e) => patch(f.id, c.id, { label: e.target.value })} placeholder="What is it for" className="!h-9" />
                               ) : (
-                                <span className="inline-flex items-center gap-2">{c.kind === "worker" ? <Users className="size-4 text-text-muted" strokeWidth={1.75} /> : <UtensilsCrossed className="size-4 text-text-muted" strokeWidth={1.75} />}{c.label}</span>
+                                <span className="inline-flex items-center gap-2">{photoOf(c) ? <PhotoThumb photo={photoOf(c)} onOpen={(p) => setGallery({ open: true, start: p })} /> : c.kind === "worker" ? <Users className="size-4 text-text-muted" strokeWidth={1.75} /> : <UtensilsCrossed className="size-4 text-text-muted" strokeWidth={1.75} />}{c.label}</span>
                               )}
                             </td>
                             <td className="py-1.5 pr-2"><Input aria-label={`Quantity of ${c.label || "charge"} for ${f.name}`} inputMode="decimal" className="tnum !h-9" value={c.qty || ""} placeholder="0" onChange={(e) => patch(f.id, c.id, { qty: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></td>
@@ -136,8 +157,9 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
                     </table>
                   </div>
 
+                  {price.needsMainRate && !f.mainRate && <p className="mt-2 text-xs font-medium text-warning">Enter the main course rate per plate for {f.name}. Main course dishes have no price of their own.</p>}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <Select aria-label={`Add staff to ${f.name}`} value="" onChange={(e) => e.target.value && setCharges(f.id, (list) => [...list, workerLine(e.target.value, f.pax)])} className="!h-9 w-auto">
+                    <Select creatable aria-label={`Add staff to ${f.name}`} value="" onChange={(e) => e.target.value && setCharges(f.id, (list) => [...list, workerLine(e.target.value, f.pax)])} className="!h-9 w-auto">
                       <option value="">+ Staff…</option>
                       {unusedRoles.map((r) => <option key={r} value={r}>{r}{rateOf(r) ? ` · ${rate(rateOf(r))}` : ""}</option>)}
                     </Select>

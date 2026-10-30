@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardCheck, FileQuestion, MessageCircleReply, PencilLine, Printer, Send, ShieldCheck, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardCheck, FileQuestion, MessageCircleReply, PencilLine, Printer, Send, ShieldCheck, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
@@ -29,7 +29,7 @@ function QuotationDetail() {
   const quote = quotations.find((q) => q.id === id);
   const [langPick, setDocLang] = React.useState<Locale | null>(null);
 
-  if (!quote) return <EmptyState icon={FileQuestion} title="Quotation not found" help="It may have been removed, or the link is old." action={<Button variant="primary" asChild><Link href="/quotations">All quotations</Link></Button>} />;
+  if (!quote) return <EmptyState icon={FileQuestion} title="Quotation not found" help="It may have been removed, or the link is old." action={<Button variant="primary" asChild><Link href="/orders?tab=quotations">All quotations</Link></Button>} />;
 
   const client = clients.find((c) => c.id === quote.clientId);
   const order = orders.find((o) => o.quotationId === quote.id);
@@ -56,7 +56,7 @@ function QuotationDetail() {
   const convert = async () => {
     try {
       const orderId = await convertToOrder(quote.id);
-      toast.success("Order created", { description: "It stays tentative until the advance is recorded." });
+      toast.success("Approved and booked", { description: "The order stays tentative until the advance is recorded." });
       router.push(`/orders/${orderId}`);
     } catch (e) {
       toast.error("The order was not created", { description: e instanceof Error ? e.message : undefined });
@@ -74,15 +74,15 @@ function QuotationDetail() {
   const primary =
     order ? <Button variant="primary" size="lg" asChild><Link href={`/orders/${order.id}`}>Open order {order.number}<ArrowRight strokeWidth={1.75} /></Link></Button>
     : quote.status === "pending_approval" ? (user.role === "owner" ? <Button variant="primary" size="lg" onClick={() => setStatus("draft", "Discount approved")}><ShieldCheck strokeWidth={1.75} />Approve discount</Button> : null)
-    : quote.status === "draft" || quote.status === "changes" ? <Button variant="primary" size="lg" onClick={send}><Send strokeWidth={1.75} />Send on WhatsApp</Button>
-    : quote.status === "sent" || quote.status === "approved" ? <Button variant="primary" size="lg" onClick={convert}><ClipboardCheck strokeWidth={1.75} />Convert to order</Button>
+    : active ? <Button variant="primary" size="lg" onClick={convert}><ClipboardCheck strokeWidth={1.75} />Client approved, book it</Button>
     : null;
+  const sendButton = !order && (quote.status === "draft" || quote.status === "changes") ? <Button size="lg" onClick={send}><Send strokeWidth={1.75} />Send on WhatsApp</Button> : null;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
       <div className="min-w-0">
         <div className="mb-4 flex items-center gap-3 print:hidden">
-          <Button variant="ghost" size="icon" asChild aria-label="Back to quotations"><Link href="/quotations"><ArrowLeft strokeWidth={1.75} /></Link></Button>
+          <Button variant="ghost" size="icon" asChild aria-label="Back to quotations"><Link href="/orders?tab=quotations"><ArrowLeft strokeWidth={1.75} /></Link></Button>
           <div className="min-w-0 flex-1">
             <h1 className="tnum flex flex-wrap items-center gap-2 font-heading text-2xl font-bold">{quote.number}{quote.version > 1 && <Badge>v{quote.version}</Badge>}<StatusBadge status={quote.status} /></h1>
             <p className="truncate text-sm text-text-muted">{client?.name} · {quote.eventType}</p>
@@ -98,16 +98,15 @@ function QuotationDetail() {
           {quote.status === "pending_approval" && user.role !== "owner" && <p className="rounded-lg bg-warning/10 p-3 text-xs text-warning">Waiting for the owner to approve the {totals.discountPct.toFixed(1)}% discount. It cannot be sent until then.</p>}
           {quote.status === "superseded" && <p className="rounded-lg bg-surface-muted p-3 text-xs text-text-muted">This is an older version. The latest is v{versions[0].version}.</p>}
           {quote.status === "sent" && expiresIn <= 3 && <p className="rounded-lg bg-warning/10 p-3 text-xs text-warning">{expiresIn < 0 ? "This quotation has expired." : `Expires ${expiresIn === 0 ? "today" : `in ${expiresIn} days`}. Follow up with the client.`}</p>}
-          {primary && <div className="flex flex-col">{primary}</div>}
+          {(primary || sendButton) && <div className="flex flex-col gap-2">{primary}{sendButton}</div>}
           <div className="grid grid-cols-2 gap-2">
-            {active && !order && <Button asChild><Link href={`/quotations/new?revise=${quote.id}`}><PencilLine strokeWidth={1.75} />Revise</Link></Button>}
+            {active && !order && <Button asChild><Link href={`/booking?revise=${quote.id}`}><PencilLine strokeWidth={1.75} />Revise</Link></Button>}
             <Button onClick={printLight}><Printer strokeWidth={1.75} />Print or PDF</Button>
             {quote.status === "sent" && <Button onClick={send}><Send strokeWidth={1.75} />Send again</Button>}
             {active && !order && quote.status !== "pending_approval" && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button><MessageCircleReply strokeWidth={1.75} />Client replied</Button></DropdownMenuTrigger>
                 <DropdownMenuContent>
-                  <DropdownMenuItem onSelect={() => setStatus("approved", "Marked as approved")}><CheckCircle2 strokeWidth={1.75} />Approved</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setStatus("changes", "Marked as changes asked")}><PencilLine strokeWidth={1.75} />Asked for changes</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setStatus("rejected", "Marked as rejected")}><XCircle strokeWidth={1.75} />Rejected</DropdownMenuItem>
                 </DropdownMenuContent>

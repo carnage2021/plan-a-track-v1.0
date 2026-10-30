@@ -14,6 +14,7 @@ import type {
   TeamUser,
   Tenant,
   DocSettings,
+  SamplePhoto,
 } from "./types";
 import { inBranch, setBranchContext, withBranch } from "./branch";
 import { localDay } from "./utils";
@@ -36,7 +37,7 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
  * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
  * added the client's second phone and the coordinator. */
-export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false };
+export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -133,7 +134,7 @@ export const clientRow = (c: Client): Row => ({
   ...(schema.contacts ? { alt_phone: c.altPhone || null } : {}),
 });
 
-export const categoryRow = (c: MenuCategory, sort: number): Row => ({ id: c.id, name: c.name, icon: c.icon, sort_order: sort, ...(schema.subcategories ? { parent_id: c.parentId ?? null } : {}) });
+export const categoryRow = (c: MenuCategory, sort: number): Row => ({ id: c.id, name: c.name, icon: c.icon, sort_order: sort, ...(schema.subcategories ? { parent_id: c.parentId ?? null } : {}), ...(schema.mainRate ? { priced_at_booking: !!c.atBooking } : {}) });
 
 export const itemRow = (i: MenuItem): Row => ({
   id: i.id,
@@ -247,7 +248,7 @@ async function insertFunctions(sb: SB, parent: { quotation_id?: string; order_id
   check(
     await sb.from("event_functions").insert(
       functions.map((f, i) =>
-        tenanted({ id: f.id, ...parent, name: f.name, event_date: f.date, serving_time: f.time || "19:00", venue: f.venue, pax: f.pax, package_id: f.packageId ?? null, sort_order: i, ...(schema.services ? { food_type_id: f.foodTypeId ?? null, session: f.session ?? null, end_time: f.endTime || null } : {}), ...(schema.charges ? { charges: f.charges ?? [] } : {}) }, tenantId),
+        tenanted({ id: f.id, ...parent, name: f.name, event_date: f.date, serving_time: f.time || "19:00", venue: f.venue, pax: f.pax, package_id: f.packageId ?? null, sort_order: i, ...(schema.services ? { food_type_id: f.foodTypeId ?? null, session: f.session ?? null, end_time: f.endTime || null } : {}), ...(schema.charges ? { charges: f.charges ?? [] } : {}), ...(schema.mainRate ? { main_rate: f.mainRate ?? null } : {}) }, tenantId),
       ),
     ),
     "Saving functions",
@@ -324,6 +325,11 @@ export interface Loaded {
   eventTypes: { id: string; name: string }[];
   /** False until 0017 has added event types */
   eventTypesReady: boolean;
+  samplePhotos: SamplePhoto[];
+  /** False until 0021 has added sample photos */
+  samplePhotosReady: boolean;
+  /** False until 0022 has added main course priced at booking */
+  mainRateReady: boolean;
   /** The branch this person is tied to, if the owner assigned one */
   myBranch: string;
 }
@@ -340,11 +346,13 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   const [branchProbe, branchRows, extrasProbe] = await Promise.all([sb.from("orders").select("branch_id").limit(1), all("branches", "created_at"), sb.from("packages").select("additions").limit(1)]);
   schema.packageExtras = !extrasProbe.error;
   schema.subcategories = !(await sb.from("menu_categories").select("parent_id").limit(1)).error;
+  schema.mainRate = !(await sb.from("menu_categories").select("priced_at_booking").limit(1)).error;
   // Asked of the database, not read off a loaded client, so an account with no clients yet still saves them.
   clientDates = !(await sb.from("clients").select("birthday").limit(1)).error;
   schema.contacts = !(await sb.from("enquiries").select("coordinator_id").limit(1)).error;
   schema.coordinator = !(await sb.from("enquiries").select("coordinator").limit(1)).error;
   const eventRows = await sb.from("event_types").select("id,name,sort_order").order("sort_order").order("created_at");
+  const photoRows = await sb.from("sample_photos").select("id,kind,name,photo_url,note").order("kind").order("sort_order").order("created_at");
   const branchesEnabled = !branchProbe.error;
   const branchList = ((branchRows.data ?? []) as Row[]).map((b) => ({ id: b.id as string, name: b.name as string, address: b.address as string }));
   const myBranch = (profile.branch_id as string | null) ?? "";
@@ -386,7 +394,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
         const picked = itemsByFn.get(f.id) ?? [];
         const notes = Object.fromEntries(picked.filter((p) => p.note).map((p) => [p.item_id, p.note]));
         const prices = Object.fromEntries(picked.filter((p) => p.price_override !== null && p.price_override !== undefined).map((p) => [p.item_id, Number(p.price_override)]));
-        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined, itemPrices: Object.keys(prices).length ? prices : undefined, charges: Array.isArray(f.charges) && f.charges.length ? f.charges : undefined };
+        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined, itemPrices: Object.keys(prices).length ? prices : undefined, charges: Array.isArray(f.charges) && f.charges.length ? f.charges : undefined, mainRate: f.main_rate === null || f.main_rate === undefined ? undefined : Number(f.main_rate) };
       });
   const extraRows = rowsOf(extras, "Loading extra charges");
   const extrasOf = (key: "quotation_id" | "order_id", id: string): ExtraCharge[] => extraRows.filter((e) => e[key] === id).map((e) => ({ id: e.id, label: e.label, amount: Number(e.amount) }));
@@ -406,7 +414,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     clients: rowsOf(clients, "Loading clients").map((c) => {
       return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined, referralCode: c.referral_code ?? undefined, referredBy: c.referred_by ?? undefined, credit: Number(c.credit ?? 0), altPhone: c.alt_phone ?? undefined };
     }),
-    categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon, parentId: c.parent_id ?? undefined })),
+    categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon, parentId: c.parent_id ?? undefined, atBooking: c.priced_at_booking ? true : undefined })),
     items: rowsOf(items, "Loading the menu").map((i) => ({
       id: i.id,
       name: i.name,
@@ -524,6 +532,9 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     contactsReady: schema.contacts,
     eventTypes: eventRows.error ? [] : ((eventRows.data ?? []) as Row[]).map((e) => ({ id: e.id as string, name: e.name as string })),
     eventTypesReady: !eventRows.error,
+    samplePhotos: photoRows.error ? [] : ((photoRows.data ?? []) as Row[]).map((p) => ({ id: p.id as string, kind: p.kind as SamplePhoto["kind"], name: p.name as string, photoUrl: p.photo_url as string, note: (p.note as string) ?? "" })),
+    samplePhotosReady: !photoRows.error,
+    mainRateReady: schema.mainRate,
   };
 }
 

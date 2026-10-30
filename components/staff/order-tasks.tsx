@@ -135,7 +135,7 @@ function FunctionTasks({ fn, order }: { fn: EventFunction; order: Order }) {
           <ul className="mt-2 divide-y">{mine.map((t) => <TaskRow key={t.id} task={t} fn={fn} order={order} />)}</ul>
           <div className="mt-2 grid grid-cols-1 gap-2 border-t pt-3 md:grid-cols-[1fr_auto_auto_1fr_auto]">
             <Input aria-label="New task" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add a task, e.g. Roti making" />
-            <Select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)} className="md:w-36">{workerRoles.map((r) => <option key={r}>{r}</option>)}</Select>
+            <Select creatable aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)} className="md:w-36">{workerRoles.map((r) => <option key={r}>{r}</option>)}</Select>
             <Button disabled={!title.trim()} onClick={() => { addTasks([blank({ title: title.trim(), role, rate: typical(role) })]); setTitle(""); }}><Plus strokeWidth={1.75} />Add</Button>
             <Select aria-label="Assign a chef to a dish" value={dish} onChange={(e) => setDish(e.target.value)}><option value="">Assign a chef to one dish</option>{dishes.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
             <Button disabled={!dish} onClick={() => { addTasks([blank({ title: `Chef: ${items.find((i) => i.id === dish)?.name}`, role: "Cook", itemId: dish, rate: typical("Cook") })]); setDish(""); }}><ChefHat strokeWidth={1.75} />Add</Button>

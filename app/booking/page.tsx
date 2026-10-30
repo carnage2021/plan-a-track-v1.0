@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardList, FileText, PartyPopper, Plus, Save, Send, Wallet, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { PdfDownloads } from "@/components/documents/doc-actions";
@@ -14,12 +14,13 @@ import { BrandMark } from "@/components/settings/tenant-forms";
 import { Stepper, useOrderMoney } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card, Skeleton } from "@/components/ui/primitives";
-import { blankDraft, draftIssues, emptyServices, namedServices, useQuoteDraft } from "@/lib/draft";
+import { blankDraft, blankFunction, draftIssues, emptyServices, namedServices, useQuoteDraft } from "@/lib/draft";
+import { priceFunction } from "@/lib/pricing";
 import { useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
-import type { Order } from "@/lib/types";
+import type { Order, QuoteDraft } from "@/lib/types";
 import { useUi } from "@/lib/ui";
-import { fmtDate, money, num, whatsappLink } from "@/lib/utils";
+import { fmtDate, money, num, uid, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
 
 const steps = ["Client and event", "Menu", "Extras and total", "Confirm"];
@@ -61,11 +62,40 @@ function Booked({ order, onNew }: { order: Order; onNew: () => void }) {
 
 function BookingFlow() {
   const router = useRouter();
+  const params = useSearchParams();
+  const enquiryId = params.get("enquiry") ?? undefined;
+  const reviseId = params.get("revise") ?? undefined;
   const user = useCurrentUser();
   const tenant = useStore((s) => s.tenant);
   const createQuotation = useStore((s) => s.createQuotation);
   const convertToOrder = useStore((s) => s.convertToOrder);
-  const { draft, setDraft, clear, restart, resumed } = useQuoteDraft("booking", blankDraft);
+
+  // Opened from an enquiry, its client and services fill in; opened to revise a quotation, that quotation does.
+  const fresh = React.useCallback((): QuoteDraft => {
+    const s = useStore.getState();
+    const quote = s.quotations.find((q) => q.id === reviseId);
+    if (quote) {
+      const c = s.clients.find((x) => x.id === quote.clientId);
+      return { ...blankDraft(), clientId: quote.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: quote.coordinatorId, coordinator: quote.coordinator, eventType: quote.eventType, functions: quote.functions, extras: quote.extras, discount: quote.discount, reviseOf: quote.id, enquiryId: quote.enquiryId, referralCode: quote.referralCode, creditUsed: quote.creditUsed, step: 1 };
+    }
+    const enquiry = s.enquiries.find((e) => e.id === enquiryId);
+    if (enquiry) {
+      const c = s.clients.find((x) => x.id === enquiry.clientId);
+      // The services asked for in the enquiry become the booking's events, menus still to pick.
+      const functions = enquiry.services?.length ? enquiry.services.map((f) => ({ ...f, id: uid(), itemIds: [] })) : [blankFunction(enquiry.eventType, enquiry.date, enquiry.pax, enquiry.venue)];
+      return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: enquiry.coordinatorId, coordinator: enquiry.coordinator, eventType: enquiry.eventType, enquiryId, functions, step: 0 };
+    }
+    return blankDraft();
+  }, [enquiryId, reviseId]);
+
+  const { draft, setDraft, clear, restart, resumed } = useQuoteDraft("booking", fresh, !enquiryId && !reviseId);
+  const revising = useStore((s) => s.quotations.find((q) => q.id === draft.reviseOf));
+  // The new version comes after the newest in the group, not after the one the revision started from.
+  const nextVersion = useStore((s) => (revising ? Math.max(...s.quotations.filter((q) => q.groupId === revising.groupId).map((q) => q.version)) + 1 : 1));
+  const items = useStore((s) => s.items);
+  const packages = useStore((s) => s.packages);
+  // Events built dish by dish with main course dishes but no main course rate typed in yet.
+  const noMainRate = draft.functions.filter((f) => { const p = priceFunction(f, items, packages, tenant.slabs); return p.needsMainRate && !p.mainRate; }).map((f) => f.name);
   const [activeFn, setActiveFn] = React.useState(draft.functions[0]?.id ?? "");
   const [showErrors, setShowErrors] = React.useState(false);
   const [orderId, setOrderId] = React.useState<string | null>(null);
@@ -83,6 +113,10 @@ function BookingFlow() {
   }, []);
 
   const go = (next: number) => {
+    if (next > 2 && step === 2 && noMainRate.length) {
+      toast.error(`Enter the main course rate per plate for ${noMainRate.join(", ")}`, { description: "Main course dishes have no price of their own; the rate counts on the bill." });
+      return;
+    }
     if (next > 0 && issues.length) {
       setShowErrors(true);
       setDraft({ step: 0 });
@@ -109,13 +143,23 @@ function BookingFlow() {
       setBusy(false);
     }
   };
+  /** Stops a save while an event still needs its main course rate, and takes the salesperson back to it. */
+  const ratesMissing = () => {
+    if (!noMainRate.length) return false;
+    toast.error(`Enter the main course rate per plate for ${noMainRate.join(", ")}`);
+    setDraft({ step: 2 });
+    return true;
+  };
   const quoteOnly = () =>
+    !ratesMissing() &&
     save(async () => {
       const id = await createQuotation(draft, blocked ? "pending_approval" : "draft");
       clear();
+      toast.success(blocked ? "Quotation sent to the owner for approval" : revising ? `Saved as version ${nextVersion}` : "Quotation saved", { description: "Approve it from Orders, Quotations when the client says yes." });
       router.push(`/quotations/${id}`);
     });
   const confirm = () =>
+    !ratesMissing() &&
     save(async () => {
       const id = await convertToOrder(await createQuotation(draft, "approved"));
       clear();
@@ -127,7 +171,7 @@ function BookingFlow() {
     restart();
   };
 
-  const doc = { clientName: draft.clientName, clientPhone: draft.clientPhone, eventType: draft.eventType, functions: draft.functions, extras: draft.extras, discount: draft.discount, gstRate: tenant.gstRate, gstInclusive: tenant.gstInclusive };
+  const doc = { clientName: draft.clientName, clientPhone: draft.clientPhone, eventType: draft.eventType, functions: draft.functions, extras: draft.extras, discount: draft.discount, gstRate: tenant.gstRate, gstInclusive: tenant.gstInclusive, number: revising?.number, version: revising ? nextVersion : undefined };
 
   return (
     <div className="min-h-dvh" style={{ "--brand": tenant.brandColor } as React.CSSProperties}>
@@ -136,7 +180,7 @@ function BookingFlow() {
           <BrandMark className="size-9" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-heading text-base font-semibold">{tenant.name}</p>
-            <p className="truncate text-xs opacity-80">{draft.clientName ? `${draft.clientName} · ${draft.eventType}` : tenant.tagline}</p>
+            <p className="truncate text-xs opacity-80">{revising ? `Revising ${revising.number}, saves as version ${nextVersion}` : draft.clientName ? `${draft.clientName} · ${draft.eventType}` : tenant.tagline}</p>
           </div>
           {!order && <p className="tnum text-right max-sm:hidden"><span className="block text-xs opacity-80">Total so far</span><span className="font-heading text-base font-semibold">{money(totals.grand)}</span></p>}
           <Link href="/" aria-label="Exit booking mode" title="Exit booking mode" className="grid size-9 place-items-center rounded-lg hover:bg-brand-fg/15"><X className="size-5" strokeWidth={1.75} /></Link>
@@ -201,9 +245,9 @@ function BookingFlow() {
                   ) : (
                     <Button variant="primary" size="lg" className="w-full" loading={busy} onClick={confirm}><CheckCircle2 strokeWidth={1.75} />Confirm booking</Button>
                   )}
-                  <Button size="lg" className="w-full" disabled={busy} onClick={quoteOnly}><FileText strokeWidth={1.75} />{blocked ? "Send for approval" : "Quotation only, book later"}</Button>
+                  <Button size="lg" className="w-full" disabled={busy} onClick={quoteOnly}><FileText strokeWidth={1.75} />{blocked ? "Send for approval" : revising ? `Save as quotation v${nextVersion}` : "Save as quotation"}</Button>
                   <Button size="lg" variant="ghost" className="w-full" onClick={saveLater}><Save strokeWidth={1.75} />Decide later, save draft</Button>
-                  <p className="text-xs text-text-muted">After confirming you can take the advance by cash, UPI or bank and send the receipt on WhatsApp.</p>
+                  <p className="text-xs text-text-muted">Confirm books it now, and you can take the advance by cash, UPI or bank. Save as quotation keeps it in Orders, Quotations until the client approves.</p>
                 </Card>
               </div>
             )}
@@ -223,6 +267,7 @@ export default function BookingPage() {
   React.useEffect(() => {
     if (hydrated && !signedIn) router.replace("/login");
   }, [hydrated, signedIn, router]);
-  if (!hydrated || !signedIn) return <div className="p-6"><Skeleton className="h-14 rounded-xl" /><Skeleton className="mt-6 h-96 rounded-xl" /></div>;
-  return <BookingFlow />;
+  const loading = <div className="p-6"><Skeleton className="h-14 rounded-xl" /><Skeleton className="mt-6 h-96 rounded-xl" /></div>;
+  if (!hydrated || !signedIn) return loading;
+  return <React.Suspense fallback={loading}><BookingFlow /></React.Suspense>;
 }

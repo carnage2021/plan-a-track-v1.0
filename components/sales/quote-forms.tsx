@@ -64,7 +64,7 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
             <Input inputMode="tel" value={draft.clientPhone} onChange={(e) => setDraft({ clientPhone: e.target.value })} placeholder="98250 12345" />
           </Field>
           <Field label="Event type">
-            <Select value={draft.eventType} onChange={(e) => setDraft({ eventType: e.target.value })}>{withCurrent(eventTypes, draft.eventType).map((t) => <option key={t}>{t}</option>)}</Select>
+            <Select creatable value={draft.eventType} onChange={(e) => setDraft({ eventType: e.target.value })}>{withCurrent(eventTypes, draft.eventType).map((t) => <option key={t}>{t}</option>)}</Select>
           </Field>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">

@@ -4,7 +4,7 @@ import { Clock, Plus, Trash2 } from "lucide-react";
 import * as React from "react";
 import { PaxInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/input";
+import { Field, Input, Select, TimeInput } from "@/components/ui/input";
 import { Card } from "@/components/ui/primitives";
 import { blankFunction } from "@/lib/draft";
 import { nextSlot, serviceLine, sessionFor, sessions, useFoodTypes } from "@/lib/services";
@@ -70,10 +70,10 @@ export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, s
           <Input type="date" min={minDate || isoDate(new Date())} max={maxDate || undefined} value={fn.date} onChange={(e) => onChange({ date: e.target.value })} />
         </Field>
         <Field label="Start time">
-          <Input type="time" value={fn.time} onChange={(e) => onChange({ time: e.target.value, session: e.target.value ? sessionFor(e.target.value) : fn.session })} />
+          <TimeInput label="Start time" value={fn.time} onChange={(v) => onChange({ time: v, session: v ? sessionFor(v) : fn.session })} />
         </Field>
         <Field label="End time">
-          <Input type="time" value={fn.endTime ?? ""} onChange={(e) => onChange({ endTime: e.target.value || undefined })} />
+          <TimeInput label="End time" optional value={fn.endTime ?? ""} onChange={(v) => onChange({ endTime: v || undefined })} />
         </Field>
         <Field label="Session" className="col-span-2 sm:col-span-1">
           <Select value={fn.session ?? sessionFor(fn.time)} onChange={(e) => onChange({ session: e.target.value as Session })}>

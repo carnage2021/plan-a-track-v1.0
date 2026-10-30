@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { categoryRow, clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, run, savePackageRows } from "./db";
+import { categoryRow, clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, run, savePackageRows, schema } from "./db";
 import { categories, clients, createSeed, items, packages } from "./seed";
 import type { EventFunction } from "./types";
 import { ok } from "./supply-db";
@@ -17,6 +17,10 @@ export async function seedTenant(sb: SupabaseClient, tenantId: string, ownerId: 
   const id = (old: string) => ids.get(old) ?? ids.set(old, randomUUID()).get(old)!;
 
   await run(sb.from("menu_categories").insert(categories.map((c, i) => ({ ...categoryRow({ ...c, id: id(c.id) }, i), tenant_id: tenantId }))), "Starter categories");
+  // Main course priced at booking needs 0022; before it is run the starter menu keeps its dish prices.
+  const mainIds = categories.filter((c) => c.atBooking).map((c) => id(c.id));
+  const mainReady = !(await sb.from("menu_categories").update({ priced_at_booking: true }).in("id", mainIds)).error;
+  if (mainReady) schema.mainRate = true;
   await run(sb.from("menu_items").insert(items.map((i) => ({ ...itemRow({ ...i, id: id(i.id), categoryId: id(i.categoryId) }), tenant_id: tenantId }))), "Starter menu");
   for (const p of packages) {
     await savePackageRows(sb, { ...p, id: id(p.id), fixedItemIds: p.fixedItemIds.map(id), rules: p.rules.map((r) => ({ ...r, categoryId: id(r.categoryId) })) }, tenantId);
@@ -26,7 +30,10 @@ export async function seedTenant(sb: SupabaseClient, tenantId: string, ownerId: 
   const now = new Date();
   const seed = createSeed(now);
   // A function row belongs to one quotation or one order, so each parent gets its own copies.
-  const fns = (list: EventFunction[]) => list.map((f) => ({ ...f, id: randomUUID(), packageId: f.packageId ? id(f.packageId) : undefined, itemIds: f.itemIds.map(id) }));
+  // Sample events built dish by dish get a main course rate equal to their main dishes' old prices, so totals stay as they were.
+  const mainCats = new Set(categories.filter((c) => c.atBooking).map((c) => c.id));
+  const mainRateOf = (f: EventFunction) => (mainReady && !f.packageId ? items.filter((i) => f.itemIds.includes(i.id) && i.pricingType === "plate" && mainCats.has(i.categoryId)).reduce((s, i) => s + i.price, 0) : 0);
+  const fns = (list: EventFunction[]) => list.map((f) => ({ ...f, id: randomUUID(), packageId: f.packageId ? id(f.packageId) : undefined, itemIds: f.itemIds.map(id), mainRate: mainRateOf(f) || undefined }));
   const extras = <T extends { id: string }>(list: T[]) => list.map((e) => ({ ...e, id: randomUUID() }));
 
   await run(sb.from("clients").insert(clients.map((c) => ({ ...clientRow({ ...c, id: id(c.id) }), tenant_id: tenantId }))), "Sample clients");

@@ -47,6 +47,9 @@ export interface Tenant {
   staffRates?: StaffRate[];
 }
 
+/** A photo shown to the client while choosing extras: a staff uniform, a cutlery item or a decoration setup. */
+export interface SamplePhoto { id: string; kind: "staff" | "cutlery" | "decor"; name: string; photoUrl: string; note: string }
+
 /** A staff role and what one person in it is charged to the client for one event. */
 export interface StaffRate { name: string; rate: number }
 
@@ -170,6 +173,8 @@ export interface MenuCategory {
   icon: string;
   /** The category this one sits inside; unset for a top-level category */
   parentId?: string;
+  /** Main course: its dishes have no price; the rate per plate is typed in at booking. Sub-categories follow it. */
+  atBooking?: boolean;
 }
 
 export interface MenuItem {
@@ -248,6 +253,8 @@ export interface EventFunction {
   itemPrices?: Record<string, number>;
   /** Staff, cutlery and other charges on this event alone */
   charges?: EventCharge[];
+  /** Main course rate per plate, typed in at booking for the dishes priced there */
+  mainRate?: number;
 }
 
 export interface ExtraCharge {

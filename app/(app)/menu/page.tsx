@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Chip, Skeleton, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/sheet";
-import { isWithin, treeOrder } from "@/lib/categories";
+import { isWithin, pricedAtBooking, treeOrder } from "@/lib/categories";
 import { categoryIcon } from "@/lib/icons";
 import { offered, packageLines } from "@/lib/packages";
 import { marginTone } from "@/lib/pricing";
@@ -55,7 +55,8 @@ function Menu() {
     .filter((i) => !query.trim() || i.name.toLowerCase().includes(query.trim().toLowerCase()) || i.nameLocal.includes(query.trim()))
     .filter((i) => !noPhoto || !i.photo)
     .filter((i) => !offOnly || !i.active);
-  const visible = missingFirst(listed, (i) => i.name, (i) => !(i.price > 0));
+  // Main course dishes are priced at booking, so no price there is not missing.
+  const visible = missingFirst(listed, (i) => i.name, (i) => !(i.price > 0) && !pricedAtBooking(i.categoryId));
   const missing = items.filter((i) => !i.photo).length;
 
   /** Every bulk change can be undone from the toast instead of asking for confirmation first. */
@@ -131,12 +132,12 @@ function Menu() {
                           </button>
                         )}
                         <div className="flex flex-1 flex-col px-1 pb-1 pt-3">
-                          <h3 className="truncate font-heading text-base font-semibold">{i.name}</h3>{!(i.price > 0) && <Badge tone="warning" className="mt-1">No price</Badge>}
+                          <h3 className="truncate font-heading text-base font-semibold">{i.name}</h3>{!(i.price > 0) && !pricedAtBooking(i.categoryId) && <Badge tone="warning" className="mt-1">No price</Badge>}
                           <p className="truncate text-xs text-text-muted">{i.nameLocal || "No local name"}</p>
                           <div className="mt-2 flex items-end justify-between gap-2">
                             <div className="tnum min-w-0">
                               {!hidePrices && <p className="truncate text-sm font-medium">{priceLabel(i)}</p>}
-                              {seesCost && <p className="flex items-center gap-1.5 text-xs text-text-muted">Cost {money(i.cost)}<Badge tone={marginTone(margin)} className="h-5 px-1.5">{Math.round(margin)}%</Badge></p>}
+                              {seesCost && <p className="flex items-center gap-1.5 text-xs text-text-muted">Cost {money(i.cost)}{i.price > 0 && !pricedAtBooking(i.categoryId) && <Badge tone={marginTone(margin)} className="h-5 px-1.5">{Math.round(margin)}%</Badge>}</p>}
                             </div>
                             {canEdit && <Switch checked={i.active} label={`${i.name} available`} onCheckedChange={(v) => { patchItems([i.id], { active: v }); toast(`${i.name} switched ${v ? "on" : "off"}`, { action: { label: "Undo", onClick: () => patchItems([i.id], { active: !v }) } }); }} />}
                           </div>

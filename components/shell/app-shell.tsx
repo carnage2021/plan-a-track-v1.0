@@ -13,7 +13,6 @@ import {
   Lock,
   Sparkles,
   Check,
-  FileText,
   Languages,
   ListChecks,
   LogOut,
@@ -193,7 +192,6 @@ function useQuickActions() {
   const sales = role === "owner" || role === "sales";
   return [
     sales && { label: t("newEnquiry"), icon: MessagesSquare, run: () => openEnquiry() },
-    sales && { label: t("newQuotation"), icon: FileText, run: () => router.push("/quotations/new") },
     sales && { label: t("bookingMode"), icon: Presentation, run: () => router.push("/booking") },
     (sales || role === "accountant") && { label: t("recordPayment"), icon: Wallet, run: () => openPayment() },
   ].filter((a): a is { label: string; icon: typeof Wallet; run: () => void } => !!a);
@@ -454,8 +452,6 @@ function MobileTabs() {
     { key: "orders", href: "/orders", icon: ClipboardList },
     { key: "tasks", href: "/staff", icon: ListChecks },
   ];
-  // The quotation builder has its own bottom bar (plate summary), so the tab bar steps aside there.
-  if (pathname === "/quotations/new") return null;
   const tab = "flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs font-medium";
 
   return (

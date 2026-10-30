@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/input";
+import { Field, Input, Select, TimeInput } from "@/components/ui/input";
 import { Card } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { useStore } from "@/lib/store";
@@ -238,7 +238,7 @@ export function Requirement({ functions, orderId, title, overrides, onOverrides,
 
           <Card className="grid grid-cols-1 gap-3 p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
             <Field label="Deliver by"><Input type="date" value={expectedOn || firstDate} onChange={(e) => setExpectedOn(e.target.value)} /></Field>
-            <Field label="Delivery time"><Input type="time" value={deliverTime} onChange={(e) => setDeliverTime(e.target.value)} /></Field>
+            <Field label="Delivery time"><TimeInput label="Delivery time" value={deliverTime} onChange={setDeliverTime} /></Field>
             <Field label="Delivery place"><Input value={deliverPlace} onChange={(e) => setDeliverPlace(e.target.value)} /></Field>
             <div className="md:text-right">
               <p className="tnum text-xs text-text-muted">{toBuy.length} items · {money(total)}</p>

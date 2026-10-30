@@ -5,28 +5,35 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { StatusBadge } from "@/components/shared/badges";
+import { QuotationList } from "@/components/sales/quotation-list";
 import { EmptyState, EventCard, PageHeader, ProgressBar } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card, Chip, Skeleton } from "@/components/ui/primitives";
 import { paidAmount, priceQuote } from "@/lib/pricing";
-import { useStore } from "@/lib/store";
+import { useCurrentUser, useStore } from "@/lib/store";
 import type { OrderStatus } from "@/lib/types";
 import { fmtDate, money, num } from "@/lib/utils";
 
-const filters: { id: OrderStatus | "upcoming" | "due" | "all"; label: string }[] = [
+const filters: { id: OrderStatus | "upcoming" | "due" | "all" | "quotations"; label: string }[] = [
   { id: "upcoming", label: "Upcoming" },
   { id: "tentative", label: "Tentative" },
   { id: "due", label: "Balance due" },
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
   { id: "all", label: "All" },
+  { id: "quotations", label: "Quotations" },
 ];
 
 function Orders() {
   const router = useRouter();
-  const clientId = useSearchParams().get("client");
+  const params = useSearchParams();
+  const clientId = params.get("client");
   const { orders, clients, items, packages, tenant } = useStore();
-  const [filter, setFilter] = React.useState<(typeof filters)[number]["id"]>(clientId ? "all" : "upcoming");
+  const role = useCurrentUser().role;
+  // Quotations are for the people who sell; operations and accounts see orders only.
+  const sells = role === "owner" || role === "sales";
+  const quoteCount = useStore((s) => s.quotations.filter((q) => !["superseded", "rejected"].includes(q.status) && !s.orders.some((o) => o.quotationId === q.id)).length);
+  const [filter, setFilter] = React.useState<(typeof filters)[number]["id"]>(params.get("tab") === "quotations" && sells ? "quotations" : clientId ? "all" : "upcoming");
   const client = clients.find((c) => c.id === clientId);
 
   const rows = React.useMemo(
@@ -46,13 +53,15 @@ function Orders() {
 
   return (
     <>
-      <PageHeader title="Orders" subtitle={client ? `Showing orders for ${client.name}` : "Confirmed bookings and the events they contain."} action={<Button variant="primary" asChild><Link href="/booking"><Presentation strokeWidth={1.75} /><span className="max-sm:hidden">Start a booking</span></Link></Button>}>
+      <PageHeader title="Orders" subtitle={filter === "quotations" ? "Quotations saved at the end of a booking. Approve one when the client says yes, and it becomes an order." : client ? `Showing orders for ${client.name}` : "Bookings, and the quotations waiting for the client."} action={<Button variant="primary" asChild><Link href="/booking"><Presentation strokeWidth={1.75} /><span className="max-sm:hidden">New booking</span></Link></Button>}>
         {client && <Chip active onClick={() => router.replace("/orders")}>{client.name}<X strokeWidth={1.75} /></Chip>}
-        {filters.map((f) => <Chip key={f.id} active={filter === f.id} onClick={() => setFilter(f.id)}>{f.label}</Chip>)}
+        {filters.filter((f) => f.id !== "quotations" || sells).map((f) => <Chip key={f.id} active={filter === f.id} onClick={() => { setFilter(f.id); router.replace(f.id === "quotations" ? "/orders?tab=quotations" : clientId ? `/orders?client=${clientId}` : "/orders"); }}>{f.label}{f.id === "quotations" && quoteCount > 0 ? ` ${quoteCount}` : ""}</Chip>)}
       </PageHeader>
 
-      {rows.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="No orders in this view" help="Orders appear here when a quotation is converted, or when you finish a booking with the client." action={<Button variant="primary" asChild><Link href="/booking">Start a booking</Link></Button>} />
+      {filter === "quotations" ? (
+        <QuotationList clientId={clientId} />
+      ) : rows.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="No orders in this view" help="Orders appear here when you confirm a booking, or approve a saved quotation." action={<Button variant="primary" asChild><Link href="/booking">New booking</Link></Button>} />
       ) : (
         <>
           <Card className="hidden overflow-hidden lg:block">

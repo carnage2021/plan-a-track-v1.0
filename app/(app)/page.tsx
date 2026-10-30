@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, CalendarDays, Check, ChevronRight, MessagesSquare, PhoneCall, Presentation, Users } from "lucide-react";
+import { CalendarCheck, CalendarDays, Check, ChevronRight, MessagesSquare, PhoneCall, Users } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import * as React from "react";
@@ -110,7 +110,7 @@ export default function DashboardPage() {
       <PageHeader
         title={`${greeting}, ${user.name.split(" ")[0]}`}
         subtitle={`${fmtDate(isoDate(new Date()), { weekday: "long", day: "numeric", month: "long" })} · ${t("subtitle")}`}
-        action={seesSales && <Button variant="primary" className="max-md:hidden" asChild><Link href="/booking"><Presentation strokeWidth={1.75} />Start a booking</Link></Button>}
+        action={seesSales && <Button variant="primary" className="max-md:hidden" onClick={() => openEnquiry()}><MessagesSquare strokeWidth={1.75} />New enquiry</Button>}
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -126,7 +126,7 @@ export default function DashboardPage() {
           <Button variant="ghost" asChild><Link href="/calendar"><CalendarDays strokeWidth={1.75} />Calendar</Link></Button>
         </div>
         {data.upcoming.length === 0 ? (
-          <EmptyState icon={CalendarDays} title={t("noEvents")} help="Confirmed and tentative functions show up here as their dates get close." action={seesSales && <Button variant="primary" asChild><Link href="/booking">Start a booking</Link></Button>} />
+          <EmptyState icon={CalendarDays} title={t("noEvents")} help="Confirmed and tentative functions show up here as their dates get close." action={seesSales && <Button variant="primary" asChild><Link href="/booking">New booking</Link></Button>} />
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {data.upcoming.map(({ order, fn }) => <EventCard key={fn.id} order={order} functionId={fn.id} showMoney={false} />)}

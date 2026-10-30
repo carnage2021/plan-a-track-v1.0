@@ -7,7 +7,7 @@ import { Badge } from "@/components/shared/badges";
 import { EmptyState, MoneyInput, ServiceLabel } from "@/components/shared/blocks";
 import { timeRange } from "@/lib/services";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/input";
+import { Field, Input, Select, Textarea, TimeInput } from "@/components/ui/input";
 import { Card, ToggleRow } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { mediaUrl } from "@/lib/db";
@@ -153,7 +153,7 @@ function TripSheet({ draft, onClose }: { draft: TripDraft; onClose: () => void }
         <div className="grid grid-cols-2 gap-3">
           <Field label="Driver"><Input value={t.driverName} onChange={(e) => set({ driverName: e.target.value })} /></Field>
           <Field label="Driver phone"><Input inputMode="tel" value={t.driverPhone} onChange={(e) => set({ driverPhone: e.target.value })} /></Field>
-          <Field label="Leaves the kitchen at"><Input type="time" value={t.departTime} onChange={(e) => set({ departTime: e.target.value })} /></Field>
+          <Field label="Leaves the kitchen at"><TimeInput label="Leaves the kitchen at" value={t.departTime} onChange={(v) => set({ departTime: v })} /></Field>
           <Field label="Trip cost" hint="Added to the event's transport cost"><MoneyInput value={t.cost} onChange={(cost) => set({ cost })} /></Field>
         </div>
         <div>

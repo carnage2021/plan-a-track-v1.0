@@ -244,6 +244,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
         {!hidePrices && (
           <dl className="tnum space-y-1 text-sm">
             <div className="flex items-baseline justify-between"><dt className="text-text-muted">Per plate{price.slabPct ? ` (${price.slabPct}% off for ${num(fn.pax)}+)` : ""}</dt><dd className="font-heading text-2xl font-bold">{money(price.perPlate)}</dd></div>
+            {price.needsMainRate && <p className="text-xs text-text-muted">{price.mainRate ? `Includes main course at ${money(price.mainRate)} a plate` : "Plus the main course rate per plate, entered in Extras and total"}</p>}
             <div className="flex justify-between text-text-muted"><dt>{fn.name} · {num(fn.pax)} guests</dt><dd>{money(price.total)}</dd></div>
             {functions.length > 1 && <div className="flex justify-between text-text-muted"><dt>All {functions.length} functions</dt><dd>{money(totals.food)}</dd></div>}
             {totals.extras > 0 && <div className="flex justify-between text-text-muted"><dt>Extras</dt><dd>{money(totals.extras)}</dd></div>}

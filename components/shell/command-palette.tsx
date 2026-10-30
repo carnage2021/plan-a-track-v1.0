@@ -65,7 +65,6 @@ export function CommandPalette() {
               {sales && (
                 <Command.Group heading="Actions" className={group}>
                   <Command.Item className={row} onSelect={go(() => openEnquiry())}><MessagesSquare strokeWidth={1.75} />{t("common.newEnquiry")}</Command.Item>
-                  <Command.Item className={row} onSelect={go(() => router.push("/quotations/new"))}><FileText strokeWidth={1.75} />{t("common.newQuotation")}</Command.Item>
                   <Command.Item className={row} onSelect={go(() => openPayment())}><Wallet strokeWidth={1.75} />{t("common.recordPayment")}</Command.Item>
                   <Command.Item className={row} onSelect={go(() => router.push("/booking"))}><Presentation strokeWidth={1.75} />{t("common.bookingMode")}</Command.Item>
                 </Command.Group>

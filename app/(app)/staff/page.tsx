@@ -36,7 +36,7 @@ function WorkerSheet({ worker, onClose }: { worker?: Worker; onClose: () => void
       <div className="grid grid-cols-2 gap-3">
         <Field label="Name" className="col-span-2"><Input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
         <Field label="Phone"><Input inputMode="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} /></Field>
-        <Field label="Role"><Select value={form.role} onChange={(e) => set("role", e.target.value)}>{[...new Set([...workerRoles, form.role])].map((r) => <option key={r}>{r}</option>)}</Select></Field>
+        <Field label="Role"><Select creatable value={form.role} onChange={(e) => set("role", e.target.value)}>{[...new Set([...workerRoles, form.role])].map((r) => <option key={r}>{r}</option>)}</Select></Field>
         <Field label="Type"><Select value={form.type} onChange={(e) => set("type", e.target.value as WorkerType)}>{(Object.keys(typeLabel) as WorkerType[]).map((t) => <option key={t} value={t}>{typeLabel[t]}</option>)}</Select></Field>
         {form.type === "contractor" ? (
           <Field label="Supplied by" hint={contractors.length ? undefined : "Add a Labour contractor on the Vendors page."}><Select value={form.contractorId ?? ""} onChange={(e) => set("contractorId", e.target.value || undefined)}><option value="">Choose a contractor</option>{contractors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</Select></Field>

@@ -5,6 +5,7 @@ import { DocHeader, DocPayBlock, docStyle, useDocs } from "@/components/document
 import { byDay } from "@/components/sales/event-charges";
 import { docT } from "@/lib/doc-i18n";
 import { chargeAmount, priceFunction, priceQuote } from "@/lib/pricing";
+import { pricedAtBooking } from "@/lib/categories";
 import { timeRange } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import { outsourceTotals } from "@/lib/supply";
@@ -164,12 +165,15 @@ function EventLines({ f, itemised, lang }: { f: EventFunction; itemised: boolean
   return (
     <>
       <tr><td className="pt-2.5 font-medium" colSpan={4}>{head} <span className={`text-xs font-normal ${muted}`}>· {num(f.pax)} {t("guests")}{pkg ? ` · ${pkg.name} ${t("package")}` : ""}</span></td></tr>
-      {!itemised && row("food", `${t("food")} (${num(f.pax)} × ${money(p.perPlate)} ${t("perPlate")})`, num(f.pax), money(p.perPlate), p.perPlate * f.pax, "")}
+      {!itemised && row("food", `${t("food").charAt(0).toUpperCase()}${t("food").slice(1)} (${num(f.pax)} × ${money(p.perPlate)} ${t("perPlate")})`, num(f.pax), money(p.perPlate), p.perPlate * f.pax, "")}
       {itemised && pkg && row("pkg", `${pkg.name} ${t("package")}`, num(f.pax), money(pkg.pricePerPlate), pkg.pricePerPlate * f.pax)}
       {itemised && plates.map((i) => {
-        const extra = !pkg || p.extraIds.includes(i.id);
-        return row(i.id, <span className="pl-3">{i.name}{pkg && !extra ? <span className={`text-xs ${muted}`}> · in package</span> : null}</span>, extra ? num(f.pax) : "", extra ? rate(priceOf(i)) : "", extra ? priceOf(i) * f.pax : null);
+        // Main course dishes are paid for together by the main course rate, on its own line below.
+        const main = p.needsMainRate && f.itemPrices?.[i.id] === undefined && pricedAtBooking(i.categoryId);
+        const extra = (!pkg || p.extraIds.includes(i.id)) && !main;
+        return row(i.id, <span className="pl-3">{i.name}{pkg && !extra ? <span className={`text-xs ${muted}`}> · in package</span> : main ? <span className={`text-xs ${muted}`}> · {t("mainCourse").toLowerCase()}</span> : null}</span>, extra ? num(f.pax) : "", extra ? rate(priceOf(i)) : "", extra ? priceOf(i) * f.pax : null);
       })}
+      {itemised && p.mainRate > 0 && row("main", <span className="pl-3 font-medium">{t("mainCourse")}</span>, num(f.pax), rate(p.mainRate), p.mainRate * f.pax)}
       {itemised && slab !== 0 && row("slab", <span className="pl-3">{p.slabPct}% guest-count discount</span>, "", "", slab)}
       {itemised ? fixed.map((i) => row(i.id, <span className="pl-3">{i.name}</span>, 1, rate(priceOf(i)), priceOf(i))) : p.fixed > 0 && row("fixed", t("counters"), 1, money(p.fixed), p.fixed)}
       {(f.charges ?? []).filter((c) => chargeAmount(c)).map((c) => row(c.id, <span className="pl-3">{c.label}</span>, num(c.qty), rate(c.rate), chargeAmount(c)))}

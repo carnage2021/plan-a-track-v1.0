@@ -1,4 +1,4 @@
-import { lineage } from "./categories";
+import { lineage, pricedAtBooking } from "./categories";
 import type { Discount, EventCharge, EventFunction, ExtraCharge, MenuItem, MenuPackage, Tenant } from "./types";
 
 /** One charge line's amount, kept to the paisa. */
@@ -32,6 +32,10 @@ export interface FunctionPrice {
   charges: number;
   /** Food plus the event's charges: what this one event costs the client before discount and GST */
   eventTotal: number;
+  /** The event is built dish by dish and has main course dishes, so it needs a main course rate */
+  needsMainRate: boolean;
+  /** The main course rate per plate counted in perPlate (0 when none is needed or typed) */
+  mainRate: number;
 }
 
 export function slabPct(pax: number, slabs: Tenant["slabs"]) {
@@ -40,13 +44,14 @@ export function slabPct(pax: number, slabs: Tenant["slabs"]) {
 }
 
 export function priceFunction(
-  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices" | "charges">,
+  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices" | "charges" | "mainRate">,
   items: MenuItem[],
   packages: MenuPackage[],
   slabs: Tenant["slabs"],
 ): FunctionPrice {
-  // A price changed on this quotation or order wins over the menu price.
-  const byId = new Map(items.map((i) => [i.id, fn.itemPrices?.[i.id] !== undefined ? { ...i, price: fn.itemPrices[i.id] } : i]));
+  // A price changed on this quotation or order wins over the menu price. Main course dishes have no price of their
+  // own; they are paid for by the main course rate typed in at booking.
+  const byId = new Map(items.map((i) => [i.id, fn.itemPrices?.[i.id] !== undefined ? { ...i, price: fn.itemPrices[i.id] } : pricedAtBooking(i.categoryId) ? { ...i, price: 0 } : i]));
   const picked = fn.itemIds.map((id) => byId.get(id)).filter((i): i is MenuItem => !!i);
   const plateItems = picked.filter((i) => i.pricingType === "plate");
   const fixed = picked.filter((i) => i.pricingType !== "plate").reduce((s, i) => s + i.price, 0);
@@ -83,8 +88,13 @@ export function priceFunction(
     basePlate = plateItems.reduce((s, i) => s + i.price, 0);
   }
 
+  // With a package its price covers the main course; built dish by dish, the typed rate is added per plate.
+  const needsMainRate = !pkg && plateItems.some((i) => pricedAtBooking(i.categoryId));
+  const mainRate = needsMainRate ? fn.mainRate ?? 0 : 0;
+  basePlate += mainRate;
   const pct = slabPct(fn.pax, slabs);
-  const perPlate = Math.round(basePlate * (1 - pct / 100));
+  // The guest-count discount is for menu prices; the main course rate is typed for this booking, so it stays as typed.
+  const perPlate = Math.round((basePlate - mainRate) * (1 - pct / 100)) + mainRate;
   const costPerPlate = plateItems.reduce((s, i) => s + i.cost, 0);
   const fixedCost = picked.filter((i) => i.pricingType !== "plate").reduce((s, i) => s + i.cost, 0);
 
@@ -101,6 +111,8 @@ export function priceFunction(
     extraIds,
     charges: eventCharges(fn),
     eventTotal: perPlate * fn.pax + fixed + eventCharges(fn),
+    needsMainRate,
+    mainRate,
   };
 }
 

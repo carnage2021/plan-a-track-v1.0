@@ -82,7 +82,7 @@ function BookingFlow() {
       const c = s.clients.find((x) => x.id === enquiry.clientId);
       // The services asked for in the enquiry become the booking's events, menus still to pick.
       const functions = enquiry.services?.length ? enquiry.services.map((f) => ({ ...f, id: uid(), itemIds: [] })) : [blankFunction("", enquiry.date, enquiry.pax, enquiry.venue)];
-      return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: enquiry.coordinatorId, coordinator: enquiry.coordinator, eventType: enquiry.eventType, enquiryId, functions, step: 0 };
+      return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: enquiry.coordinatorId, coordinator: enquiry.coordinator, eventType: enquiry.eventType, enquiryId, functions, startDate: enquiry.date, endDate: enquiry.endDate ?? enquiry.date, step: 0 };
     }
     return blankDraft();
   }, [enquiryId, reviseId]);

@@ -11,20 +11,14 @@ import { marginTone, priceFunction, priceQuote } from "@/lib/pricing";
 import { datesBetween, eventSpan } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { QuoteDraft } from "@/lib/types";
-import { cn, fmtDate, money, uid } from "@/lib/utils";
-import { useEventTypes } from "@/lib/event-types";
+import { cn, fmtDate, isoDate, money, realDate, uid } from "@/lib/utils";
+import { useEventTypes, useSubEvents } from "@/lib/event-types";
 import { ContactFields, withCurrent } from "./enquiry-sheet";
 import { nextService, ServiceCard } from "./service-fields";
 import { ExtraDishes, ReferralCard } from "./summary-extras";
 import { byDay, EventCharges } from "./event-charges";
 
 type SetDraft = (patch: Partial<QuoteDraft> | ((d: QuoteDraft) => Partial<QuoteDraft>)) => void;
-
-const functionNames: Record<string, string[]> = {
-  Wedding: ["Haldi", "Mehndi", "Sangeet", "Wedding", "Reception"],
-  Engagement: ["Engagement", "Dinner"],
-  Corporate: ["Lunch", "High tea", "Dinner"],
-};
 
 /** Step 1: who the client is and which functions the event has. */
 export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft; setDraft: SetDraft; showErrors?: boolean }) {
@@ -35,11 +29,17 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
   const match = clients.find((c) => c.id === draft.clientId);
   const suggestions = draft.clientName.length >= 2 && !match ? clients.filter((c) => c.name.toLowerCase().includes(draft.clientName.toLowerCase())).slice(0, 4) : [];
   const setFn = (id: string, patch: Partial<QuoteDraft["functions"][number]>) => setDraft((d) => ({ functions: d.functions.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
-  const names = functionNames[draft.eventType] ?? [];
-  const unused = names.filter((n) => !draft.functions.some((f) => f.name === n));
+  const unused = useSubEvents(draft.eventType).filter((n) => !draft.functions.some((f) => f.name.trim().toLowerCase() === n.toLowerCase()));
   const last = draft.functions[draft.functions.length - 1];
   const span = eventSpan(draft.functions);
-  const fallback = { date: "", pax: 200, venue: "" };
+  // A draft saved before the start and end dates were asked for takes them from its services.
+  const start = draft.startDate ?? span.start;
+  const end = draft.endDate ?? span.end;
+  const lastDay = end && end > start ? end : start;
+  const fallback = { date: start, pax: 200, venue: "" };
+  /** Service 1 starts on the event's first day, and a service with no date yet takes it too; the rest are only flagged when outside. */
+  const setDates = (s: string, e: string) =>
+    setDraft((d) => ({ startDate: s, endDate: e && (!s || e > s) ? e : s, functions: realDate(s) ? d.functions.map((f, i) => (i === 0 || !f.date ? { ...f, date: s } : f)) : d.functions }));
 
   return (
     <div className="space-y-4">
@@ -68,6 +68,14 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
           </Field>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Field label="Event start date" error={showErrors && start && !realDate(start) ? "Check the year" : ""}>
+            <Input type="date" value={start} min={isoDate(new Date())} onChange={(e) => setDates(e.target.value, end)} />
+          </Field>
+          <Field label="Event end date" error={showErrors && draft.endDate && !realDate(draft.endDate) ? "Check the year" : ""} hint="Same as the start for a one-day event.">
+            <Input type="date" value={end || start} min={start || isoDate(new Date())} onChange={(e) => setDates(start, e.target.value)} />
+          </Field>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <ContactFields
             value={{ email: draft.clientEmail, altPhone: draft.clientAltPhone, address: draft.clientAddress, coordinatorId: draft.coordinatorId, coordinator: draft.coordinator }}
             onChange={(p) => setDraft({ ...("email" in p ? { clientEmail: p.email } : {}), ...("altPhone" in p ? { clientAltPhone: p.altPhone } : {}), ...("address" in p ? { clientAddress: p.address } : {}), ...("coordinatorId" in p ? { coordinatorId: p.coordinatorId } : {}), ...("coordinator" in p ? { coordinator: p.coordinator } : {}) })}
@@ -83,15 +91,15 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
         {span.start && <p className="tnum text-sm text-text-muted">Event {fmtDate(span.start, { day: "numeric", month: "short" })}{span.end > span.start ? ` to ${fmtDate(span.end, { day: "numeric", month: "short" })}, ${datesBetween(span.start, span.end).length} days` : ", one day"} · {draft.functions.length} {draft.functions.length === 1 ? "service" : "services"}</p>}
       </div>
       {draft.functions.map((f, i) => (
-        <ServiceCard key={f.id} eventType={draft.eventType} fn={f} index={i} onChange={(p) => setFn(f.id, p)} onRemove={draft.functions.length > 1 ? () => setDraft((d) => ({ functions: d.functions.filter((x) => x.id !== f.id) })) : undefined} showErrors={showErrors} />
+        <ServiceCard key={f.id} eventType={draft.eventType} fn={f} index={i} onChange={(p) => setFn(f.id, p)} onRemove={draft.functions.length > 1 ? () => setDraft((d) => ({ functions: d.functions.filter((x) => x.id !== f.id) })) : undefined} minDate={start || undefined} maxDate={lastDay || undefined} showErrors={showErrors} />
       ))}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => setDraft((d) => ({ functions: [...d.functions, { ...nextService(d.functions, fallback), name: unused[0] ?? "" }] }))}><Plus strokeWidth={1.75} />Add a service</Button>
+        <Button onClick={() => setDraft((d) => ({ functions: [...d.functions, nextService(d.functions, fallback, lastDay || undefined)] }))}><Plus strokeWidth={1.75} />Add a service</Button>
         {unused.slice(0, 4).map((n) => (
-          <Button key={n} variant="ghost" onClick={() => setDraft((d) => ({ functions: [...d.functions, { ...nextService(d.functions, fallback), name: n }] }))}><Plus strokeWidth={1.75} />{n}</Button>
+          <Button key={n} variant="ghost" onClick={() => setDraft((d) => ({ functions: [...d.functions, { ...nextService(d.functions, fallback, lastDay || undefined), name: n }] }))}><Plus strokeWidth={1.75} />{n}</Button>
         ))}
-        {last && draft.functions.length === 1 && <span className="flex items-center gap-1 text-xs text-text-muted"><Copy className="size-3.5" strokeWidth={1.75} />A new service copies the date, venue and guests and starts after this one ends; menus can be copied in the next step.</span>}
+        {last && draft.functions.length === 1 && <span className="flex items-center gap-1 text-xs text-text-muted"><Copy className="size-3.5" strokeWidth={1.75} />A new service copies the event name, date, venue and guests and starts after this one ends; menus can be copied in the next step.</span>}
       </div>
     </div>
   );

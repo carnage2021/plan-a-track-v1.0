@@ -366,6 +366,7 @@ function OrderView({ order }: { order: Order }) {
               <div className="flex flex-wrap gap-2">
                 <DownloadPdf kind="bill" id={order.id} lang={docLang} label="Bill · per plate, no dish prices" />
                 <DownloadPdf kind="itemised" id={order.id} lang={docLang} label="Itemised bill · every dish priced" />
+                <DownloadPdf kind="small" id={order.id} lang="en" label="Small quotation · rates and totals only" />
               </div>
             </div>
             <div className="border-t pt-3">

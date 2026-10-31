@@ -6,6 +6,7 @@ import { CreditNoteDocument, InvoiceDocument } from "@/components/billing/docume
 import { useOrderMoney } from "@/components/shared/blocks";
 import { EventPdf } from "@/components/documents/event-pdf";
 import { OrderBillDoc, WorkOrderDoc } from "@/components/documents/order-docs";
+import { SmallQuote } from "@/components/documents/small-quote";
 import { useSupply } from "@/lib/supply-store";
 import { coordinatorOf } from "@/components/sales/enquiry-sheet";
 import { useBilling } from "@/lib/billing";
@@ -37,7 +38,7 @@ function Doc() {
   const order = orders.find((o) => o.id === id || o.id === invoice?.orderId || o.id === credit?.orderId || o.id === work?.orderId);
   const clientLang = clients.find((c) => c.id === (quote?.clientId ?? order?.clientId))?.language;
   const lang = ((params.get("lang") as Locale | null) ?? clientLang ?? "en") as Locale;
-  const loaded = hydrated && signedIn && (["quote", "menu", "confirmation", "bill", "itemised"].includes(kind) || (kind === "workorder" ? supplyReady : billingReady));
+  const loaded = hydrated && signedIn && (["quote", "menu", "confirmation", "bill", "itemised", "small"].includes(kind) || (kind === "workorder" ? supplyReady : billingReady));
 
   let body: React.ReactNode = null;
   if (loaded) {
@@ -46,13 +47,17 @@ function Doc() {
       body = <EventPdf variant="quotation" day={day} coordinator={coordinatorOf(quote, users)} data={{ ...quote, clientName: client?.name ?? "", clientPhone: client?.phone, date: quote.createdAt, lang }} />;
     } else if ((kind === "menu" || kind === "confirmation") && order) body = <OrderDoc order={order} variant={kind} lang={lang} day={day} />;
     else if ((kind === "bill" || kind === "itemised") && order) body = <OrderBillDoc order={order} itemised={kind === "itemised"} lang={lang} />;
-    else if (kind === "workorder" && work && order) body = <WorkOrderDoc o={work} order={order} />;
+    // The small quotation is made from a quotation or from a booking.
+    else if (kind === "small" && (quote || order)) {
+      const src = (quote ?? order)!;
+      body = <SmallQuote data={{ ...src, clientName: clients.find((c) => c.id === src.clientId)?.name ?? "" }} />;
+    } else if (kind === "workorder" && work && order) body = <WorkOrderDoc o={work} order={order} />;
     else if (kind === "invoice" && invoice && order) body = <InvoiceDocument invoice={invoice} order={order} lang={lang} />;
     else if (kind === "credit" && credit && order) body = <CreditNoteDocument note={credit} order={order} lang={lang} />;
   }
 
   const found = body !== null;
-  const title = kind === "invoice" ? invoice?.number : kind === "credit" ? credit?.number : kind === "quote" ? quote?.number : kind === "workorder" ? work?.number : kind === "bill" || kind === "itemised" ? `${order?.number ?? ""} ${kind === "bill" ? "Bill" : "Itemised bill"}` : order?.number;
+  const title = kind === "small" ? `${(quote ?? order)?.number ?? ""} Small quotation` : kind === "invoice" ? invoice?.number : kind === "credit" ? credit?.number : kind === "quote" ? quote?.number : kind === "workorder" ? work?.number : kind === "bill" || kind === "itemised" ? `${order?.number ?? ""} ${kind === "bill" ? "Bill" : "Itemised bill"}` : order?.number;
   // Tells the PDF route the page is finished: data in, fonts and photos loaded.
   React.useEffect(() => {
     if (hydrated && !signedIn) document.body.dataset.ready = "signedout";

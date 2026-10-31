@@ -369,6 +369,9 @@ export interface QuoteDraft {
   clientEmail?: string;
   clientAltPhone?: string;
   clientAddress?: string;
+  /** First and last day of the event; every service's date is checked against them */
+  startDate?: string;
+  endDate?: string;
   coordinatorId?: string;
   /** The coordinator's name, phone and email as typed (or filled from the team) */
   coordinator?: Coordinator;

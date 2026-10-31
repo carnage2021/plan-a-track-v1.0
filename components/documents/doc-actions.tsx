@@ -8,7 +8,7 @@ import { docLanguages } from "@/lib/doc-i18n";
 import type { EventFunction, Locale } from "@/lib/types";
 import { cn, fmtDate } from "@/lib/utils";
 
-export type PdfKind = "quote" | "menu" | "confirmation" | "invoice" | "credit" | "bill" | "itemised" | "workorder";
+export type PdfKind = "quote" | "menu" | "confirmation" | "invoice" | "credit" | "bill" | "itemised" | "workorder" | "small";
 
 /** English, Hindi or Gujarati for the document; starts in the client's own language. */
 export function DocLangPicker({ value, onChange, className }: { value: Locale; onChange: (l: Locale) => void; className?: string }) {

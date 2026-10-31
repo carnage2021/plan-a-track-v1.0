@@ -10,7 +10,7 @@ import puppeteer from "puppeteer-core";
 
 export const maxDuration = 60;
 
-const kinds = ["quote", "menu", "confirmation", "invoice", "credit", "bill", "itemised", "workorder"];
+const kinds = ["quote", "menu", "confirmation", "invoice", "credit", "bill", "itemised", "workorder", "small"];
 const langs = ["en", "hi", "gu"];
 
 function chromePath() {

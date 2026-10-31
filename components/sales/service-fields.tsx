@@ -33,6 +33,7 @@ export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, s
   const foodTypes = useFoodTypes();
   const packages = useStore((s) => s.packages);
   const ready = useStore((s) => s.servicesReady);
+  const outside = !!fn.date && ((!!minDate && fn.date < minDate) || (!!maxDate && fn.date > maxDate));
 
   // The food type is what is served (Lunch, Gala Dinner); the event name stays the client's own (Haldi, Sangeet).
   const pickFoodType = (foodTypeId: string) => {
@@ -69,7 +70,7 @@ export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, s
             {subEvents.map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
         </Field>
-        <Field label="Date" error={showErrors && !fn.date ? "Pick a date" : ""}>
+        <Field label="Date" error={showErrors && !fn.date ? "Pick a date" : outside ? "Outside the event's start and end dates" : ""}>
           <Input type="date" min={minDate || isoDate(new Date())} max={maxDate || undefined} value={fn.date} onChange={(e) => onChange({ date: e.target.value })} />
         </Field>
         <Field label="Session">
@@ -99,7 +100,7 @@ export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, s
   );
 }
 
-/** A new service after the last one: same day, guests and venue, starting an hour after it ends. */
+/** A new service after the last one: same event name, day, guests and venue, starting an hour after it ends. */
 export function nextService(list: EventFunction[], fallback: { date: string; pax: number; venue: string }, lastDay?: string) {
   const last = list[list.length - 1];
   const slot = nextSlot(last);
@@ -110,7 +111,8 @@ export function nextService(list: EventFunction[], fallback: { date: string; pax
     if (!lastDay || next <= lastDay) date = next;
     else Object.assign(slot, { time: "12:00", endTime: "15:00" });
   }
-  return blankFunction("", date, last?.pax ?? fallback.pax, last?.venue ?? fallback.venue, slot);
+  // Most events run several services (Haldi breakfast, Haldi lunch), so the name carries over and can be changed.
+  return blankFunction(last?.name ?? "", date, last?.pax ?? fallback.pax, last?.venue ?? fallback.venue, slot);
 }
 
 /** The list of services with an Add button, for the enquiry form. */

@@ -16,7 +16,7 @@ import type { QuoteStatus, Quotation } from "@/lib/types";
 import { printLight } from "@/lib/ui";
 import { cn, daysFromToday, fmtDate, money, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
-import { DocLangPicker, PdfDownloads } from "@/components/documents/doc-actions";
+import { DocLangPicker, DownloadPdf, PdfDownloads } from "@/components/documents/doc-actions";
 import type { Locale } from "@/lib/types";
 
 function QuotationDetail() {
@@ -90,6 +90,7 @@ function QuotationDetail() {
         </div>
         <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden"><DocLangPicker value={docLang} onChange={setDocLang} /></div>
         <PdfDownloads kind="quote" id={quote.id} lang={docLang} functions={quote.functions} className="mb-3" />
+        <DownloadPdf kind="small" id={quote.id} lang="en" label="Small quotation · rates and totals only" className="mb-3 w-full sm:w-auto" />
         <QuoteDocument data={{ ...doc, lang: docLang }} />
       </div>
 

@@ -61,6 +61,8 @@ export function draftIssues(d: QuoteDraft) {
   const issues: string[] = [];
   if (!d.clientName.trim()) issues.push("Enter the client's name");
   if (d.clientPhone.replace(/\D/g, "").length < 10) issues.push("Enter a 10-digit mobile number");
+  if (d.startDate && !realDate(d.startDate)) issues.push("Check the year of the event start date");
+  if (d.endDate && !realDate(d.endDate)) issues.push("Check the year of the event end date");
   // Names are filled in automatically when blank, so only a date and guests are needed per service.
   d.functions.forEach((f, i) => {
     const name = f.name.trim() || `Service ${i + 1}`;

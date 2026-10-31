@@ -117,8 +117,8 @@ export function SummaryForm({ draft, setDraft, hideMargin }: { draft: QuoteDraft
   const unusedPresets = (chargesReady ? bookingPresets : extraPresets).filter((p) => !draft.extras.some((e) => e.label === p));
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px] lg:items-start">
-      <div className="space-y-4">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+      <div className="min-w-0 space-y-4">
         <ExtraDishes
           functions={draft.functions}
           onPrice={(fnId, itemId, price) =>

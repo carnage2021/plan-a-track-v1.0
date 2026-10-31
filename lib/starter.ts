@@ -7,6 +7,7 @@ import type { EventFunction } from "./types";
 import { ok } from "./supply-db";
 import { starterAssets, starterIngredients, starterRecipes, starterVendors } from "./supply-seed";
 import { financialYear } from "./utils";
+import { starterPhotos } from "./starter-photos";
 
 /**
  * Fills a new caterer's account: the starter menu and packages always, and optionally sample
@@ -25,6 +26,8 @@ export async function seedTenant(sb: SupabaseClient, tenantId: string, ownerId: 
   for (const p of packages) {
     await savePackageRows(sb, { ...p, id: id(p.id), fixedItemIds: p.fixedItemIds.map(id), rules: p.rules.map((r) => ({ ...r, categoryId: id(r.categoryId) })) }, tenantId);
   }
+  // Starter photos of uniforms, cutlery and decoration, so Step 3 has something to show; skipped before 0021.
+  await sb.from("sample_photos").insert(starterPhotos.map((p, i) => ({ tenant_id: tenantId, kind: p.kind, name: p.name, photo_url: p.photoUrl, note: p.note, sort_order: i })));
   if (!withSamples) return;
 
   const now = new Date();

@@ -1,12 +1,14 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element -- photos come from links the caterer imports, any host */
-import { ChevronLeft, ChevronRight, Images, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Images, Plus, Sparkles, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { Dialog } from "radix-ui";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { starterPhotos } from "@/lib/starter-photos";
 import type { SamplePhoto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -16,11 +18,17 @@ export const photoKinds: { id: SamplePhoto["kind"]; label: string }[] = [
   { id: "decor", label: "Decoration" },
 ];
 
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+/** Whether two names mean the same thing: equal, or one inside the other ("Dinner plate, steel", "Waiters"). */
+export const sameThing = (a: string, b: string) => {
+  const x = key(a), y = key(b);
+  return !!x && !!y && (x === y || (Math.min(x.length, y.length) >= 3 && (x.includes(y) || y.includes(x))));
+};
 
-/** The first photo for a staff role or cutlery item, matched by name. */
-export function usePhotoFor(kind: SamplePhoto["kind"], name: string) {
-  return useStore((s) => s.samplePhotos.find((p) => p.kind === kind && same(p.name, name)));
+/** The photo for a staff role, cutlery item or decoration line: the same name first, then a close one. */
+export function findPhoto(photos: SamplePhoto[], kind: SamplePhoto["kind"], name: string) {
+  const list = photos.filter((p) => p.kind === kind);
+  return list.find((p) => key(p.name) === key(name)) ?? list.find((p) => sameThing(p.name, name));
 }
 
 /** A small photo beside a charge line; tapping it opens the gallery at that photo. */
@@ -108,6 +116,72 @@ export function ShowPhotosButton({ onClick }: { onClick: () => void }) {
   return <Button onClick={onClick}><Images strokeWidth={1.75} />Show photos to client</Button>;
 }
 
+/** Adds the starter photos the account does not have yet. Owner only, once 0021 is run. */
+export function StarterPhotosButton({ variant = "secondary" }: { variant?: "primary" | "secondary" }) {
+  const ready = useStore((s) => s.samplePhotosReady);
+  const photos = useStore((s) => s.samplePhotos);
+  const add = useStore((s) => s.addSamplePhoto);
+  const isOwner = useCurrentUser().role === "owner";
+  const missing = starterPhotos.filter((p) => !photos.some((x) => x.kind === p.kind && key(x.name) === key(p.name)));
+  if (!ready || !isOwner || !missing.length) return null;
+  return <Button variant={variant} onClick={() => missing.forEach(add)}><Sparkles strokeWidth={1.75} />Add {missing.length} starter photos</Button>;
+}
+
+/**
+ * Photos to show and pick from while adding an event's extras: staff uniforms, cutlery and decoration. Tapping a
+ * photo shows it large; Add puts it on the event as a staff, cutlery or decoration line.
+ */
+export function PhotoStrip({ title, isAdded, onAdd, onOpen }: { title: string; isAdded: (p: SamplePhoto) => boolean; onAdd: (p: SamplePhoto) => void; onOpen: (p: SamplePhoto) => void }) {
+  const photos = useStore((s) => s.samplePhotos);
+  const kinds = photoKinds.filter((k) => photos.some((p) => p.kind === k.id));
+  const [kind, setKind] = React.useState<SamplePhoto["kind"]>(kinds[0]?.id ?? "staff");
+  const current = kinds.some((k) => k.id === kind) ? kind : kinds[0]?.id;
+  if (!kinds.length) return null;
+  return (
+    <section className="mt-3 min-w-0 rounded-xl border bg-surface-muted/50 p-3" aria-label={`Photos for ${title}`}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 flex items-center gap-1.5 text-xs font-medium text-text-muted"><Images className="size-4" strokeWidth={1.75} />Photos</span>
+        {kinds.map((k) => (
+          <button key={k.id} type="button" aria-pressed={current === k.id} onClick={() => setKind(k.id)} className={cn("h-8 rounded-full px-3 text-xs font-medium", current === k.id ? "bg-primary text-primary-fg" : "bg-surface text-text-muted hover:text-text")}>
+            {k.label} <span className="opacity-70">{photos.filter((p) => p.kind === k.id).length}</span>
+          </button>
+        ))}
+      </div>
+      <ul className="no-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
+        {photos.filter((p) => p.kind === current).map((p) => {
+          const added = isAdded(p);
+          return (
+            <li key={p.id} className="w-36 shrink-0 overflow-hidden rounded-xl border bg-surface">
+              <button type="button" onClick={() => onOpen(p)} aria-label={`Show photo of ${p.name}`} className="block w-full"><img src={p.photoUrl} alt={p.name} className="aspect-[4/3] w-full object-cover" loading="lazy" /></button>
+              <div className="p-2" data-no-title-case>
+                <p className="truncate text-xs font-medium" title={p.name}>{p.name}</p>
+                <button type="button" disabled={added} onClick={() => onAdd(p)} aria-label={added ? `${p.name} added to ${title}` : `Add ${p.name} to ${title}`} className={cn("mt-1.5 flex h-8 w-full items-center justify-center gap-1 rounded-lg text-xs font-medium", added ? "bg-success/10 text-success" : "bg-primary-soft text-primary hover:bg-primary hover:text-primary-fg")}>
+                  {added ? <><Check className="size-3.5" strokeWidth={2} />Added</> : <><Plus className="size-3.5" strokeWidth={2} />Add</>}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** Shown in Step 3 while the account has no photos: what they are for, and how to get some. */
+export function NoPhotosYet() {
+  const ready = useStore((s) => s.samplePhotosReady);
+  const isOwner = useCurrentUser().role === "owner";
+  if (!ready) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed bg-surface p-3 text-sm">
+      <Images className="size-5 shrink-0 text-primary" strokeWidth={1.75} />
+      <p className="min-w-48 flex-1 text-text-muted">No sample photos yet. Photos of staff uniforms, cutlery and decoration show here, to pick from with the client.{isOwner ? "" : " Ask the owner to add them."}</p>
+      <StarterPhotosButton variant="primary" />
+      {isOwner && <Button asChild variant="ghost"><Link href="/settings?tab=photos">Add your own</Link></Button>}
+    </div>
+  );
+}
+
 /** Settings: the caterer's sample photos by type, with add and delete. */
 export function SamplePhotosForm() {
   const ready = useStore((s) => s.samplePhotosReady);
@@ -126,6 +200,7 @@ export function SamplePhotosForm() {
         <h2 className="font-heading text-lg font-semibold">Sample photos</h2>
         <p className="text-sm text-text-muted">Photos to show the client while choosing extras: staff uniforms (the dress, not the people), cutlery and decoration. A uniform photo named like a staff role, or a cutlery photo named like a cutlery item, shows beside that line. Import many at once from Import, Sample photos.</p>
       </div>
+      <StarterPhotosButton />
       {photoKinds.map((k) => {
         const list = photos.filter((p) => p.kind === k.id);
         return (

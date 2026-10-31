@@ -14,7 +14,7 @@ import { assetRequirement } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { Asset } from "@/lib/supply-types";
 import type { EventCharge, EventFunction, QuoteDraft, SamplePhoto } from "@/lib/types";
-import { PhotoThumb, SamplePhotoGallery, ShowPhotosButton } from "./sample-photos";
+import { findPhoto, NoPhotosYet, PhotoStrip, PhotoThumb, SamplePhotoGallery, sameThing, ShowPhotosButton } from "./sample-photos";
 import { cn, fmtDate, money, num, rate, uid } from "@/lib/utils";
 
 type SetDraft = (patch: Partial<QuoteDraft> | ((d: QuoteDraft) => Partial<QuoteDraft>)) => void;
@@ -42,7 +42,8 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
   // Sample photos to show the client: a uniform for each staff role, a photo for each cutlery item.
   const photos = useStore((s) => s.samplePhotos);
   const [gallery, setGallery] = React.useState<{ open: boolean; start?: SamplePhoto }>({ open: false });
-  const photoOf = (c: EventCharge) => (c.kind === "other" ? undefined : photos.find((p) => p.kind === (c.kind === "worker" ? "staff" : "cutlery") && p.name.trim().toLowerCase() === c.label.trim().toLowerCase()));
+  // A staff line shows its uniform, a cutlery line its item, and any other line a decoration (or cutlery) photo.
+  const photoOf = (c: EventCharge) => (c.kind === "worker" ? findPhoto(photos, "staff", c.label) : c.kind === "cutlery" ? findPhoto(photos, "cutlery", c.label) : c.label.trim() ? findPhoto(photos, "decor", c.label) ?? findPhoto(photos, "cutlery", c.label) : undefined);
   const roles = React.useMemo(() => [...new Set([...rates.map((r) => r.name), ...workerRoles])], [rates]);
   const rateOf = (role: string) => rates.find((r) => r.name.toLowerCase() === role.toLowerCase())?.rate ?? 0;
 
@@ -53,6 +54,17 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
 
   const workerLine = (role: string, pax: number): EventCharge => ({ id: uid(), kind: "worker", ref: role, label: role, qty: headcount(role, pax), rate: rateOf(role) });
   const cutleryLine = (a: Asset, f: EventFunction): EventCharge => ({ id: uid(), kind: "cutlery", ref: a.id, label: a.name, qty: assetRequirement(a, f, items), rate: a.rentRate ?? 0 });
+
+  /** A photo already has its line on this event. */
+  const photoAdded = (f: EventFunction, p: SamplePhoto) =>
+    (f.charges ?? []).some((c) => (p.kind === "staff" ? c.kind === "worker" : p.kind === "cutlery" ? c.kind !== "worker" : c.kind === "other") && sameThing(c.label, p.name));
+  /** Add from a photo: a uniform adds that staff role, cutlery its item (or a line of its own), decoration a charge. */
+  const addFromPhoto = (f: EventFunction, p: SamplePhoto) => {
+    if (photoAdded(f, p)) return;
+    if (p.kind === "staff") return setCharges(f.id, (list) => [...list, workerLine(roles.find((r) => sameThing(r, p.name)) ?? p.name, f.pax)]);
+    const asset = p.kind === "cutlery" ? assets.find((a) => sameThing(a.name, p.name)) : undefined;
+    setCharges(f.id, (list) => [...list, asset ? cutleryLine(asset, f) : { id: uid(), kind: "other", label: p.name, qty: p.kind === "cutlery" ? f.pax : 1, rate: 0 }]);
+  };
 
   /** Every priced staff role, with the usual headcount for the guests. */
   const fillStaff = (f: EventFunction) =>
@@ -87,6 +99,7 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
         <ShowPhotosButton onClick={() => setGallery({ open: true })} />
       </div>
       <SamplePhotoGallery open={gallery.open} start={gallery.start} onOpenChange={(open) => setGallery({ open })} />
+      {photos.length === 0 && <NoPhotosYet />}
       {days.map(([date, fns]) => {
         const dayTotal = fns.reduce((s, f) => s + priceFunction(f, items, packages, tenant.slabs).eventTotal, 0);
         return (
@@ -139,7 +152,10 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
                           <tr key={c.id}>
                             <td className="py-1.5 pr-2">
                               {c.kind === "other" ? (
-                                <Input aria-label={`Charge name for ${f.name}`} value={c.label} onChange={(e) => patch(f.id, c.id, { label: e.target.value })} placeholder="What is it for" className="!h-9" />
+                                <span className="flex items-center gap-2">
+                                  <PhotoThumb photo={photoOf(c)} onOpen={(p) => setGallery({ open: true, start: p })} />
+                                  <Input aria-label={`Charge name for ${f.name}`} value={c.label} onChange={(e) => patch(f.id, c.id, { label: e.target.value })} placeholder="What is it for" className="!h-9" />
+                                </span>
                               ) : (
                                 <span className="inline-flex items-center gap-2">{photoOf(c) ? <PhotoThumb photo={photoOf(c)} onOpen={(p) => setGallery({ open: true, start: p })} /> : c.kind === "worker" ? <Users className="size-4 text-text-muted" strokeWidth={1.75} /> : <UtensilsCrossed className="size-4 text-text-muted" strokeWidth={1.75} />}{c.label}</span>
                               )}
@@ -173,6 +189,7 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
                     {assets.some((a) => (a.rentRate ?? 0) > 0) && <Button variant="ghost" onClick={() => fillCutlery(f)}><UtensilsCrossed strokeWidth={1.75} />All cutlery</Button>}
                     {draft.functions.length > 1 && charges.length > 0 && <Button variant="ghost" onClick={() => copyToOthers(f)}><Copy strokeWidth={1.75} />Same for every event</Button>}
                   </div>
+                  <PhotoStrip title={f.name} isAdded={(p) => photoAdded(f, p)} onAdd={(p) => addFromPhoto(f, p)} onOpen={(p) => setGallery({ open: true, start: p })} />
                   {!rates.length && <p className={cn("mt-2 text-xs text-text-muted")}>Tip: set what you charge for each staff role in Settings, Service staff rates, and it fills in here.</p>}
                 </Card>
               );

@@ -15,7 +15,8 @@ import { cn, fmtDate, isoDate, money, realDate, uid } from "@/lib/utils";
 import { useEventTypes, useSubEvents } from "@/lib/event-types";
 import { ContactFields, withCurrent } from "./enquiry-sheet";
 import { nextService, ServiceCard } from "./service-fields";
-import { ExtraDishes, ReferralCard } from "./summary-extras";
+import { FoodPrices } from "./food-prices";
+import { ReferralCard } from "./summary-extras";
 import { byDay, EventCharges } from "./event-charges";
 
 type SetDraft = (patch: Partial<QuoteDraft> | ((d: QuoteDraft) => Partial<QuoteDraft>)) => void;
@@ -127,20 +128,7 @@ export function SummaryForm({ draft, setDraft, hideMargin }: { draft: QuoteDraft
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
       <div className="min-w-0 space-y-4">
-        <ExtraDishes
-          functions={draft.functions}
-          onPrice={(fnId, itemId, price) =>
-            setDraft((d) => ({
-              functions: d.functions.map((f) => {
-                if (f.id !== fnId) return f;
-                const prices = { ...f.itemPrices };
-                if (price === undefined) delete prices[itemId];
-                else prices[itemId] = price;
-                return { ...f, itemPrices: Object.keys(prices).length ? prices : undefined };
-              }),
-            }))
-          }
-        />
+        <FoodPrices functions={draft.functions} onPatch={(fnId, patch) => setDraft((d) => ({ functions: d.functions.map((f) => (f.id === fnId ? { ...f, ...patch(f) } : f)) }))} />
 
         {chargesReady ? <EventCharges draft={draft} setDraft={setDraft} /> : <p className="rounded-lg bg-warning/10 p-3 text-xs text-warning">Staff and cutlery for each event can be priced once the 0018 database update is run.</p>}
 

@@ -37,7 +37,7 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
  * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
  * added the client's second phone and the coordinator. */
-export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false };
+export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false, dishGuests: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -248,13 +248,13 @@ async function insertFunctions(sb: SB, parent: { quotation_id?: string; order_id
   check(
     await sb.from("event_functions").insert(
       functions.map((f, i) =>
-        tenanted({ id: f.id, ...parent, name: f.name, event_date: f.date, serving_time: f.time || "19:00", venue: f.venue, pax: f.pax, package_id: f.packageId ?? null, sort_order: i, ...(schema.services ? { food_type_id: f.foodTypeId ?? null, session: f.session ?? null, end_time: f.endTime || null } : {}), ...(schema.charges ? { charges: f.charges ?? [] } : {}), ...(schema.mainRate ? { main_rate: f.mainRate ?? null } : {}) }, tenantId),
+        tenanted({ id: f.id, ...parent, name: f.name, event_date: f.date, serving_time: f.time || "19:00", venue: f.venue, pax: f.pax, package_id: f.packageId ?? null, sort_order: i, ...(schema.services ? { food_type_id: f.foodTypeId ?? null, session: f.session ?? null, end_time: f.endTime || null } : {}), ...(schema.charges ? { charges: f.charges ?? [] } : {}), ...(schema.mainRate ? { main_rate: f.mainRate ?? null } : {}), ...(schema.dishGuests ? { package_price: f.packagePrice ?? null } : {}) }, tenantId),
       ),
     ),
     "Saving functions",
   );
   const items = functions.flatMap((f) =>
-    [...new Set(f.itemIds)].map((itemId, i) => tenanted({ function_id: f.id, item_id: itemId, note: f.itemNotes?.[itemId] ?? "", sort_order: i, ...(schema.referrals ? { price_override: f.itemPrices?.[itemId] ?? null } : {}) }, tenantId)),
+    [...new Set(f.itemIds)].map((itemId, i) => tenanted({ function_id: f.id, item_id: itemId, note: f.itemNotes?.[itemId] ?? "", sort_order: i, ...(schema.referrals ? { price_override: f.itemPrices?.[itemId] ?? null } : {}), ...(schema.dishGuests ? { prep_pax: f.itemPax?.[itemId] ?? null } : {}) }, tenantId)),
   );
   if (items.length) check(await sb.from("function_items").insert(items), "Saving the menu");
 }
@@ -332,6 +332,7 @@ export interface Loaded {
   samplePhotosReady: boolean;
   /** False until 0022 has added main course priced at booking */
   mainRateReady: boolean;
+  dishGuestsReady: boolean;
   /** The branch this person is tied to, if the owner assigned one */
   myBranch: string;
 }
@@ -349,6 +350,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   schema.packageExtras = !extrasProbe.error;
   schema.subcategories = !(await sb.from("menu_categories").select("parent_id").limit(1)).error;
   schema.mainRate = !(await sb.from("menu_categories").select("priced_at_booking").limit(1)).error;
+  schema.dishGuests = !(await sb.from("function_items").select("prep_pax").limit(1)).error && !(await sb.from("event_functions").select("package_price").limit(1)).error;
   // Asked of the database, not read off a loaded client, so an account with no clients yet still saves them.
   clientDates = !(await sb.from("clients").select("birthday").limit(1)).error;
   schema.contacts = !(await sb.from("enquiries").select("coordinator_id").limit(1)).error;
@@ -397,7 +399,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
         const picked = itemsByFn.get(f.id) ?? [];
         const notes = Object.fromEntries(picked.filter((p) => p.note).map((p) => [p.item_id, p.note]));
         const prices = Object.fromEntries(picked.filter((p) => p.price_override !== null && p.price_override !== undefined).map((p) => [p.item_id, Number(p.price_override)]));
-        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined, itemPrices: Object.keys(prices).length ? prices : undefined, charges: Array.isArray(f.charges) && f.charges.length ? f.charges : undefined, mainRate: f.main_rate === null || f.main_rate === undefined ? undefined : Number(f.main_rate) };
+        const prep = Object.fromEntries(picked.filter((p) => p.prep_pax !== null && p.prep_pax !== undefined).map((p) => [p.item_id, Number(p.prep_pax)]));
+        return { id: f.id, name: f.name, date: day(f.event_date), time: String(f.serving_time).slice(0, 5), endTime: f.end_time ? String(f.end_time).slice(0, 5) : undefined, session: f.session ?? undefined, foodTypeId: f.food_type_id ?? undefined, venue: f.venue, pax: f.pax, packageId: f.package_id ?? undefined, itemIds: picked.map((p) => p.item_id), itemNotes: Object.keys(notes).length ? notes : undefined, itemPrices: Object.keys(prices).length ? prices : undefined, charges: Array.isArray(f.charges) && f.charges.length ? f.charges : undefined, mainRate: f.main_rate === null || f.main_rate === undefined ? undefined : Number(f.main_rate), itemPax: Object.keys(prep).length ? prep : undefined, packagePrice: f.package_price === null || f.package_price === undefined ? undefined : Number(f.package_price) };
       });
   const extraRows = rowsOf(extras, "Loading extra charges");
   const extrasOf = (key: "quotation_id" | "order_id", id: string): ExtraCharge[] => extraRows.filter((e) => e[key] === id).map((e) => ({ id: e.id, label: e.label, amount: Number(e.amount) }));
@@ -539,6 +542,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     samplePhotos: photoRows.error ? [] : ((photoRows.data ?? []) as Row[]).map((p) => ({ id: p.id as string, kind: p.kind as SamplePhoto["kind"], name: p.name as string, photoUrl: p.photo_url as string, note: (p.note as string) ?? "" })),
     samplePhotosReady: !photoRows.error,
     mainRateReady: schema.mainRate,
+    dishGuestsReady: schema.dishGuests,
   };
 }
 

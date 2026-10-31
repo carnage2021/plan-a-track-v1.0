@@ -71,6 +71,8 @@ interface Data {
   /** 0021 has run: sample photos for staff uniforms, cutlery and decoration */
   samplePhotosReady: boolean;
   mainRateReady: boolean;
+  /** 0024 has run: kitchen guests per dish and a package price per booking */
+  dishGuestsReady: boolean;
   addSamplePhoto: (p: Omit<SamplePhoto, "id">) => void;
   removeSamplePhoto: (id: string) => void;
   tenantId: string;
@@ -151,6 +153,8 @@ interface Actions {
   setRawOverrides: (orderId: string, overrides: Record<string, number>) => void;
   /** A dish's per-plate price on a booked order; undefined goes back to the menu price. Logged as a change. */
   setOrderItemPrice: (orderId: string, functionId: string, itemId: string, price: number | undefined, priceImpact: number) => void;
+  /** Guests each dish of one event is cooked for; dishes left out use the booked guests */
+  setOrderItemPax: (orderId: string, functionId: string, itemPax: Record<string, number>) => void;
   /** The client's referral code, made and saved the first time it is needed. */
   ensureReferralCode: (clientId: string) => string;
 }
@@ -163,7 +167,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false, dishGuestsReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -627,6 +631,29 @@ export const useStore = create<Store>()(
           await run(sb.from("event_functions").update({ pax }).eq("id", functionId), "Saving the guest count");
           await run(sb.from("order_changes").insert({ id: entry.id, order_id: orderId, description: entry.text, price_impact: priceImpact, changed_by: s.currentUserId }), "Logging the change");
         });
+        // Agency orders not yet sent follow the new count.
+        useSupply.getState().syncOutsourceQty(orderId);
+      },
+      setOrderItemPax: (orderId, functionId, itemPax) => {
+        const s = get();
+        const fn = s.orders.find((o) => o.id === orderId)?.functions.find((f) => f.id === functionId);
+        if (!fn) return;
+        // Only counts that differ from the booked guests are kept; the rest follow the booking.
+        const next = Object.fromEntries(Object.entries(itemPax).filter(([id, n]) => fn.itemIds.includes(id) && n > 0 && n !== fn.pax));
+        const was = (id: string) => fn.itemPax?.[id] ?? fn.pax;
+        const changed = fn.itemIds.filter((id) => was(id) !== (next[id] ?? fn.pax));
+        if (!changed.length) return;
+        const name = (id: string) => s.items.find((i) => i.id === id)?.name ?? "";
+        const text = `${fn.name}: kitchen guests ${changed.length > 3 ? `changed for ${changed.length} dishes` : changed.map((id) => `${name(id)} ${was(id)} to ${next[id] ?? fn.pax}`).join(", ")}`;
+        const entry = { id: uid(), at: today(), by: s.users.find((u) => u.id === s.currentUserId)?.name ?? "", text, priceImpact: 0 };
+        set((st) => ({
+          orders: st.orders.map((o) => (o.id === orderId ? { ...o, functions: o.functions.map((f) => (f.id === functionId ? { ...f, itemPax: Object.keys(next).length ? next : undefined } : f)), changeLog: [entry, ...o.changeLog] } : o)),
+        }));
+        background(async (sb) => {
+          for (const id of changed) await run(sb.from("function_items").update({ prep_pax: next[id] ?? null }).eq("function_id", functionId).eq("item_id", id), "Saving the kitchen guests");
+          await run(sb.from("order_changes").insert({ id: entry.id, order_id: orderId, description: entry.text, price_impact: 0, changed_by: s.currentUserId }), "Logging the change");
+        });
+        useSupply.getState().syncOutsourceQty(orderId);
       },
       setRawOverrides: (orderId, overrides) => {
         set((s) => ({ orders: s.orders.map((o) => (o.id === orderId ? { ...o, rawOverrides: Object.keys(overrides).length ? overrides : undefined } : o)) }));

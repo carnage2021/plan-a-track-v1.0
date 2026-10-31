@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/sheet";
 import { marginTone } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
-import { outsourceTotals } from "@/lib/supply";
+import { dishGuests, outsourceTotals } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { OutsourceOrder, OutsourceStatus } from "@/lib/supply-types";
 import type { Order } from "@/lib/types";
@@ -39,6 +39,8 @@ function OutsourceCard({ o, order }: { o: OutsourceOrder; order: Order }) {
   const [issue, setIssue] = React.useState("");
   const name = (id: string) => items.find((i) => i.id === id)?.name ?? "";
   const editable = o.status === "draft" || o.status === "sent";
+  // Kitchen guests changed after the order went to the vendor: the quantity agreed no longer matches.
+  const stale = fn && o.status !== "draft" && o.status !== "cancelled" ? o.lines.filter((l) => items.find((i) => i.id === l.itemId)?.pricingType === "plate" && l.qty !== dishGuests(fn, l.itemId)) : [];
   const text = `Order ${o.number} from ${tenantName}\n\n${o.lines.map((l) => `• ${name(l.itemId)}: ${num(l.qty)} @ ₹${l.agencyRate}`).join("\n")}\n\nTotal: ${money(totals.cost)}\nDeliver on ${fmtDate(o.deliverOn)}, ${fmtTime(o.deliverTime)} at ${o.deliverPlace}.\nContact: ${o.contact}\n\nPlease reply to accept, or send your rate if it has changed.`;
 
   const advance = () => {
@@ -64,6 +66,14 @@ function OutsourceCard({ o, order }: { o: OutsourceOrder; order: Order }) {
         <ol className="mt-3 flex gap-1" aria-label={`Status: ${label[o.status]}`}>
           {flow.slice(1).map((s, i) => <li key={s} className={cn("h-1.5 flex-1 rounded-full", i < step ? "bg-success" : "bg-surface-muted")} title={label[s]} />)}
         </ol>
+      )}
+
+      {stale.length > 0 && fn && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-warning/10 p-3 text-xs text-warning">
+          <AlertTriangle className="size-4 shrink-0" strokeWidth={1.75} />
+          <span className="min-w-0 flex-1">Kitchen guests changed after this was sent: {stale.map((l) => `${name(l.itemId)} ${num(l.qty)} ordered, ${num(dishGuests(fn, l.itemId))} needed`).join("; ")}. Tell {vendor?.name ?? "the agency"}.</span>
+          {editable && <Button variant="ghost" className="!h-8" onClick={() => patch(o.id, { lines: o.lines.map((l) => (stale.some((x) => x.id === l.id) ? { ...l, qty: dishGuests(fn, l.itemId) } : l)) })}>Use the new counts</Button>}
+        </div>
       )}
 
       <div className="mt-3 overflow-x-auto">

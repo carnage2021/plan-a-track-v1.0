@@ -28,6 +28,12 @@ export interface FunctionPrice {
   rules: RuleProgress[];
   /** Dishes charged on top of the package price */
   extraIds: string[];
+  /** The package price per plate used: this booking's own, or the package's */
+  packagePrice: number;
+  /** Dishes inside the package with a price typed on top of it for this booking */
+  addOnIds: string[];
+  /** Per-plate value of those add-ons */
+  addOnPerPlate: number;
   /** Staff, cutlery and other charges of this event */
   charges: number;
   /** Food plus the event's charges: what this one event costs the client before discount and GST */
@@ -44,13 +50,13 @@ export function slabPct(pax: number, slabs: Tenant["slabs"]) {
 }
 
 export function priceFunction(
-  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices" | "charges" | "mainRate">,
+  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices" | "charges" | "mainRate" | "packagePrice">,
   items: MenuItem[],
   packages: MenuPackage[],
   slabs: Tenant["slabs"],
 ): FunctionPrice {
-  // A price changed on this quotation or order wins over the menu price. Main course dishes have no price of their
-  // own; they are paid for by the main course rate typed in at booking.
+  // A price changed on this quotation or order wins over the menu price. Main course dishes have no menu price;
+  // built dish by dish they are paid for by the main course rate (the sum of their typed prices, or typed whole).
   const byId = new Map(items.map((i) => [i.id, fn.itemPrices?.[i.id] !== undefined ? { ...i, price: fn.itemPrices[i.id] } : pricedAtBooking(i.categoryId) ? { ...i, price: 0 } : i]));
   const picked = fn.itemIds.map((id) => byId.get(id)).filter((i): i is MenuItem => !!i);
   const plateItems = picked.filter((i) => i.pricingType === "plate");
@@ -59,14 +65,28 @@ export function priceFunction(
 
   let basePlate = 0;
   let extraPerPlate = 0;
+  let addOnPerPlate = 0;
   const rules: RuleProgress[] = [];
   const extraIds: string[] = [];
+  const addOnIds: string[] = [];
+  const packagePrice = pkg ? fn.packagePrice ?? pkg.pricePerPlate : 0;
+  // A dish inside the package costs nothing extra, unless a price is typed on it for this booking: then it is added on top.
+  const addOn = (id: string) => {
+    const p = fn.itemPrices?.[id] ?? 0;
+    if (p) {
+      addOnPerPlate += p;
+      addOnIds.push(id);
+    }
+  };
 
   if (pkg) {
-    basePlate = pkg.pricePerPlate;
+    basePlate = packagePrice;
     const used = new Map<string, number>();
     for (const item of plateItems) {
-      if (pkg.fixedItemIds.includes(item.id)) continue;
+      if (pkg.fixedItemIds.includes(item.id)) {
+        addOn(item.id);
+        continue;
+      }
       // A dish fills the most specific package choice it belongs to (Paneer sabji before Main course),
       // moving up to a wider one when that is full; with no room left anywhere it is charged extra.
       const chain = lineage(item.categoryId);
@@ -77,15 +97,15 @@ export function priceFunction(
       if (!rule) {
         extraPerPlate += item.price;
         extraIds.push(item.id);
-      }
+      } else addOn(item.id);
     }
     for (const r of pkg.rules) {
       const chosen = used.get(r.categoryId) ?? 0;
       rules.push({ categoryId: r.categoryId, choose: r.choose, chosen, met: chosen >= r.choose });
     }
-    basePlate += extraPerPlate;
+    basePlate += extraPerPlate + addOnPerPlate;
   } else {
-    basePlate = plateItems.reduce((s, i) => s + i.price, 0);
+    basePlate = plateItems.filter((i) => !pricedAtBooking(i.categoryId)).reduce((s, i) => s + i.price, 0);
   }
 
   // With a package its price covers the main course; built dish by dish, the typed rate is added per plate.
@@ -109,6 +129,9 @@ export function priceFunction(
     cost: costPerPlate * fn.pax + fixedCost,
     rules,
     extraIds,
+    packagePrice,
+    addOnIds,
+    addOnPerPlate,
     charges: eventCharges(fn),
     eventTotal: perPlate * fn.pax + fixed + eventCharges(fn),
     needsMainRate,

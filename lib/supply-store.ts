@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { schema } from "./db";
 import { background, write } from "./queue";
 import { useStore } from "./store";
-import { assetRequirement, recipeCost } from "./supply";
+import { assetRequirement, dishGuests, recipeCost } from "./supply";
 import {
   assetRow,
   billRow,
@@ -62,6 +62,8 @@ interface Actions {
   addVendorPayment: (payment: Omit<VendorPayment, "id">) => void;
   draftOutsource: (orderId: string) => Promise<number>;
   patchOutsource: (id: string, patch: Partial<OutsourceOrder>) => void;
+  /** Agency orders of a booking still in draft take each dish's kitchen guests; sent ones stay as agreed */
+  syncOutsourceQty: (orderId: string) => void;
   saveAsset: (asset: Omit<Asset, "id"> & { id?: string }) => void;
   createChallan: (orderId: string, functionId: string) => Promise<string>;
   saveChallan: (challan: Challan) => void;
@@ -277,7 +279,7 @@ export const useSupply = create<SupplyStore>()((set, get) => {
             // vendor sees only the event name, never the client: the client is the caterer's own.
             id: uid(), orderId, functionId: fn.id, vendorId, status: "draft", deliverOn: fn.date, deliverTime: hourBefore(fn.time), deliverPlace: fn.venue,
             contact: [manager?.name, manager?.phone].filter(Boolean).join(", "), notes: fn.name,
-            lines: dishes.map((d) => ({ id: uid(), itemId: d.id, qty: d.pricingType === "plate" ? fn.pax : 1, agencyRate: d.agencyRate, clientRate: d.price })),
+            lines: dishes.map((d) => ({ id: uid(), itemId: d.id, qty: d.pricingType === "plate" ? dishGuests(fn, d.id) : 1, agencyRate: d.agencyRate, clientRate: d.price })),
           });
         }
       }
@@ -303,6 +305,18 @@ export const useSupply = create<SupplyStore>()((set, get) => {
         await ok(sb.from("outsource_orders").update(outsourceRow(saved)).eq("id", id), "Updating the agency order");
         if (patch.lines) await ok(sb.from("outsource_lines").upsert(saved.lines.map((l) => ({ id: l.id, outsource_id: id, item_id: l.itemId, qty: l.qty, agency_rate: l.agencyRate, client_rate: l.clientRate }))), "Updating agency rates");
       });
+    },
+
+    syncOutsourceQty: (orderId) => {
+      const main = useStore.getState();
+      const order = main.orders.find((o) => o.id === orderId);
+      if (!order) return;
+      for (const o of get().outsourceOrders.filter((x) => x.orderId === orderId && x.status === "draft")) {
+        const fn = order.functions.find((f) => f.id === o.functionId);
+        if (!fn) continue;
+        const lines = o.lines.map((l) => (main.items.find((i) => i.id === l.itemId)?.pricingType === "plate" ? { ...l, qty: dishGuests(fn, l.itemId) } : l));
+        if (lines.some((l, i) => l.qty !== o.lines[i].qty)) get().patchOutsource(o.id, { lines });
+      }
     },
 
     saveAsset: (asset) => {

@@ -41,7 +41,7 @@ export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, s
     onChange({
       foodTypeId: foodTypeId || undefined,
       // A package made for another food type no longer fits.
-      ...(pkg?.foodTypeId && pkg.foodTypeId !== foodTypeId ? { packageId: undefined } : {}),
+      ...(pkg?.foodTypeId && pkg.foodTypeId !== foodTypeId ? { packageId: undefined, packagePrice: undefined } : {}),
     });
   };
 

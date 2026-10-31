@@ -255,6 +255,10 @@ export interface EventFunction {
   charges?: EventCharge[];
   /** Main course rate per plate, typed in at booking for the dishes priced there */
   mainRate?: number;
+  /** Guests each dish is cooked for, keyed by item id, when fewer (or more) than the booked guests; billing keeps `pax` */
+  itemPax?: Record<string, number>;
+  /** The package price per plate for this quotation or order only */
+  packagePrice?: number;
 }
 
 export interface ExtraCharge {

@@ -16,6 +16,7 @@ import { standardLoad, tripFlow, tripLabel, tripNext, useOps, type LoadLine, typ
 import { useStore } from "@/lib/store";
 import { useSupply } from "@/lib/supply-store";
 import type { EventFunction, Order } from "@/lib/types";
+import { dishGuests } from "@/lib/supply";
 import { cn, fmtDate, fmtTime, money, num, whatsappLink } from "@/lib/utils";
 import { PhotoButton } from "./common";
 import { logWhatsApp } from "@/lib/messages";
@@ -38,7 +39,7 @@ function useLoadList(fn: EventFunction) {
     const dishes = fn.itemIds
       .map((id) => items.find((i) => i.id === id))
       .filter((i) => i && !i.outsourced)
-      .map((i) => ({ label: `${i!.name}: ${num(portions(i!, fn.pax))} ${i!.pricingType === "plate" ? "portions" : "counter"}`, done: false }));
+      .map((i) => ({ label: `${i!.name}: ${num(portions(i!, dishGuests(fn, i!.id)))} ${i!.pricingType === "plate" ? "portions" : "counter"}`, done: false }));
     const challan = challans.find((c) => c.functionId === fn.id);
     const cutlery = challan ? [{ label: `Cutlery and crockery, challan ${challan.number} (${num(challan.lines.reduce((s, l) => s + (l.issued || l.required), 0))} pieces)`, done: false }] : [{ label: "Cutlery and crockery", done: false }];
     return [...dishes, ...cutlery, ...standardLoad.map((label) => ({ label, done: false }))];

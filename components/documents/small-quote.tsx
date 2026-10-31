@@ -4,7 +4,7 @@ import { Tinos } from "next/font/google";
 import * as React from "react";
 import { byDay } from "@/components/sales/event-charges";
 import { pricedAtBooking, rootOf } from "@/lib/categories";
-import { chargeAmount, priceFunction, priceQuote } from "@/lib/pricing";
+import { chargeAmount, type FunctionPrice, priceFunction, priceQuote } from "@/lib/pricing";
 import { eventSpan, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { Discount, EventFunction, ExtraCharge, MenuItem, MenuPackage } from "@/lib/types";
@@ -24,17 +24,18 @@ export interface SmallQuoteData {
  * How one event's per-plate rate is made up, for the red line under it: the package price and the extra dishes on
  * top, or the dishes course by course (one part per top-level category), then the main course rate.
  */
-function rateParts(f: EventFunction, items: MenuItem[], pkg: MenuPackage | undefined, extraIds: string[], mainRate: number) {
+function rateParts(f: EventFunction, items: MenuItem[], pkg: MenuPackage | undefined, p: FunctionPrice) {
   const parts = new Map<string, number>();
-  if (pkg) parts.set("package", pkg.pricePerPlate);
+  if (pkg) parts.set("package", p.packagePrice);
   for (const id of f.itemIds) {
     const i = items.find((x) => x.id === id);
-    if (!i || i.pricingType !== "plate" || (pkg && !extraIds.includes(id))) continue;
+    // Main course dishes are paid for by the main course rate, its own part below.
+    if (!i || i.pricingType !== "plate" || (pkg ? !p.extraIds.includes(id) && !p.addOnIds.includes(id) : pricedAtBooking(i.categoryId))) continue;
     const price = f.itemPrices?.[id] ?? (pricedAtBooking(i.categoryId) ? 0 : i.price);
     const key = rootOf(i.categoryId);
     parts.set(key, (parts.get(key) ?? 0) + price);
   }
-  if (mainRate) parts.set("main", mainRate);
+  if (p.mainRate) parts.set("main", p.mainRate);
   return [...parts.values()].filter((v) => v > 0);
 }
 
@@ -63,7 +64,7 @@ export function SmallQuote({ data }: { data: SmallQuoteData }) {
 
   const food = days.flatMap(([, fns]) => fns.map((f) => {
     const p = priceFunction(f, items, packages, tenant.slabs);
-    const parts = rateParts(f, items, packages.find((x) => x.id === f.packageId), p.extraIds, p.mainRate);
+    const parts = rateParts(f, items, packages.find((x) => x.id === f.packageId), p);
     const sum = parts.reduce((s, v) => s + v, 0);
     // The guest-count discount comes off the menu prices, so the split says so when there is one.
     const split = parts.length > 1 ? `(Rs.${parts.map(decimal).join("+")}=${decimal(sum)}${p.perPlate !== sum ? `, less ${p.slabPct}% = ${decimal(p.perPlate)}` : ""}/-)` : "";

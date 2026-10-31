@@ -54,7 +54,7 @@ lib/store.ts      main store: load, every write, the write queue
 lib/db.ts         row mappers (app object <-> table row) and the database feature checks
 lib/pricing.ts    all money maths (per plate, packages, event charges, discount, GST)
 lib/imports.ts    Excel/CSV import: all sheets, every list's columns and checks
-supabase/migrations/  0001 to 0023, run by hand in the Supabase SQL editor, in order
+supabase/migrations/  0001 to 0024, run by hand in the Supabase SQL editor, in order
 docs/import-examples/ example .xlsx files and a bilingual (English and Gujarati) import guide PDF for caterers
 ```
 
@@ -125,6 +125,8 @@ Seven main phases: sales, supply, staff, kitchen, operations, billing, and repor
 - **Sub-events (0023):** each event type has sub-events (`event_types.sub_events`; Wedding: Haldi, Mehndi, Sangeet, Garba, Mandap Muhurat, Wedding Day, Reception), set in Settings → Event types or by the Event types import's "Sub events" column (a type already there gets the new ones added). The service card's Event Name is a searchable drop-down of the booking's event type's sub-events that also takes a typed name (`useSubEvents` in `lib/event-types.ts`). The food service never fills the event name; a blank one is saved as "Service N".
 - **Booking start and end dates:** Step 1 asks for the event's start and end date (`QuoteDraft.startDate`/`endDate`, filled from an enquiry; not stored, a saved booking's span comes from its services). Service 1 takes the start date; a service dated outside them is flagged. A new service copies the previous one's event name (`nextService`).
 - **Small quotation** (`components/documents/small-quote.tsx`, PDF kind `small`, from a quotation or an order): one plain table like a hand-made sheet. Each service by Food Service Name with pax, rate and total; a red line splits the rate (package or course by course, main course rate, less the guest-count discount); EXTRA CHARGES holds the event charges (staff with their times) and counters; then Food Cost, Extra Charges, Grand Total, Discount, Total; whole-booking extras come after the discount, then GST and the final total, the same as the full quotation.
+- **Kitchen guests per dish (0024):** Order → Menu lists each event's dishes with the guests each is cooked for (`EventFunction.itemPax`, `function_items.prep_pax`; empty means the booked guests), with a "Set all" box per category (`components/supply/dish-guests.tsx`, `setOrderItemPax`). `dishGuests` in `lib/supply.ts` gives the count: raw material, agency work orders, dispatch and kitchen portions use it; the client's bill and cutlery keep the booked guests. A save updates draft agency orders (`syncOutsourceQty`); a sent one shows a warning on the Agencies tab.
+- **Step 3 food prices** (`components/sales/food-prices.tsx`): every dish by day and event with its price for this booking. Dish and counter prices go in `itemPrices`; main course dish prices add up to the event's `mainRate` (they are never charged on their own); a package's price per plate can be changed (`EventFunction.packagePrice`, `event_functions.package_price`, 0024) and a price typed on a dish inside the package is added on top (`priceFunction` `addOnIds`). Changing the package drops its typed price.
 - **Dates:** `isoDate` always writes a four-digit year and `parseDate` keeps years below 100, so a year half typed in (0202 on the way to 2026) cannot freeze the festival code; `realDate` refuses such a year on save.
 
 ## Rules for working on it

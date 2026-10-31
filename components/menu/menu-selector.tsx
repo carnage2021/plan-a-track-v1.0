@@ -91,7 +91,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const patch = (changes: Partial<EventFunction>) => onChange(functions.map((f) => (f.id === fn.id ? { ...f, ...changes } : f)));
   const pickFoodType = (id: string) => {
     // A package made for another food type no longer fits.
-    patch({ foodTypeId: id, ...(pkg?.foodTypeId && pkg.foodTypeId !== id ? { packageId: undefined } : {}) });
+    patch({ foodTypeId: id, ...(pkg?.foodTypeId && pkg.foodTypeId !== id ? { packageId: undefined, packagePrice: undefined } : {}) });
     setShowAll(false);
   };
   // The food type comes first; a function that already has dishes (from before food types) is not held up.
@@ -99,7 +99,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const toggle = (id: string) => patch({ itemIds: fn.itemIds.includes(id) ? fn.itemIds.filter((x) => x !== id) : [...fn.itemIds, id] });
   const choosePackage = (packageId?: string) => {
     const next = packages.find((p) => p.id === packageId);
-    patch({ packageId, itemIds: next ? [...new Set([...next.fixedItemIds, ...fn.itemIds])] : fn.itemIds });
+    // A price typed for the old package does not carry over to another one.
+    patch({ packageId, ...(packageId !== fn.packageId ? { packagePrice: undefined } : {}), itemIds: next ? [...new Set([...next.fixedItemIds, ...fn.itemIds])] : fn.itemIds });
   };
 
   const { popularity, clientBefore } = React.useMemo(() => {
@@ -301,7 +302,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
               <DropdownMenuTrigger asChild><Button variant="ghost" className="shrink-0"><Copy strokeWidth={1.75} />Copy menu from</Button></DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {functions.filter((f) => f.id !== fn.id).map((f) => (
-                  <DropdownMenuItem key={f.id} onSelect={() => patch({ packageId: f.packageId, itemIds: [...f.itemIds] })}>{f.name}<span className="tnum ml-auto text-xs text-text-muted">{f.itemIds.length} dishes</span></DropdownMenuItem>
+                  <DropdownMenuItem key={f.id} onSelect={() => patch({ packageId: f.packageId, packagePrice: f.packagePrice, itemPrices: f.itemPrices && { ...f.itemPrices }, mainRate: f.mainRate, itemIds: [...f.itemIds] })}>{f.name}<span className="tnum ml-auto text-xs text-text-muted">{f.itemIds.length} dishes</span></DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>

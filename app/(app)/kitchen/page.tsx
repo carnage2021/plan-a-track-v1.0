@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Chip } from "@/components/ui/primitives";
 import { clock, dishFlow, dishLabel, kitchenKey, portions, readyBy, useKitchen, type DishStatus } from "@/lib/kitchen";
 import { useStore } from "@/lib/store";
-import { fmtQty, requirementFor, roundQty } from "@/lib/supply";
+import { dishGuests, fmtQty, requirementFor, roundQty } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import { serviceLine, timeRange, useFoodTypes } from "@/lib/services";
 import type { EventFunction, MenuItem } from "@/lib/types";
@@ -44,8 +44,8 @@ function useProduction(date: string) {
           if (!item || item.outsourced) continue;
           const category = categories.find((c) => c.id === item.categoryId)?.name ?? "";
           const dish = map.get(id) ?? { item, category, uses: [], total: 0, readyBy: Infinity, status: "pending" as DishStatus, done: 0 };
-          dish.uses.push({ key: kitchenKey(fn.id, id), fnName: fn.name, client: clients.find((c) => c.id === o.clientId)?.name ?? "", pax: fn.pax, time: fn.time, endTime: fn.endTime, session: fn.session, foodTypeId: fn.foodTypeId, venue: fn.venue, portions: portions(item, fn.pax) });
-          dish.total += portions(item, fn.pax);
+          dish.uses.push({ key: kitchenKey(fn.id, id), fnName: fn.name, client: clients.find((c) => c.id === o.clientId)?.name ?? "", pax: dishGuests(fn, id), time: fn.time, endTime: fn.endTime, session: fn.session, foodTypeId: fn.foodTypeId, venue: fn.venue, portions: portions(item, dishGuests(fn, id)) });
+          dish.total += portions(item, dishGuests(fn, id));
           dish.readyBy = Math.min(dish.readyBy, readyBy(fn.time, category));
           map.set(id, dish);
         }

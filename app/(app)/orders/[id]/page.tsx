@@ -11,9 +11,8 @@ import { coordinatorOf } from "@/components/sales/enquiry-sheet";
 import { EventSheet } from "@/components/sales/event-sheet";
 import { NamePlates } from "@/components/sales/name-plates";
 import { QuoteDocument } from "@/components/sales/quote-document";
-import { Badge, StatusBadge, VegMark } from "@/components/shared/badges";
+import { Badge, StatusBadge } from "@/components/shared/badges";
 import { Avatar, DateBlock, EmptyState, PaxInput, ProgressBar, ServiceLabel, useOrderMoney } from "@/components/shared/blocks";
-import { DishImage } from "@/components/shared/dish";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/input";
 import { Card, CardTitle, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
@@ -24,14 +23,14 @@ import { OrderOps } from "@/components/ops/order-ops";
 import { OrderTasks, StaffGate } from "@/components/staff/order-tasks";
 import { CutleryTab } from "@/components/supply/challan";
 import { SupplyGate } from "@/components/supply/common";
+import { DishGuests, dishGuestsKey } from "@/components/supply/dish-guests";
 import { AgenciesTab } from "@/components/supply/outsource";
 import { Requirement } from "@/components/supply/requirement";
 import { priceFunction, priceQuote } from "@/lib/pricing";
 import { useBilling } from "@/lib/billing";
 import { useSupply } from "@/lib/supply-store";
 import { referrerOf, useCurrentUser, useStore } from "@/lib/store";
-import { isWithin, roots } from "@/lib/categories";
-import type { EventFunction, MenuItem, Order, Payment, Locale } from "@/lib/types";
+import type { EventFunction, Order, Payment, Locale } from "@/lib/types";
 import { ExtraDishes } from "@/components/sales/summary-extras";
 import { printLight, printThermal, useUi } from "@/lib/ui";
 import { fmtDate, money, num, whatsappLink } from "@/lib/utils";
@@ -90,7 +89,7 @@ function OrderDetail() {
 }
 
 function OrderView({ order }: { order: Order }) {
-  const { clients, items, packages, categories, tenant, users, quotations } = useStore();
+  const { clients, items, packages, tenant, users, quotations } = useStore();
   const setOrderStatus = useStore((s) => s.setOrderStatus);
   const patchOrder = useStore((s) => s.patchOrder);
   const setOrderItemPrice = useStore((s) => s.setOrderItemPrice);
@@ -282,30 +281,7 @@ function OrderView({ order }: { order: Order }) {
               toast.success("Price changed", { description: `Order total ${impact >= 0 ? "up" : "down"} by ${money(Math.abs(impact))}. Logged in the change log.` });
             }}
           />
-          {functions.map((f) => (
-            <Card key={f.id}>
-              <CardTitle action={<span className="tnum text-xs text-text-muted">{f.itemIds.length} dishes · {num(f.pax)} guests</span>}>{f.name}</CardTitle>
-              <div className="grid gap-x-6 gap-y-4 p-4 sm:grid-cols-2 md:px-5 lg:grid-cols-3">
-                {roots(categories).map((c) => {
-                  const picked = f.itemIds.map((i) => items.find((x) => x.id === i)).filter((i): i is MenuItem => !!i && isWithin(i.categoryId, c.id));
-                  if (!picked.length) return null;
-                  return (
-                    <div key={c.id}>
-                      <p className="mb-2 text-xs font-medium text-text-muted">{c.name}</p>
-                      <ul className="space-y-2">
-                        {picked.map((i) => (
-                          <li key={i.id} className="flex items-center gap-2">
-                            <DishImage item={i} sizes="48px" className="w-12 shrink-0 rounded-lg" />
-                            <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5 text-sm"><VegMark diet={i.diet} /><span className="truncate">{i.name}</span></span>{f.itemNotes?.[i.id] && <span className="block truncate text-xs text-warning">{f.itemNotes[i.id]}</span>}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          ))}
+          {functions.map((f) => <DishGuests key={dishGuestsKey(f)} order={order} fn={f} readOnly={locked} />)}
         </TabsContent>
 
         <TabsContent value="agencies"><SupplyGate><AgenciesTab order={order} /></SupplyGate></TabsContent>

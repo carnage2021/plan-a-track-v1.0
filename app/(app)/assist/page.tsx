@@ -17,6 +17,7 @@ import { offered } from "@/lib/packages";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { isWithin, roots } from "@/lib/categories";
 import type { Diet, MenuItem } from "@/lib/types";
+import { dishGuests } from "@/lib/supply";
 import { cn, isoDate, money, num } from "@/lib/utils";
 
 // Phase 7 (plan F4): helpers that work from the caterer's own data with plain rules, so they need no
@@ -111,7 +112,7 @@ function Quantities() {
       // Only dishes that were packed and had their leftover counted teach us anything.
       if (!row || row.status !== "packed" || !item || item.pricingType !== "plate") continue;
       const d = by.get(id) ?? { cooked: 0, left: 0, pax: 0, events: 0 };
-      by.set(id, { cooked: d.cooked + portions(item, f.pax), left: d.left + row.leftover, pax: d.pax + f.pax, events: d.events + 1 });
+      by.set(id, { cooked: d.cooked + portions(item, dishGuests(f, id)), left: d.left + row.leftover, pax: d.pax + dishGuests(f, id), events: d.events + 1 });
     }
     return [...by.entries()].map(([id, d]) => {
       const item = items.find((i) => i.id === id)!;

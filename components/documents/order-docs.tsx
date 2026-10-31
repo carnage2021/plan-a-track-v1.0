@@ -166,12 +166,13 @@ function EventLines({ f, itemised, lang }: { f: EventFunction; itemised: boolean
     <>
       <tr><td className="pt-2.5 font-medium" colSpan={4}>{head} <span className={`text-xs font-normal ${muted}`}>· {num(f.pax)} {t("guests")}{pkg ? ` · ${pkg.name} ${t("package")}` : ""}</span></td></tr>
       {!itemised && row("food", `${t("food").charAt(0).toUpperCase()}${t("food").slice(1)} (${num(f.pax)} × ${money(p.perPlate)} ${t("perPlate")})`, num(f.pax), money(p.perPlate), p.perPlate * f.pax, "")}
-      {itemised && pkg && row("pkg", `${pkg.name} ${t("package")}`, num(f.pax), money(pkg.pricePerPlate), pkg.pricePerPlate * f.pax)}
+      {itemised && pkg && row("pkg", `${pkg.name} ${t("package")}`, num(f.pax), money(p.packagePrice), p.packagePrice * f.pax)}
       {itemised && plates.map((i) => {
         // Main course dishes are paid for together by the main course rate, on its own line below.
-        const main = p.needsMainRate && f.itemPrices?.[i.id] === undefined && pricedAtBooking(i.categoryId);
-        const extra = (!pkg || p.extraIds.includes(i.id)) && !main;
-        return row(i.id, <span className="pl-3">{i.name}{pkg && !extra ? <span className={`text-xs ${muted}`}> · in package</span> : main ? <span className={`text-xs ${muted}`}> · {t("mainCourse").toLowerCase()}</span> : null}</span>, extra ? num(f.pax) : "", extra ? rate(priceOf(i)) : "", extra ? priceOf(i) * f.pax : null);
+        const main = p.needsMainRate && pricedAtBooking(i.categoryId);
+        // A dish beyond the package, or one priced on top of it for this booking, is charged on its own line.
+        const extra = ((!pkg || p.extraIds.includes(i.id)) && !main) || p.addOnIds.includes(i.id);
+        return row(i.id, <span className="pl-3">{i.name}{pkg && !p.extraIds.includes(i.id) ? <span className={`text-xs ${muted}`}> · in package{p.addOnIds.includes(i.id) ? ", added on top" : ""}</span> : main ? <span className={`text-xs ${muted}`}> · {t("mainCourse").toLowerCase()}</span> : null}</span>, extra ? num(f.pax) : "", extra ? rate(priceOf(i)) : "", extra ? priceOf(i) * f.pax : null);
       })}
       {itemised && p.mainRate > 0 && row("main", <span className="pl-3 font-medium">{t("mainCourse")}</span>, num(f.pax), rate(p.mainRate), p.mainRate * f.pax)}
       {itemised && slab !== 0 && row("slab", <span className="pl-3">{p.slabPct}% guest-count discount</span>, "", "", slab)}

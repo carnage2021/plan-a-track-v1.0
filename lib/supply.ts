@@ -13,8 +13,11 @@ export function roundQty(qty: number, unit: string) {
 
 export const fmtQty = (qty: number) => (Number.isInteger(qty) ? String(qty) : qty.toFixed(qty < 1 ? 2 : 1).replace(/\.?0+$/, ""));
 
-/** Raw material for a set of functions: each dish's recipe scaled to the guests, plus its wastage buffer. */
-export function requirementFor(functions: Pick<EventFunction, "pax" | "itemIds">[], items: MenuItem[], recipes: RecipeLine[]) {
+/** Guests a dish is cooked for on an event: its kitchen count when one is set, else the booked guests. */
+export const dishGuests = (fn: Pick<EventFunction, "pax" | "itemPax">, itemId: string) => fn.itemPax?.[itemId] ?? fn.pax;
+
+/** Raw material for a set of functions: each dish's recipe scaled to its kitchen guests, plus its wastage buffer. */
+export function requirementFor(functions: Pick<EventFunction, "pax" | "itemIds" | "itemPax">[], items: MenuItem[], recipes: RecipeLine[]) {
   const byItem = new Map<string, RecipeLine[]>();
   for (const r of recipes) byItem.set(r.itemId, [...(byItem.get(r.itemId) ?? []), r]);
   const itemOf = new Map(items.map((i) => [i.id, i]));
@@ -24,7 +27,7 @@ export function requirementFor(functions: Pick<EventFunction, "pax" | "itemIds">
       const item = itemOf.get(id);
       // Outsourced dishes arrive ready, so they need no raw material from our store.
       if (!item || item.outsourced) continue;
-      const scale = (fn.pax / (item.recipeBase || 100)) * (1 + (item.bufferPct || 0) / 100);
+      const scale = (dishGuests(fn, id) / (item.recipeBase || 100)) * (1 + (item.bufferPct || 0) / 100);
       for (const line of byItem.get(id) ?? []) need.set(line.ingredientId, (need.get(line.ingredientId) ?? 0) + line.qty * scale);
     }
   return need;
@@ -49,7 +52,7 @@ export function withOverrides(need: Map<string, number>, overrides?: Record<stri
  * takes the same proportion of a changed quantity as it had of the recipe's; an added ingredient is split
  * by guests.
  */
-export function functionNeed(order: Pick<Order, "functions" | "rawOverrides">, fn: Pick<EventFunction, "id" | "pax" | "itemIds">, items: MenuItem[], recipes: RecipeLine[]) {
+export function functionNeed(order: Pick<Order, "functions" | "rawOverrides">, fn: Pick<EventFunction, "id" | "pax" | "itemIds" | "itemPax">, items: MenuItem[], recipes: RecipeLine[]) {
   const own = requirementFor([fn], items, recipes);
   if (!order.rawOverrides) return own;
   const all = requirementFor(order.functions, items, recipes);

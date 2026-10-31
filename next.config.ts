@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   // The PDF route drives a real browser; these load at run time instead of being bundled.
   serverExternalPackages: ["puppeteer-core", "@sparticuz/chromium"],
+  // The packed browser is read from disk at run time, so the file tracer cannot see it; without this the
+  // PDF route on Vercel has no browser to start.
+  outputFileTracingIncludes: { "/api/pdf": ["./node_modules/@sparticuz/chromium/bin/**"] },
   images: {
     // Dish photos and logos uploaded to Supabase Storage.
     remotePatterns: [{ protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" }],

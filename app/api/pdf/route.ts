@@ -39,9 +39,16 @@ export async function GET(request: Request) {
 
   // On Vercel the packaged Chromium is used; on a computer, the installed Chrome.
   const serverless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-  const executablePath = serverless ? await chromium.executablePath() : chromePath();
-  if (!executablePath) return Response.json({ error: "No browser found to make the PDF. Set CHROME_PATH." }, { status: 500 });
-  const browser = await puppeteer.launch({ executablePath, headless: true, args: serverless ? chromium.args : ["--no-sandbox", "--font-render-hinting=none"] });
+  let browser: Awaited<ReturnType<typeof puppeteer.launch>>;
+  // A browser that fails to start still answers with the reason, so the person sees more than an empty error.
+  try {
+    const executablePath = serverless ? await chromium.executablePath() : chromePath();
+    if (!executablePath) return Response.json({ error: "No browser found to make the PDF. Set CHROME_PATH." }, { status: 500 });
+    browser = await puppeteer.launch({ executablePath, headless: true, args: serverless ? chromium.args : ["--no-sandbox", "--font-render-hinting=none"] });
+  } catch (e) {
+    console.error("PDF browser did not start", e);
+    return Response.json({ error: `The PDF maker could not start: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });
+  }
   try {
     await browser.setCookie(...cookies);
     const page = await browser.newPage();

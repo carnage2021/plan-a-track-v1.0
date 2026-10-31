@@ -67,8 +67,9 @@ export default function ImportPage() {
     const done: Record<string, string[]> = {};
     try {
       for (const step of list.build(ok.map((x) => x.r))) {
-        if (step.update?.ids.length) {
-          const { error } = await sb.from(step.table).update(step.update.values).in("id", step.update.ids);
+        for (const u of step.update ?? []) {
+          if (!u.ids.length) continue;
+          const { error } = await sb.from(step.table).update(u.values).in("id", u.ids);
           if (error) throw new Error(error.message);
         }
         for (let i = 0; i < step.rows.length; i += 200) {

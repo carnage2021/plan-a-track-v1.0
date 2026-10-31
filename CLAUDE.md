@@ -54,7 +54,7 @@ lib/store.ts      main store: load, every write, the write queue
 lib/db.ts         row mappers (app object <-> table row) and the database feature checks
 lib/pricing.ts    all money maths (per plate, packages, event charges, discount, GST)
 lib/imports.ts    Excel/CSV import: all sheets, every list's columns and checks
-supabase/migrations/  0001 to 0022, run by hand in the Supabase SQL editor, in order
+supabase/migrations/  0001 to 0023, run by hand in the Supabase SQL editor, in order
 docs/import-examples/ example .xlsx files and a bilingual (English and Gujarati) import guide PDF for caterers
 ```
 
@@ -122,6 +122,8 @@ Seven main phases: sales, supply, staff, kitchen, operations, billing, and repor
 - **Sample photos (0021):** staff uniforms (the dress, not people), cutlery and decoration, by import ("Sample photos") or Settings. In Step 3 a staff or cutlery line shows the photo with the same name, and "Show photos to client" opens a full-screen gallery (`components/sales/sample-photos.tsx`).
 - **One booking flow:** booking mode (`app/booking`) is the only builder. It ends with Confirm booking or Save as quotation. Saved quotations are in Orders → Quotations (`components/sales/quotation-list.tsx`) with Approve, which converts to an order. Enquiry "Create quotation" and quotation Revise open `/booking?enquiry=` / `/booking?revise=`; the old `/quotations` and `/quotations/new` pages redirect. Quotation pages follow the Orders access.
 - **Main course priced at booking (0022):** a category ticked "Main course, price at booking" (sub-categories follow, `pricedAtBooking` in `lib/categories.ts`) has dishes with no price. In Step 3 each event built dish by dish asks for its main course rate per plate (`EventFunction.mainRate`); `priceFunction` adds it to `perPlate` (not slab-discounted), so every document, bill and invoice carries it. A package event's price covers the main course. Saving or confirming is blocked until each rate is in. The menu import has a "Main course" Yes/No column.
+- **Sub-events (0023):** each event type has sub-events (`event_types.sub_events`; Wedding: Haldi, Mehndi, Sangeet, Garba, Mandap Muhurat, Wedding Day, Reception), set in Settings → Event types or by the Event types import's "Sub events" column (a type already there gets the new ones added). The service card's Event Name is a searchable drop-down of the booking's event type's sub-events that also takes a typed name (`useSubEvents` in `lib/event-types.ts`). The food service never fills the event name; a blank one is saved as "Service N".
+- **Dates:** `isoDate` always writes a four-digit year and `parseDate` keeps years below 100, so a year half typed in (0202 on the way to 2026) cannot freeze the festival code; `realDate` refuses such a year on save.
 
 ## Rules for working on it
 

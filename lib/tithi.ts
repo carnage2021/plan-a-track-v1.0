@@ -34,7 +34,9 @@ export function sunLongitude(d: number) {
 /** Days since J2000.0 for an Indian clock time (IST) on an ISO date. */
 export function daysAt(isoDate: string, hourIst = 6.5) {
   const [y, m, day] = isoDate.split("-").map(Number);
-  return (Date.UTC(y, m - 1, day) + (hourIst - 5.5) * 3600000) / 86400000 + 2440587.5 - 2451545.0;
+  const utc = new Date(Date.UTC(2000, m - 1, day));
+  utc.setUTCFullYear(y); // Date.UTC alone reads years 0 to 99 as 1900 to 1999
+  return (utc.getTime() + (hourIst - 5.5) * 3600000) / 86400000 + 2440587.5 - 2451545.0;
 }
 
 /** Tithi number 1 to 30 at a given moment, days since J2000.0. */

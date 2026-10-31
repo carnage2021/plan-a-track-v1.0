@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, TimeInput } from "@/components/ui/input";
 import { Card } from "@/components/ui/primitives";
 import { blankFunction } from "@/lib/draft";
+import { useSubEvents } from "@/lib/event-types";
 import { nextSlot, serviceLine, sessionFor, sessions, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { EventFunction, Session } from "@/lib/types";
@@ -22,25 +23,22 @@ interface CardProps {
   minDate?: string;
   maxDate?: string;
   showErrors?: boolean;
-  /** Placeholder for the name, e.g. "Wedding lunch" */
-  namePlaceholder?: string;
+  /** The booking's event type; its sub-events (Haldi, Sangeet ...) are offered as the Event Name */
+  eventType?: string;
 }
 
 /** One catering service: food type, name, date, start and end time, session, guests and venue. */
-export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, showErrors, namePlaceholder }: CardProps) {
+export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, showErrors, eventType }: CardProps) {
+  const subEvents = useSubEvents(eventType);
   const foodTypes = useFoodTypes();
   const packages = useStore((s) => s.packages);
   const ready = useStore((s) => s.servicesReady);
 
+  // The food type is what is served (Lunch, Gala Dinner); the event name stays the client's own (Haldi, Sangeet).
   const pickFoodType = (foodTypeId: string) => {
-    const before = foodTypes.find((t) => t.id === fn.foodTypeId)?.name;
-    const next = foodTypes.find((t) => t.id === foodTypeId);
-    // The name follows the food type until someone types their own.
-    const generic = !fn.name.trim() || fn.name === before || /^(Main function|Service \d+|Function \d+)$/.test(fn.name);
     const pkg = packages.find((p) => p.id === fn.packageId);
     onChange({
       foodTypeId: foodTypeId || undefined,
-      ...(generic && next ? { name: next.name } : {}),
       // A package made for another food type no longer fits.
       ...(pkg?.foodTypeId && pkg.foodTypeId !== foodTypeId ? { packageId: undefined } : {}),
     });
@@ -56,29 +54,34 @@ export function ServiceCard({ fn, index, onChange, onRemove, minDate, maxDate, s
         {onRemove && <Button variant="ghost" size="icon" aria-label={`Remove ${fn.name || `service ${index + 1}`}`} onClick={onRemove}><Trash2 strokeWidth={1.75} /></Button>}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Field label="Food Service Name" className="col-span-2" hint={ready ? undefined : "Saved once the 0012 database update is run."}>
+      {/* Two columns: the 12-hour time pickers need half the card each, also inside the enquiry window. */}
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Field label="Food Service Name" className="col-span-2 sm:col-span-1" hint={ready ? undefined : "Saved once the 0012 database update is run."}>
           <Select value={fn.foodTypeId ?? ""} onChange={(e) => pickFoodType(e.target.value)}>
             <option value="">Choose food service</option>
             {foodTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </Select>
         </Field>
-        <Field label="Event Name" className="col-span-2" hint={fn.name.trim() ? undefined : "Left blank, it is named after its food service."}>
-          <Input value={fn.name} onChange={(e) => onChange({ name: e.target.value })} placeholder={namePlaceholder ?? (foodTypes.find((t) => t.id === fn.foodTypeId)?.name || `Service ${index + 1}`)} />
+        <Field label="Event Name" className="col-span-2 sm:col-span-1" hint={fn.name.trim() ? undefined : subEvents.length ? `Pick a ${eventType} event or type your own.` : `Type a name, or it is saved as Service ${index + 1}.`}>
+          <Select creatable aria-label={`Event name of service ${index + 1}`} value={fn.name} onChange={(e) => onChange({ name: e.target.value })}>
+            <option value="">{subEvents.length ? `Pick or type, e.g. ${subEvents[0]}` : "Type the event name"}</option>
+            {fn.name.trim() && !subEvents.some((s) => s.toLowerCase() === fn.name.trim().toLowerCase()) && <option value={fn.name}>{fn.name}</option>}
+            {subEvents.map((s) => <option key={s} value={s}>{s}</option>)}
+          </Select>
         </Field>
-        <Field label="Date" className="col-span-2 sm:col-span-1" error={showErrors && !fn.date ? "Pick a date" : ""}>
+        <Field label="Date" error={showErrors && !fn.date ? "Pick a date" : ""}>
           <Input type="date" min={minDate || isoDate(new Date())} max={maxDate || undefined} value={fn.date} onChange={(e) => onChange({ date: e.target.value })} />
         </Field>
-        <Field label="Start time">
-          <TimeInput label="Start time" value={fn.time} onChange={(v) => onChange({ time: v, session: v ? sessionFor(v) : fn.session })} />
-        </Field>
-        <Field label="End time">
-          <TimeInput label="End time" optional value={fn.endTime ?? ""} onChange={(v) => onChange({ endTime: v || undefined })} />
-        </Field>
-        <Field label="Session" className="col-span-2 sm:col-span-1">
+        <Field label="Session">
           <Select value={fn.session ?? sessionFor(fn.time)} onChange={(e) => onChange({ session: e.target.value as Session })}>
             {sessions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </Select>
+        </Field>
+        <Field label="Start time" className="col-span-2 sm:col-span-1">
+          <TimeInput label="Start time" value={fn.time} onChange={(v) => onChange({ time: v, session: v ? sessionFor(v) : fn.session })} />
+        </Field>
+        <Field label="End time" className="col-span-2 sm:col-span-1">
+          <TimeInput label="End time" optional value={fn.endTime ?? ""} onChange={(v) => onChange({ endTime: v || undefined })} />
         </Field>
       </div>
       <DateAvailability date={fn.date} pax={fn.pax} />
@@ -111,12 +114,12 @@ export function nextService(list: EventFunction[], fallback: { date: string; pax
 }
 
 /** The list of services with an Add button, for the enquiry form. */
-export function ServiceList({ value, onChange, start, end, fallback, showErrors }: { value: EventFunction[]; onChange: (next: EventFunction[]) => void; start: string; end?: string; fallback: { date: string; pax: number; venue: string }; showErrors?: boolean }) {
+export function ServiceList({ value, onChange, start, end, fallback, showErrors, eventType }: { value: EventFunction[]; onChange: (next: EventFunction[]) => void; start: string; end?: string; fallback: { date: string; pax: number; venue: string }; showErrors?: boolean; eventType?: string }) {
   const set = (id: string, patch: Partial<EventFunction>) => onChange(value.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   return (
     <div className="space-y-3">
       {value.map((f, i) => (
-        <ServiceCard key={f.id} fn={f} index={i} onChange={(p) => set(f.id, p)} onRemove={value.length > 1 ? () => onChange(value.filter((x) => x.id !== f.id)) : undefined} minDate={start} maxDate={end && end > start ? end : start} showErrors={showErrors} />
+        <ServiceCard key={f.id} eventType={eventType} fn={f} index={i} onChange={(p) => set(f.id, p)} onRemove={value.length > 1 ? () => onChange(value.filter((x) => x.id !== f.id)) : undefined} minDate={start} maxDate={end && end > start ? end : start} showErrors={showErrors} />
       ))}
       <Button onClick={() => onChange([...value, nextService(value, fallback, end && end > start ? end : start)])}><Plus strokeWidth={1.75} />Add another service</Button>
     </div>

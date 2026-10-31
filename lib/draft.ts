@@ -5,9 +5,9 @@ import { useStore } from "./store";
 import type { EventFunction, QuoteDraft } from "./types";
 import { firstEventType } from "./event-types";
 import { sessionFor } from "./services";
-import { uid } from "./utils";
+import { realDate, uid } from "./utils";
 
-export function blankFunction(name = "Main function", date = "", pax = 200, venue = "", slot: Partial<EventFunction> = {}): EventFunction {
+export function blankFunction(name = "", date = "", pax = 200, venue = "", slot: Partial<EventFunction> = {}): EventFunction {
   const time = slot.time ?? "19:00";
   return { id: uid(), name, date, time, endTime: slot.endTime ?? "22:00", session: sessionFor(time), venue, pax, itemIds: [], foodTypeId: slot.foodTypeId };
 }
@@ -48,13 +48,11 @@ export function useQuoteDraft(key: string, fresh: () => QuoteDraft, resume = tru
   return { draft, setDraft, clear, restart, resumed };
 }
 
-/** The name a service shows when none is typed: its food type, else "Service 3". */
-export const serviceName = (f: Pick<EventFunction, "name" | "foodTypeId">, index: number, foodTypes: { id: string; name: string }[]) =>
-  f.name.trim() || foodTypes.find((t) => t.id === f.foodTypeId)?.name || `Service ${index + 1}`;
+/** The name a service shows when none is typed: "Service 3". The food type is not an event name, so it is not used. */
+export const serviceName = (f: Pick<EventFunction, "name">, index: number) => f.name.trim() || `Service ${index + 1}`;
 
 /** Services with every blank name filled in, so an unnamed service never holds up a booking. */
-export const namedServices = (functions: EventFunction[], foodTypes: { id: string; name: string }[]) =>
-  functions.map((f, i) => (f.name.trim() ? f : { ...f, name: serviceName(f, i, foodTypes) }));
+export const namedServices = (functions: EventFunction[]) => functions.map((f, i) => (f.name.trim() ? f : { ...f, name: serviceName(f, i) }));
 
 /** Services with no dishes and no package yet. Not an error (the menu can follow later) but worth a look before saving. */
 export const emptyServices = (functions: EventFunction[]) => functions.filter((f) => !f.itemIds.length && !f.packageId).map((f, i) => f.name.trim() || `Service ${i + 1}`);
@@ -67,6 +65,7 @@ export function draftIssues(d: QuoteDraft) {
   d.functions.forEach((f, i) => {
     const name = f.name.trim() || `Service ${i + 1}`;
     if (!f.date) issues.push(`Pick a date for ${name}`);
+    else if (!realDate(f.date)) issues.push(`Check the year of ${name}'s date`);
     if (!f.pax) issues.push(`Enter guests for ${name}`);
   });
   return issues;

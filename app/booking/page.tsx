@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Card, Skeleton } from "@/components/ui/primitives";
 import { blankDraft, blankFunction, draftIssues, emptyServices, namedServices, useQuoteDraft } from "@/lib/draft";
 import { priceFunction } from "@/lib/pricing";
-import { useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { Order, QuoteDraft } from "@/lib/types";
 import { useUi } from "@/lib/ui";
@@ -82,7 +81,7 @@ function BookingFlow() {
     if (enquiry) {
       const c = s.clients.find((x) => x.id === enquiry.clientId);
       // The services asked for in the enquiry become the booking's events, menus still to pick.
-      const functions = enquiry.services?.length ? enquiry.services.map((f) => ({ ...f, id: uid(), itemIds: [] })) : [blankFunction(enquiry.eventType, enquiry.date, enquiry.pax, enquiry.venue)];
+      const functions = enquiry.services?.length ? enquiry.services.map((f) => ({ ...f, id: uid(), itemIds: [] })) : [blankFunction("", enquiry.date, enquiry.pax, enquiry.venue)];
       return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: enquiry.coordinatorId, coordinator: enquiry.coordinator, eventType: enquiry.eventType, enquiryId, functions, step: 0 };
     }
     return blankDraft();
@@ -102,7 +101,6 @@ function BookingFlow() {
   const order = useStore((s) => s.orders.find((o) => o.id === orderId));
   const { totals, needsApproval } = useDraftTotals(draft);
   const issues = draftIssues(draft);
-  const foodTypes = useFoodTypes();
   const blocked = needsApproval && user.role !== "owner";
   const step = draft.step;
 
@@ -124,7 +122,7 @@ function BookingFlow() {
       return;
     }
     // Blank service names take their food type's name, or "Service 7", rather than holding the booking up.
-    setDraft((d) => ({ step: next, functions: namedServices(d.functions, foodTypes) }));
+    setDraft((d) => ({ step: next, functions: namedServices(d.functions) }));
     window.scrollTo({ top: 0 });
   };
   const saveLater = () => {

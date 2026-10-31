@@ -12,11 +12,10 @@ import { festivalsOn } from "@/lib/festivals";
 import { tithiLabel } from "@/lib/tithi";
 import { blankFunction } from "@/lib/draft";
 import { useEventTypes } from "@/lib/event-types";
-import { useFoodTypes } from "@/lib/services";
 import type { Coordinator, Diet, Enquiry, EventFunction, LeadSource, TeamUser } from "@/lib/types";
 import { useUi } from "@/lib/ui";
 import { ServiceList } from "./service-fields";
-import { addDays, fmtDate, isoDate, num } from "@/lib/utils";
+import { addDays, fmtDate, isoDate, num, realDate } from "@/lib/utils";
 
 const sources: { id: LeadSource; label: string }[] = [
   { id: "phone", label: "Phone call" },
@@ -74,7 +73,6 @@ function EnquirySheetForm() {
   const updateClientContact = useStore((s) => s.updateClientContact);
   const contactsReady = useStore((s) => s.contactsReady);
   const saveEnquiry = useStore((s) => s.saveEnquiry);
-  const foodTypes = useFoodTypes();
   const eventTypes = useEventTypes();
 
   const blank = React.useCallback(
@@ -102,7 +100,7 @@ function EnquirySheetForm() {
   const [form, setForm] = React.useState<Form>(() =>
     existing
       ? // An enquiry saved before services existed becomes one service on its date.
-        { ...existing, name: client?.name ?? "", phone: client?.phone ?? "", email: client?.email ?? "", altPhone: client?.altPhone ?? "", address: client?.address ?? "", services: existing.services?.length ? existing.services : [blankFunction(existing.eventType, existing.date, existing.pax, existing.venue)] }
+        { ...existing, name: client?.name ?? "", phone: client?.phone ?? "", email: client?.email ?? "", altPhone: client?.altPhone ?? "", address: client?.address ?? "", services: existing.services?.length ? existing.services : [blankFunction("", existing.date, existing.pax, existing.venue)] }
       : blank(),
   );
   const [touched, setTouched] = React.useState(false);
@@ -120,8 +118,8 @@ function EnquirySheetForm() {
   const errors = {
     name: form.name.trim() ? "" : "Enter the client's name",
     phone: form.phone.replace(/\D/g, "").length >= 10 ? "" : "Enter a 10-digit mobile number",
-    date: form.date ? "" : "Pick the event date",
-    services: form.services.every((x) => x.date) ? "" : "Every service needs a date",
+    date: !form.date ? "Pick the event date" : realDate(form.date) && (!form.endDate || realDate(form.endDate)) ? "" : "Check the year of the event date",
+    services: form.services.every((x) => x.date) ? (form.services.every((x) => realDate(x.date)) ? "" : "Check the year of each service's date") : "Every service needs a date",
     email: !form.email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) ? "" : "Check the email address",
     altPhone: !form.altPhone.trim() || form.altPhone.replace(/\D/g, "").length >= 10 ? "" : "Enter a 10-digit number, or leave it empty",
   };
@@ -133,8 +131,8 @@ function EnquirySheetForm() {
     const { name, phone, services, email, altPhone, address, ...rest } = form;
     const clientId = existing?.clientId ?? ensureClient(name, phone);
     updateClientContact(clientId, { email, altPhone, address });
-    // A service with no name takes its food type's name.
-    const named = services.map((x, i) => ({ ...x, name: x.name.trim() || foodTypes.find((t) => t.id === x.foodTypeId)?.name || `Service ${i + 1}` }));
+    // A service with no name is saved as "Service 2".
+    const named = services.map((x, i) => ({ ...x, name: x.name.trim() || `Service ${i + 1}` }));
     saveEnquiry({ ...rest, services: named, clientId, id: existing?.id });
     close();
     toast.success(existing ? "Enquiry updated" : "Enquiry saved", { description: `${name} · ${form.eventType} · ${fmtDate(form.date)}` });
@@ -186,7 +184,7 @@ function EnquirySheetForm() {
           <h3 className="font-heading text-base font-semibold">Catering services</h3>
           <p className="mb-3 text-xs text-text-muted">One for each meal or counter, with its own food type and timings. Two on the same day is fine, such as welcome drinks at 6 pm and dinner at 9 pm.</p>
           {touched && errors.services && <p className="mb-2 text-xs text-danger">{errors.services}</p>}
-          <ServiceList value={form.services} onChange={(services) => set("services", services)} start={form.date} end={form.endDate} fallback={{ date: form.date, pax: form.pax, venue: form.venue }} showErrors={touched} />
+          <ServiceList eventType={form.eventType} value={form.services} onChange={(services) => set("services", services)} start={form.date} end={form.endDate} fallback={{ date: form.date, pax: form.pax, venue: form.venue }} showErrors={touched} />
         </section>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Budget per plate">

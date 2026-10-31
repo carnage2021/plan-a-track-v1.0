@@ -37,7 +37,7 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
  * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
  * added the client's second phone and the coordinator. */
-export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false };
+export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -322,9 +322,11 @@ export interface Loaded {
   /** False until 0016 has added the client's second phone and the coordinator */
   contactsReady: boolean;
   /** The account's own event types, in order; empty means the standard list */
-  eventTypes: { id: string; name: string }[];
+  eventTypes: { id: string; name: string; subEvents?: string[] }[];
   /** False until 0017 has added event types */
   eventTypesReady: boolean;
+  /** False until 0023 has added sub-events to event types */
+  subEventsReady: boolean;
   samplePhotos: SamplePhoto[];
   /** False until 0021 has added sample photos */
   samplePhotosReady: boolean;
@@ -351,7 +353,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   clientDates = !(await sb.from("clients").select("birthday").limit(1)).error;
   schema.contacts = !(await sb.from("enquiries").select("coordinator_id").limit(1)).error;
   schema.coordinator = !(await sb.from("enquiries").select("coordinator").limit(1)).error;
-  const eventRows = await sb.from("event_types").select("id,name,sort_order").order("sort_order").order("created_at");
+  const eventRows = await sb.from("event_types").select("*").order("sort_order").order("created_at");
+  schema.subEvents = !eventRows.error && !(await sb.from("event_types").select("sub_events").limit(1)).error;
   const photoRows = await sb.from("sample_photos").select("id,kind,name,photo_url,note").order("kind").order("sort_order").order("created_at");
   const branchesEnabled = !branchProbe.error;
   const branchList = ((branchRows.data ?? []) as Row[]).map((b) => ({ id: b.id as string, name: b.name as string, address: b.address as string }));
@@ -530,8 +533,9 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     chargesReady: schema.charges,
     subcategoriesReady: schema.subcategories,
     contactsReady: schema.contacts,
-    eventTypes: eventRows.error ? [] : ((eventRows.data ?? []) as Row[]).map((e) => ({ id: e.id as string, name: e.name as string })),
+    eventTypes: eventRows.error ? [] : ((eventRows.data ?? []) as Row[]).map((e) => ({ id: e.id as string, name: e.name as string, subEvents: Array.isArray(e.sub_events) && e.sub_events.length ? (e.sub_events as string[]) : undefined })),
     eventTypesReady: !eventRows.error,
+    subEventsReady: schema.subEvents,
     samplePhotos: photoRows.error ? [] : ((photoRows.data ?? []) as Row[]).map((p) => ({ id: p.id as string, kind: p.kind as SamplePhoto["kind"], name: p.name as string, photoUrl: p.photo_url as string, note: (p.note as string) ?? "" })),
     samplePhotosReady: !photoRows.error,
     mainRateReady: schema.mainRate,

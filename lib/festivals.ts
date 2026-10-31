@@ -17,6 +17,8 @@ const siderealSun = (d: number) => (((sunLongitude(d) - ayanamsa(d)) % 360) + 36
 /** Every new moon between two moments, found by stepping a synodic month at a time and refining. */
 function newMoons(from: number, to: number) {
   const found: number[] = [];
+  // A date half typed in can give no number at all; never search without an end.
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to - from > 1000) return found;
   const synodic = 29.530588861;
   let k = Math.floor((from - 6.098) / synodic) - 1; // 2000-01-06 was a new moon
   for (;;) {
@@ -108,6 +110,9 @@ const fixed: Record<string, string> = {
 
 const cacheDay = new Map<string, string[]>();
 
+/** Festivals are worked out for real calendar years only, not a year still being typed (0002, 0202). */
+const plausible = (year: number) => Number.isInteger(year) && year >= 1900 && year <= 2200;
+
 /** Festival names for an ISO date (YYYY-MM-DD). */
 export function festivalsOn(iso: string): string[] {
   const hit = cacheDay.get(iso);
@@ -124,6 +129,7 @@ export function festivalsOn(iso: string): string[] {
 function lunarFestivals(iso: string) {
   const year = Number(iso.slice(0, 4));
   const out: string[] = [];
+  if (!plausible(year)) return out;
   const yesterday = isoDate(addDays(parseDate(iso), -1));
   const tomorrow = isoDate(addDays(parseDate(iso), 1));
   for (const r of rules) {
@@ -147,6 +153,7 @@ function lunarFestivals(iso: string) {
 
 /** The lunar month for a date, e.g. "Kartik" (amanta). */
 export function lunarMonthOn(iso: string) {
+  if (!plausible(Number(iso.slice(0, 4)))) return "";
   const m = lunarMonthAt(daysAt(iso), Number(iso.slice(0, 4)));
   return m ? `${m.adhik ? "Adhik " : ""}${m.name}` : "";
 }

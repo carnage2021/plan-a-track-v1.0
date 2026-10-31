@@ -83,7 +83,7 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
         {span.start && <p className="tnum text-sm text-text-muted">Event {fmtDate(span.start, { day: "numeric", month: "short" })}{span.end > span.start ? ` to ${fmtDate(span.end, { day: "numeric", month: "short" })}, ${datesBetween(span.start, span.end).length} days` : ", one day"} · {draft.functions.length} {draft.functions.length === 1 ? "service" : "services"}</p>}
       </div>
       {draft.functions.map((f, i) => (
-        <ServiceCard key={f.id} fn={f} index={i} onChange={(p) => setFn(f.id, p)} onRemove={draft.functions.length > 1 ? () => setDraft((d) => ({ functions: d.functions.filter((x) => x.id !== f.id) })) : undefined} showErrors={showErrors} />
+        <ServiceCard key={f.id} eventType={draft.eventType} fn={f} index={i} onChange={(p) => setFn(f.id, p)} onRemove={draft.functions.length > 1 ? () => setDraft((d) => ({ functions: d.functions.filter((x) => x.id !== f.id) })) : undefined} showErrors={showErrors} />
       ))}
 
       <div className="flex flex-wrap items-center gap-2">

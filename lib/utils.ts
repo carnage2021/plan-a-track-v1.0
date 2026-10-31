@@ -49,7 +49,8 @@ export function uid() {
 export function isoDate(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
+  // Four-digit year always: a year typed half-way (0202 on the way to 2026) must stay a valid date string.
+  return `${String(d.getFullYear()).padStart(4, "0")}-${m}-${day}`;
 }
 
 /** The local calendar day of a database timestamp; slicing the UTC text would give yesterday after midnight in India. */
@@ -57,9 +58,15 @@ export function localDay(timestamp: string) {
   return isoDate(new Date(timestamp));
 }
 
+/** A date with a real four-digit year, not one half typed in (0020 on the way to 2026). */
+export const realDate = (iso: string) => /^(19|20|21)\d\d-\d\d-\d\d$/.test(iso);
+
 export function parseDate(iso: string) {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return new Date(y, m - 1, d);
+  const out = new Date(2000, m - 1, d);
+  // new Date(20, ...) means 1920; setFullYear keeps a typed year 0020 as it is.
+  out.setFullYear(y);
+  return out;
 }
 
 export function addDays(d: Date, days: number) {

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { subPath, pricedAtBooking } from "./categories";
+import { splitSubEvents } from "./event-types";
 import { defaultFoodTypes } from "./services";
 import { itemRow, clientRow, packageRow, schema } from "./db";
 import { useStaff } from "./staff";
@@ -20,7 +21,7 @@ export interface Column { label: string; required?: boolean; example: string; ki
 /* eslint-disable @typescript-eslint/no-explicit-any -- rows go straight to PostgREST */
 type Row = Record<string, any>;
 /** Rows to insert, by table, in the order they must go in; `update` changes rows already there (not undone). */
-export type Plan = { table: string; rows: Row[]; update?: { ids: string[]; values: Row } }[];
+export type Plan = { table: string; rows: Row[]; update?: { ids: string[]; values: Row }[] }[];
 
 export interface ListSpec {
   key: ListKey;
@@ -193,7 +194,7 @@ export const lists: ListSpec[] = [
       });
       for (const c of newCats) if (mainCats.has(c.id)) c.priced_at_booking = true;
       const switchOver = [...mainCats].filter((id) => s.categories.some((c) => c.id === id && !c.atBooking));
-      return [{ table: "menu_categories", rows: newCats, update: { ids: switchOver, values: { priced_at_booking: true } } }, { table: "menu_items", rows: items }];
+      return [{ table: "menu_categories", rows: newCats, update: [{ ids: switchOver, values: { priced_at_booking: true } }] }, { table: "menu_items", rows: items }];
     },
     rows: () => {
       const s = useStore.getState();
@@ -370,15 +371,45 @@ export const lists: ListSpec[] = [
   {
     key: "events",
     label: "Event types",
-    columns: [{ label: "Event type", required: true, example: "Wedding" }],
-    // An account still on the standard list has none of its own, so every row comes in.
-    existing: () => new Set(useStore.getState().eventTypes.map((e) => norm(e.name))),
-    identity: (r) => norm(r["Event type"]),
-    build(records) {
-      const start = useStore.getState().eventTypes.length;
-      return [{ table: "event_types", rows: records.map((r, i) => ({ id: uid(), name: r["Event type"].trim(), sort_order: start + i })) }];
+    columns: [
+      { label: "Event type", required: true, example: "Wedding" },
+      { label: "Sub events", example: "Haldi; Mehndi; Sangeet; Garba; Wedding Day; Reception" },
+    ],
+    // An account still on the standard list has none of its own, so every row comes in. A type already there is
+    // only a duplicate when it brings no new sub-event.
+    existing: () => new Set(useStore.getState().eventTypes.flatMap((e) => [norm(e.name), ...(e.subEvents ?? []).map((x) => `${norm(e.name)}:${norm(x)}`)])),
+    identity: (r) => {
+      const subs = splitSubEvents(r["Sub events"] ?? "");
+      const own = useStore.getState().eventTypes.find((e) => norm(e.name) === norm(r["Event type"]));
+      const fresh = subs.filter((x) => !(own?.subEvents ?? []).some((y) => norm(y) === norm(x)));
+      // Nothing new: matches the type itself. Something new: a key no existing row has, so the row comes in.
+      return own && fresh.length ? `${norm(r["Event type"])}:new:${fresh.map(norm).join(",")}` : norm(r["Event type"]);
     },
-    rows: () => useStore.getState().eventTypes.map((e) => ({ "Event type": e.name })),
+    build(records) {
+      const s = useStore.getState();
+      const rows: Row[] = [];
+      const update: { ids: string[]; values: Row }[] = [];
+      const added = new Map<string, Row>();
+      records.forEach((r) => {
+        const name = r["Event type"].trim();
+        const subs = splitSubEvents(r["Sub events"] ?? "");
+        const own = s.eventTypes.find((e) => norm(e.name) === norm(name));
+        if (own) {
+          // Kept in the order they were, with the new ones after.
+          const merged = [...(own.subEvents ?? [])];
+          for (const x of subs) if (!merged.some((y) => norm(y) === norm(x))) merged.push(x);
+          if (schema.subEvents) update.push({ ids: [own.id], values: { sub_events: merged } });
+          return;
+        }
+        const dup = added.get(norm(name));
+        if (dup) { if (schema.subEvents) dup.sub_events = splitSubEvents([...(dup.sub_events as string[]), ...subs].join(";")); return; }
+        const row: Row = { id: uid(), name, sort_order: s.eventTypes.length + rows.length, ...(schema.subEvents ? { sub_events: subs } : {}) };
+        added.set(norm(name), row);
+        rows.push(row);
+      });
+      return [{ table: "event_types", rows, update }];
+    },
+    rows: () => useStore.getState().eventTypes.map((e) => ({ "Event type": e.name, "Sub events": (e.subEvents ?? []).join("; ") })),
   },
   {
     key: "photos",

@@ -5,7 +5,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { categoryRow, clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, loadAll, paymentRow, run, savePackageRows, tenantRow } from "./db";
+import { categoryRow, clientRow, enquiryRow, insertOrder, insertQuotation, itemRow, loadAll, paymentRow, run, savePackageRows, schema, tenantRow } from "./db";
 import { background, setReload, write } from "./queue";
 import { supabase } from "./supabase/client";
 import { useKitchen } from "./kitchen";
@@ -63,9 +63,10 @@ interface Data {
   /** False until 0016 has added the client's second phone and the coordinator */
   contactsReady: boolean;
   /** The account's own event types, in order; empty means the standard list */
-  eventTypes: { id: string; name: string }[];
+  eventTypes: { id: string; name: string; subEvents?: string[] }[];
   /** False until 0017 has added event types */
   eventTypesReady: boolean;
+  subEventsReady: boolean;
   samplePhotos: SamplePhoto[];
   /** 0021 has run: sample photos for staff uniforms, cutlery and decoration */
   samplePhotosReady: boolean;
@@ -112,7 +113,7 @@ interface Actions {
   ensureClient: (name: string, phone: string, id?: string) => string;
   saveClient: (client: Client) => void;
   /** Saves the account's event types as given: new ones are added, names and order updated, missing ones removed. */
-  setEventTypes: (next: { id: string; name: string }[]) => Promise<void>;
+  setEventTypes: (next: { id: string; name: string; subEvents?: string[] }[]) => Promise<void>;
   /** Fills in or corrects a client's email, second phone and address; blanks leave what is there. */
   updateClientContact: (clientId: string, contact: { email?: string; altPhone?: string; address?: string }) => void;
   saveEnquiry: (enquiry: Omit<Enquiry, "id" | "createdAt"> & { id?: string }) => string;
@@ -162,7 +163,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -308,7 +309,7 @@ export const useStore = create<Store>()(
             // Names are unique per account, so renames and swaps go through a temporary name first.
             const renamed = clean.filter((e) => before.some((b) => b.id === e.id && b.name !== e.name));
             for (const e of renamed) await run(sb.from("event_types").update({ name: `${e.id}~` }).eq("id", e.id), "Renaming event types");
-            if (clean.length) await run(sb.from("event_types").upsert(clean.map((e, i) => ({ id: e.id, name: e.name, sort_order: i }))), "Saving event types");
+            if (clean.length) await run(sb.from("event_types").upsert(clean.map((e, i) => ({ id: e.id, name: e.name, sort_order: i, ...(schema.subEvents ? { sub_events: e.subEvents ?? [] } : {}) }))), "Saving event types");
           });
         } catch (e) {
           set({ eventTypes: before });

@@ -6,7 +6,7 @@ import { VegMark } from "@/components/shared/badges";
 import { MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/primitives";
-import { pricedAtBooking, rootOf, subPath, treeOrder } from "@/lib/categories";
+import { fullPath, pricedAtBooking, rootOf, subPath, treeOrder } from "@/lib/categories";
 import { priceFunction } from "@/lib/pricing";
 import { serviceLine, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
@@ -26,8 +26,9 @@ function withPrice(f: EventFunction, id: string, price: number, base: number) {
 
 /**
  * Step 3: every dish picked, day by day and event by event, with its price for this booking. Dishes priced per
- * plate or per counter take a new price; main course dishes add up to the event's main course rate; with a package
- * its price per plate can be changed, and a price typed on a dish inside it is added on top.
+ * plate or per counter take a new price; the main course (soups, rotis, sabjis, dal, rice and every sub-category
+ * under it) takes one price per plate for the whole of it; with a package its price per plate can be changed, and a
+ * price typed on a dish inside it is added on top.
  */
 export function FoodPrices({ functions, onPatch }: { functions: EventFunction[]; onPatch: Patch }) {
   const items = useStore((s) => s.items);
@@ -56,13 +57,18 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
             const mains = dishes.filter((i) => !pkg && i.pricingType === "plate" && pricedAtBooking(i.categoryId));
             const setDish = (i: MenuItem, price: number) =>
               onPatch(f.id, (cur) => {
-                const main = !pkg && i.pricingType === "plate" && pricedAtBooking(i.categoryId);
                 // Inside a package a dish costs nothing extra; main course dishes have no menu price.
-                const base = main || (pkg && !p.extraIds.includes(i.id) && i.pricingType === "plate") ? 0 : pricedAtBooking(i.categoryId) ? 0 : i.price;
-                const itemPrices = withPrice(cur, i.id, price, base);
-                // The main course rate is the total of its dishes' prices.
-                return main ? { itemPrices, mainRate: mains.reduce((s, m) => s + (m.id === i.id ? price : itemPrices?.[m.id] ?? 0), 0) || undefined } : { itemPrices };
+                const base = (pkg && !p.extraIds.includes(i.id) && i.pricingType === "plate") || pricedAtBooking(i.categoryId) ? 0 : i.price;
+                return { itemPrices: withPrice(cur, i.id, price, base) };
               });
+            // One price for the whole main course; any old per-dish main course prices are dropped with it.
+            const setMain = (v: number) =>
+              onPatch(f.id, (cur) => {
+                const prices = { ...cur.itemPrices };
+                for (const m of mains) delete prices[m.id];
+                return { mainRate: v || undefined, itemPrices: Object.keys(prices).length ? prices : undefined };
+              });
+            const firstMain = mains[0]?.id;
             return (
               <div key={f.id} className="mt-2 rounded-xl border">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b bg-surface-muted/50 px-3 py-2">
@@ -85,9 +91,11 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                   {dishes.map((i) => {
                     const plate = i.pricingType === "plate";
                     const main = !pkg && plate && pricedAtBooking(i.categoryId);
+                    // The main course shows once, where its first dish would be, with every dish of it inside.
+                    if (main) return i.id === firstMain ? <MainCourse key="main" fnName={f.name} dishes={mains} value={f.mainRate ?? 0} onChange={setMain} /> : null;
                     const inPkg = !!pkg && plate && !p.extraIds.includes(i.id);
                     const value = f.itemPrices?.[i.id] ?? (inPkg || pricedAtBooking(i.categoryId) ? 0 : i.price);
-                    const tag = inPkg ? (p.addOnIds.includes(i.id) ? "In package, added on top" : "In package") : main ? "Adds to the main course rate" : pkg && plate ? "Beyond the package" : !plate ? "Counter" : "";
+                    const tag = inPkg ? (p.addOnIds.includes(i.id) ? "In package, added on top" : "In package") : pkg && plate ? "Beyond the package" : !plate ? "Counter" : "";
                     return (
                       <Row
                         key={i.id}
@@ -96,7 +104,7 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                         sub={[categories.find((c) => c.id === rootOf(i.categoryId))?.name, subPath(i.categoryId)].filter(Boolean).join(" › ")}
                         tag={tag}
                         value={value}
-                        changed={f.itemPrices?.[i.id] !== undefined && !main && !inPkg}
+                        changed={f.itemPrices?.[i.id] !== undefined && !inPkg}
                         onChange={(v) => setDish(i, v)}
                         onReset={() => onPatch(f.id, (cur) => ({ itemPrices: withPrice(cur, i.id, i.price, i.price) }))}
                         unit={plate ? "a plate" : "a counter"}
@@ -104,11 +112,6 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                     );
                   })}
                 </ul>
-                {mains.length > 0 && (
-                  <p className={cn("tnum border-t px-3 py-2 text-xs", p.mainRate ? "text-text-muted" : "bg-warning/10 font-medium text-warning")}>
-                    {p.mainRate ? `Main course rate ${rate(p.mainRate)} a plate: the total of the main course prices above, or the rate typed for the event below.` : "Price the main course dishes above, or type one main course rate for the event below."}
-                  </p>
-                )}
                 <p className="tnum flex justify-between border-t px-3 py-2 text-sm"><span className="text-text-muted">Food for {f.name}</span><span className="font-semibold">{money(p.total)}</span></p>
               </div>
             );
@@ -116,6 +119,37 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
         </section>
       ))}
     </Card>
+  );
+}
+
+/** The whole main course of one event: one price per plate that covers every dish in it, sub-category by sub-category. */
+function MainCourse({ fnName, dishes, value, onChange }: { fnName: string; dishes: MenuItem[]; value: number; onChange: (v: number) => void }) {
+  const groups = new Map<string, MenuItem[]>();
+  for (const d of dishes) {
+    const key = fullPath(d.categoryId);
+    groups.set(key, [...(groups.get(key) ?? []), d]);
+  }
+  return (
+    <li className={cn("px-3 py-2.5", !value && "bg-warning/10")}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="min-w-0 flex-1 basis-48">
+          <p className="text-sm font-medium">Main course · {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}</p>
+          <p className={cn("text-xs", value ? "text-text-muted" : "font-medium text-warning")}>{value ? "One price per plate for the whole main course, every dish below included" : "Enter one price per plate for the whole main course"}</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <MoneyInput label={`Main course price per plate for ${fnName}`} value={value} onChange={onChange} className="w-28" />
+          <span className="w-16 text-xs text-text-muted">a plate</span>
+        </div>
+      </div>
+      <dl className="mt-2 space-y-1 border-l-2 border-primary/30 pl-3">
+        {[...groups].map(([group, list]) => (
+          <div key={group} className="text-xs sm:flex sm:gap-2">
+            <dt className="shrink-0 font-medium text-text-muted sm:w-40">{group}</dt>
+            <dd className="flex flex-wrap gap-x-3 gap-y-0.5" data-no-title-case>{list.map((d) => <span key={d.id} className="inline-flex items-center gap-1"><VegMark diet={d.diet} />{d.name}</span>)}</dd>
+          </div>
+        ))}
+      </dl>
+    </li>
   );
 }
 

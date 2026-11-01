@@ -1,4 +1,4 @@
-import { lineage, pricedAtBooking } from "./categories";
+import { lineage, pricedAtBooking, rootOf } from "./categories";
 import type { Discount, EventCharge, EventFunction, ExtraCharge, MenuItem, MenuPackage, Tenant } from "./types";
 
 /** One charge line's amount, kept to the paisa. */
@@ -11,6 +11,17 @@ export interface RuleProgress {
   choose: number;
   chosen: number;
   met: boolean;
+}
+
+/** The per-plate dishes of one top-level category on a dish-by-dish event, priced as one line. */
+export interface PlatePart {
+  categoryId: string;
+  itemIds: string[];
+  /** The total of the dishes' prices for this booking */
+  dishTotal: number;
+  /** What the category is charged per plate: a price typed for it, or its dishes' total */
+  perPlate: number;
+  typed: boolean;
 }
 
 export interface FunctionPrice {
@@ -42,6 +53,8 @@ export interface FunctionPrice {
   needsMainRate: boolean;
   /** The main course rate per plate counted in perPlate (0 when none is needed or typed) */
   mainRate: number;
+  /** Built dish by dish: the per-plate dishes outside the main course, one part per top-level category */
+  parts: PlatePart[];
 }
 
 export function slabPct(pax: number, slabs: Tenant["slabs"]) {
@@ -50,7 +63,7 @@ export function slabPct(pax: number, slabs: Tenant["slabs"]) {
 }
 
 export function priceFunction(
-  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices" | "charges" | "mainRate" | "packagePrice">,
+  fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices" | "charges" | "mainRate" | "packagePrice" | "categoryPrices">,
   items: MenuItem[],
   packages: MenuPackage[],
   slabs: Tenant["slabs"],
@@ -69,6 +82,9 @@ export function priceFunction(
   const rules: RuleProgress[] = [];
   const extraIds: string[] = [];
   const addOnIds: string[] = [];
+  const parts: PlatePart[] = [];
+  // Category prices typed for this booking; like the main course rate they stay as typed, with no guest-count discount.
+  let typedPlate = 0;
   const packagePrice = pkg ? fn.packagePrice ?? pkg.pricePerPlate : 0;
   // A dish inside the package costs nothing extra, unless a price is typed on it for this booking: then it is added on top.
   const addOn = (id: string) => {
@@ -105,16 +121,31 @@ export function priceFunction(
     }
     basePlate += extraPerPlate + addOnPerPlate;
   } else {
-    basePlate = plateItems.filter((i) => !pricedAtBooking(i.categoryId)).reduce((s, i) => s + i.price, 0);
+    for (const i of plateItems) {
+      if (pricedAtBooking(i.categoryId)) continue;
+      const root = rootOf(i.categoryId);
+      let part = parts.find((x) => x.categoryId === root);
+      if (!part) parts.push((part = { categoryId: root, itemIds: [], dishTotal: 0, perPlate: 0, typed: false }));
+      part.itemIds.push(i.id);
+      part.dishTotal += i.price;
+    }
+    for (const part of parts) {
+      const typed = fn.categoryPrices?.[part.categoryId];
+      part.typed = typed !== undefined;
+      part.perPlate = typed ?? part.dishTotal;
+      if (part.typed) typedPlate += part.perPlate;
+      else basePlate += part.perPlate;
+    }
   }
 
   // With a package its price covers the main course; built dish by dish, the typed rate is added per plate.
   const needsMainRate = !pkg && plateItems.some((i) => pricedAtBooking(i.categoryId));
   const mainRate = needsMainRate ? fn.mainRate ?? 0 : 0;
-  basePlate += mainRate;
   const pct = slabPct(fn.pax, slabs);
-  // The guest-count discount is for menu prices; the main course rate is typed for this booking, so it stays as typed.
-  const perPlate = Math.round((basePlate - mainRate) * (1 - pct / 100)) + mainRate;
+  // The guest-count discount is for menu prices; the main course rate and category prices are typed for this
+  // booking, so they stay as typed.
+  const perPlate = Math.round(basePlate * (1 - pct / 100)) + typedPlate + mainRate;
+  basePlate += typedPlate + mainRate;
   const costPerPlate = plateItems.reduce((s, i) => s + i.cost, 0);
   const fixedCost = picked.filter((i) => i.pricingType !== "plate").reduce((s, i) => s + i.cost, 0);
 
@@ -136,6 +167,7 @@ export function priceFunction(
     eventTotal: perPlate * fn.pax + fixed + eventCharges(fn),
     needsMainRate,
     mainRate,
+    parts,
   };
 }
 

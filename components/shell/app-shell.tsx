@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenEnquiry } from "@/components/sales/enquiry-list";
 import { useStock } from "@/components/supply/common";
 import { balanceOf, scheduleRows, useBilling } from "@/lib/billing";
 import { useOps } from "@/lib/operations";
@@ -187,7 +188,7 @@ function useQuickActions() {
   const t = useTranslations("common");
   const router = useRouter();
   const role = useCurrentUser().role;
-  const openEnquiry = useUi((s) => s.openEnquiry);
+  const openEnquiry = useOpenEnquiry();
   const openPayment = useUi((s) => s.openPayment);
   const sales = role === "owner" || role === "sales";
   return [
@@ -216,14 +217,14 @@ function useAlerts() {
     const name = (id: string) => clients.find((c) => c.id === id)?.name ?? "";
     const followUps = enquiries
       .filter((e) => e.followUpAt && !["booked", "lost"].includes(e.stage) && daysFromToday(e.followUpAt) <= 0)
-      .map((e) => ({ id: e.id, href: "/enquiries", title: `Follow up with ${name(e.clientId)}`, sub: `${e.eventType} · due ${relativeDay(e.followUpAt!).toLowerCase()}`, tone: daysFromToday(e.followUpAt!) < 0 ? "danger" : "warning" }));
+      .map((e) => ({ id: e.id, href: "/orders?tab=enquiries", title: `Follow up with ${name(e.clientId)}`, sub: `${e.eventType} · due ${relativeDay(e.followUpAt!).toLowerCase()}`, tone: daysFromToday(e.followUpAt!) < 0 ? "danger" : "warning" }));
     const tentative = orders
       .filter((o) => o.status === "tentative")
       .map((o) => ({ id: o.id, href: `/orders/${o.id}`, title: `${name(o.clientId)} has not paid the advance`, sub: `${o.number} is still tentative`, tone: "warning" }));
     const today = isoDate(new Date());
     const fresh = enquiries
       .filter((e) => e.createdAt?.slice(0, 10) === today && e.stage === "new")
-      .map((e) => ({ id: `new-${e.id}`, href: "/enquiries", title: `New enquiry from ${name(e.clientId)}`, sub: `${e.eventType} · ${e.pax} guests`, tone: "info" }));
+      .map((e) => ({ id: `new-${e.id}`, href: "/orders?tab=enquiries", title: `New enquiry from ${name(e.clientId)}`, sub: `${e.eventType} · ${e.pax} guests`, tone: "info" }));
     const received = orders.flatMap((o) => o.payments.filter((p) => p.date === today).map((p) => ({ id: `paid-${p.id}`, href: `/orders/${o.id}?tab=payments`, title: `${money(p.amount)} received from ${name(o.clientId)}`, sub: p.receiptNo, tone: "success" })));
     const live = orders.filter((o) => o.status !== "cancelled");
     const late = live.flatMap((o) => {

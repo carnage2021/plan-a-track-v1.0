@@ -73,6 +73,8 @@ interface Data {
   mainRateReady: boolean;
   /** 0024 has run: kitchen guests per dish and a package price per booking */
   dishGuestsReady: boolean;
+  /** 0025 has run: one price per plate for a whole category on a booking */
+  categoryPricesReady: boolean;
   addSamplePhoto: (p: Omit<SamplePhoto, "id">) => void;
   removeSamplePhoto: (id: string) => void;
   tenantId: string;
@@ -120,6 +122,7 @@ interface Actions {
   updateClientContact: (clientId: string, contact: { email?: string; altPhone?: string; address?: string }) => void;
   saveEnquiry: (enquiry: Omit<Enquiry, "id" | "createdAt"> & { id?: string }) => string;
   moveEnquiry: (id: string, stage: EnquiryStage, lostReason?: string) => void;
+  deleteEnquiry: (id: string) => void;
   saveItem: (item: Omit<MenuItem, "id"> & { id?: string }) => void;
   /** Deletes a dish, or switches it off when a past quotation or order lists it. Says which it did. */
   deleteItem: (id: string) => Promise<"deleted" | "switched_off">;
@@ -167,7 +170,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false, dishGuestsReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false, dishGuestsReady: false, categoryPricesReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -337,6 +340,11 @@ export const useStore = create<Store>()(
         // A new enquiry is filed under the branch being shown; editing one never moves it.
         background((sb) => run(sb.from("enquiries").upsert(enquiry.id ? enquiryRow(saved) : withBranch(enquiryRow(saved))), "Saving the enquiry"));
         return id;
+      },
+      deleteEnquiry: (id) => {
+        set((s) => ({ enquiries: s.enquiries.filter((e) => e.id !== id) }));
+        // Quotations made from it keep their client and menu; their link to the enquiry is cleared by the database.
+        background((sb) => run(sb.from("enquiries").delete().eq("id", id), "Deleting the enquiry"));
       },
       moveEnquiry: (id, stage, lostReason) => {
         const reason = stage === "lost" ? lostReason : undefined;

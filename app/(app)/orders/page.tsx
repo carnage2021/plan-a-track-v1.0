@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { StatusBadge } from "@/components/shared/badges";
+import { EnquiryList } from "@/components/sales/enquiry-list";
 import { QuotationList } from "@/components/sales/quotation-list";
 import { EmptyState, EventCard, PageHeader, ProgressBar } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
@@ -14,13 +15,14 @@ import { useCurrentUser, useStore } from "@/lib/store";
 import type { OrderStatus } from "@/lib/types";
 import { fmtDate, money, num } from "@/lib/utils";
 
-const filters: { id: OrderStatus | "upcoming" | "due" | "all" | "quotations"; label: string }[] = [
+const filters: { id: OrderStatus | "upcoming" | "due" | "all" | "quotations" | "enquiries"; label: string }[] = [
   { id: "upcoming", label: "Upcoming" },
   { id: "tentative", label: "Tentative" },
   { id: "due", label: "Balance due" },
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
   { id: "all", label: "All" },
+  { id: "enquiries", label: "Enquiries" },
   { id: "quotations", label: "Quotations" },
 ];
 
@@ -33,7 +35,11 @@ function Orders() {
   // Quotations are for the people who sell; operations and accounts see orders only.
   const sells = role === "owner" || role === "sales";
   const quoteCount = useStore((s) => s.quotations.filter((q) => !["superseded", "rejected"].includes(q.status) && !s.orders.some((o) => o.quotationId === q.id)).length);
-  const [filter, setFilter] = React.useState<(typeof filters)[number]["id"]>(params.get("tab") === "quotations" && sells ? "quotations" : clientId ? "all" : "upcoming");
+  const enquiryCount = useStore((s) => s.enquiries.filter((e) => ["new", "contacted", "followup"].includes(e.stage)).length);
+  const tab = params.get("tab");
+  const [filter, setFilter] = React.useState<(typeof filters)[number]["id"]>((tab === "quotations" || tab === "enquiries") && sells ? tab : clientId ? "all" : "upcoming");
+  // Enquiries and quotations are for the people who sell.
+  const salesOnly = (id: string) => id === "quotations" || id === "enquiries";
   const client = clients.find((c) => c.id === clientId);
 
   const rows = React.useMemo(
@@ -53,12 +59,14 @@ function Orders() {
 
   return (
     <>
-      <PageHeader title="Orders" subtitle={filter === "quotations" ? "Quotations saved at the end of a booking. Approve one when the client says yes, and it becomes an order." : client ? `Showing orders for ${client.name}` : "Bookings, and the quotations waiting for the client."} action={<Button variant="primary" asChild><Link href="/booking"><Presentation strokeWidth={1.75} /><span className="max-sm:hidden">New booking</span></Link></Button>}>
+      <PageHeader title="Orders" subtitle={filter === "enquiries" ? "Enquiries saved from the first step of a booking. Continue one when the client is ready." : filter === "quotations" ? "Quotations saved at the end of a booking. Approve one when the client says yes, and it becomes an order." : client ? `Showing orders for ${client.name}` : "Bookings, and the quotations waiting for the client."} action={<Button variant="primary" asChild><Link href="/booking"><Presentation strokeWidth={1.75} /><span className="max-sm:hidden">New booking</span></Link></Button>}>
         {client && <Chip active onClick={() => router.replace("/orders")}>{client.name}<X strokeWidth={1.75} /></Chip>}
-        {filters.filter((f) => f.id !== "quotations" || sells).map((f) => <Chip key={f.id} active={filter === f.id} onClick={() => { setFilter(f.id); router.replace(f.id === "quotations" ? "/orders?tab=quotations" : clientId ? `/orders?client=${clientId}` : "/orders"); }}>{f.label}{f.id === "quotations" && quoteCount > 0 ? ` ${quoteCount}` : ""}</Chip>)}
+        {filters.filter((f) => !salesOnly(f.id) || sells).map((f) => <Chip key={f.id} active={filter === f.id} onClick={() => { setFilter(f.id); router.replace(salesOnly(f.id) ? `/orders?tab=${f.id}` : clientId ? `/orders?client=${clientId}` : "/orders"); }}>{f.label}{f.id === "quotations" && quoteCount > 0 ? ` ${quoteCount}` : f.id === "enquiries" && enquiryCount > 0 ? ` ${enquiryCount}` : ""}</Chip>)}
       </PageHeader>
 
-      {filter === "quotations" ? (
+      {filter === "enquiries" ? (
+        <EnquiryList clientId={clientId} />
+      ) : filter === "quotations" ? (
         <QuotationList clientId={clientId} />
       ) : rows.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No orders in this view" help="Orders appear here when you confirm a booking, or approve a saved quotation." action={<Button variant="primary" asChild><Link href="/booking">New booking</Link></Button>} />

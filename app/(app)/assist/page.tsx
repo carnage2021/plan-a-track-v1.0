@@ -215,7 +215,7 @@ function EnquiryReader() {
             <Field label="Venue"><Input value={f.venue} onChange={(e) => set({ venue: e.target.value })} /></Field>
             <Field label="Food"><Select value={f.food} onChange={(e) => set({ food: e.target.value as Diet })}><option value="veg">Veg</option><option value="jain">Jain</option><option value="nonveg">Non-veg</option></Select></Field>
           </div>
-          {saved ? <Button variant="ghost" asChild><Link href="/enquiries">Open Enquiries<ArrowRight strokeWidth={1.75} /></Link></Button> : <Button variant="primary" disabled={f.phone.length !== 10 || !f.date} onClick={create}>Create enquiry</Button>}
+          {saved ? <Button variant="ghost" asChild><Link href="/orders?tab=enquiries">Open Enquiries<ArrowRight strokeWidth={1.75} /></Link></Button> : <Button variant="primary" disabled={f.phone.length !== 10 || !f.date} onClick={create}>Create enquiry</Button>}
         </Card>
       )}
     </div>

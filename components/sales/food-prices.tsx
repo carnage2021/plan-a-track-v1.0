@@ -25,10 +25,11 @@ function withPrice(f: EventFunction, id: string, price: number, base: number) {
 }
 
 /**
- * Step 3: every dish picked, day by day and event by event, with its price for this booking. Dishes priced per
- * plate or per counter take a new price; the main course (soups, rotis, sabjis, dal, rice and every sub-category
- * under it) takes one price per plate for the whole of it; with a package its price per plate can be changed, and a
- * price typed on a dish inside it is added on top.
+ * Step 3: every dish picked, day by day and event by event, with its price for this booking. Built dish by dish,
+ * each category (Welcome drinks, Starters, Breads ...) shows its dishes under one price per plate that starts at
+ * their total and can be changed; the main course (every sub-category under it) takes one price typed in; counters
+ * keep their own price. With a package its price per plate can be changed, and a price typed on a dish inside it is
+ * added on top.
  */
 export function FoodPrices({ functions, onPatch }: { functions: EventFunction[]; onPatch: Patch }) {
   const items = useStore((s) => s.items);
@@ -36,6 +37,7 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
   const categories = useStore((s) => s.categories);
   const slabs = useStore((s) => s.tenant.slabs);
   const ready = useStore((s) => s.dishGuestsReady);
+  const catReady = useStore((s) => s.categoryPricesReady);
   const foodTypes = useFoodTypes();
   const order = React.useMemo(() => new Map(treeOrder(categories).map((x, i) => [x.c.id, i])), [categories]);
   if (!functions.some((f) => f.itemIds.length || f.packageId)) return null;
@@ -69,6 +71,15 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                 return { mainRate: v || undefined, itemPrices: Object.keys(prices).length ? prices : undefined };
               });
             const firstMain = mains[0]?.id;
+            // A category price equal to its dishes' total is not kept, so the dishes' prices carry on counting.
+            const setCategory = (categoryId: string, v: number, dishTotal: number) =>
+              onPatch(f.id, (cur) => {
+                const prices = { ...cur.categoryPrices };
+                if (v === dishTotal) delete prices[categoryId];
+                else prices[categoryId] = v;
+                return { categoryPrices: Object.keys(prices).length ? prices : undefined };
+              });
+            const counters = pkg ? [] : dishes.filter((i) => i.pricingType !== "plate");
             return (
               <div key={f.id} className="mt-2 rounded-xl border">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b bg-surface-muted/50 px-3 py-2">
@@ -92,7 +103,27 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                     const plate = i.pricingType === "plate";
                     const main = !pkg && plate && pricedAtBooking(i.categoryId);
                     // The main course shows once, where its first dish would be, with every dish of it inside.
-                    if (main) return i.id === firstMain ? <MainCourse key="main" fnName={f.name} dishes={mains} value={f.mainRate ?? 0} onChange={setMain} /> : null;
+                    if (main) return i.id === firstMain ? <Group key="main" main title="Main course" fnName={f.name} dishes={mains} value={f.mainRate ?? 0} onChange={setMain} /> : null;
+                    // Built dish by dish, other per-plate dishes show as their top category, once, at its first dish.
+                    if (!pkg && plate) {
+                      const part = p.parts.find((x) => x.itemIds.includes(i.id));
+                      if (!part || part.itemIds[0] !== i.id) return null;
+                      const name = categories.find((c) => c.id === part.categoryId)?.name ?? "Other dishes";
+                      return (
+                        <Group
+                          key={`cat-${part.categoryId}`}
+                          title={name}
+                          fnName={f.name}
+                          dishes={part.itemIds.map((id) => dishes.find((d) => d.id === id)).filter((d): d is MenuItem => !!d)}
+                          value={part.perPlate}
+                          hint={!catReady ? "Run the 0025 database update to price a category as a whole" : part.typed ? `Dishes add up to ${rate(part.dishTotal)}; this booking uses the price typed here` : "The total of the dishes below; change it to price them as one"}
+                          onChange={catReady ? (v) => setCategory(part.categoryId, v, part.dishTotal) : undefined}
+                          onReset={part.typed ? () => setCategory(part.categoryId, part.dishTotal, part.dishTotal) : undefined}
+                        />
+                      );
+                    }
+                    // Counters are priced per counter, not per plate, so they stay on their own lines at the end.
+                    if (!pkg) return null;
                     const inPkg = !!pkg && plate && !p.extraIds.includes(i.id);
                     const value = f.itemPrices?.[i.id] ?? (inPkg || pricedAtBooking(i.categoryId) ? 0 : i.price);
                     const tag = inPkg ? (p.addOnIds.includes(i.id) ? "In package, added on top" : "In package") : pkg && plate ? "Beyond the package" : !plate ? "Counter" : "";
@@ -111,6 +142,21 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                       />
                     );
                   })}
+                  {counters.length > 0 && <li className="bg-surface-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">Counters · priced per counter</li>}
+                  {counters.map((i) => (
+                    <Row
+                      key={i.id}
+                      item={i}
+                      name={i.name}
+                      sub={[categories.find((c) => c.id === rootOf(i.categoryId))?.name, subPath(i.categoryId)].filter(Boolean).join(" › ")}
+                      tag="Counter"
+                      value={f.itemPrices?.[i.id] ?? i.price}
+                      changed={f.itemPrices?.[i.id] !== undefined}
+                      onChange={(v) => setDish(i, v)}
+                      onReset={() => onPatch(f.id, (cur) => ({ itemPrices: withPrice(cur, i.id, i.price, i.price) }))}
+                      unit="a counter"
+                    />
+                  ))}
                 </ul>
                 <p className="tnum flex justify-between border-t px-3 py-2 text-sm"><span className="text-text-muted">Food for {f.name}</span><span className="font-semibold">{money(p.total)}</span></p>
               </div>
@@ -122,29 +168,34 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
   );
 }
 
-/** The whole main course of one event: one price per plate that covers every dish in it, sub-category by sub-category. */
-function MainCourse({ fnName, dishes, value, onChange }: { fnName: string; dishes: MenuItem[]; value: number; onChange: (v: number) => void }) {
+/**
+ * One category of an event with its dishes listed by sub-category and one price per plate for all of them. The main
+ * course starts empty and must be typed in; any other category starts at its dishes' total.
+ */
+function Group({ title, fnName, dishes, value, onChange, onReset, hint, main }: { title: string; fnName: string; dishes: MenuItem[]; value: number; onChange?: (v: number) => void; onReset?: () => void; hint?: string; main?: boolean }) {
   const groups = new Map<string, MenuItem[]>();
   for (const d of dishes) {
-    const key = fullPath(d.categoryId);
+    const key = main ? fullPath(d.categoryId) : subPath(d.categoryId);
     groups.set(key, [...(groups.get(key) ?? []), d]);
   }
+  const missing = main && !value;
   return (
-    <li className={cn("px-3 py-2.5", !value && "bg-warning/10")}>
+    <li className={cn("px-3 py-2.5", missing && "bg-warning/10")}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <div className="min-w-0 flex-1 basis-48">
-          <p className="text-sm font-medium">Main course · {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}</p>
-          <p className={cn("text-xs", value ? "text-text-muted" : "font-medium text-warning")}>{value ? "One price per plate for the whole main course, every dish below included" : "Enter one price per plate for the whole main course"}</p>
+          <p className="text-sm font-medium">{title} · {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}</p>
+          <p className={cn("text-xs", missing ? "font-medium text-warning" : "text-text-muted")}>{main ? (value ? "One price per plate for the whole main course, every dish below included" : "Enter one price per plate for the whole main course") : hint}</p>
         </div>
         <div className="flex items-center gap-1">
-          <MoneyInput label={`Main course price per plate for ${fnName}`} value={value} onChange={onChange} className="w-28" />
+          {onReset && <Button variant="ghost" size="icon" aria-label={`Back to the dishes' total for ${title}`} title="Back to the dishes' total" onClick={onReset}><RotateCcw strokeWidth={1.75} /></Button>}
+          {onChange ? <MoneyInput label={`${title} price per plate for ${fnName}`} value={value} onChange={onChange} className="w-28" /> : <span className="tnum w-28 text-right text-sm">{rate(value)}</span>}
           <span className="w-16 text-xs text-text-muted">a plate</span>
         </div>
       </div>
       <dl className="mt-2 space-y-1 border-l-2 border-primary/30 pl-3">
         {[...groups].map(([group, list]) => (
-          <div key={group} className="text-xs sm:flex sm:gap-2">
-            <dt className="shrink-0 font-medium text-text-muted sm:w-40">{group}</dt>
+          <div key={group || "top"} className="text-xs sm:flex sm:gap-2">
+            {group && <dt className="shrink-0 font-medium text-text-muted sm:w-40">{group}</dt>}
             <dd className="flex flex-wrap gap-x-3 gap-y-0.5" data-no-title-case>{list.map((d) => <span key={d.id} className="inline-flex items-center gap-1"><VegMark diet={d.diet} />{d.name}</span>)}</dd>
           </div>
         ))}

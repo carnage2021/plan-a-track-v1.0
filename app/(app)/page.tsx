@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenEnquiry } from "@/components/sales/enquiry-list";
 import { CalendarCheck, CalendarDays, Check, ChevronRight, MessagesSquare, PhoneCall, Users } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -14,7 +15,6 @@ import { useStaff } from "@/lib/staff";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { fmtQty } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
-import { useUi } from "@/lib/ui";
 import { cn, daysFromToday, fmtDate, isoDate, num, relativeDay } from "@/lib/utils";
 
 function OpenTasks() {
@@ -76,7 +76,7 @@ export default function DashboardPage() {
   const user = useCurrentUser();
   const { orders, enquiries, clients, items, tenant } = useStore();
   const workers = useStaff((s) => s.workers.length);
-  const openEnquiry = useUi((s) => s.openEnquiry);
+  const openEnquiry = useOpenEnquiry();
   const seesSales = ["owner", "sales"].includes(user.role);
 
   const data = React.useMemo(() => {

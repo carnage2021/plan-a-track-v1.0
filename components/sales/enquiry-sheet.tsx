@@ -17,7 +17,7 @@ import { useUi } from "@/lib/ui";
 import { ServiceList } from "./service-fields";
 import { addDays, fmtDate, isoDate, num, realDate } from "@/lib/utils";
 
-const sources: { id: LeadSource; label: string }[] = [
+export const sources: { id: LeadSource; label: string }[] = [
   { id: "phone", label: "Phone call" },
   { id: "whatsapp", label: "WhatsApp" },
   { id: "walkin", label: "Walk-in" },

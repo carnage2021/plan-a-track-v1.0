@@ -12,7 +12,6 @@ import {
   HandCoins,
   Home,
   MessageCircle,
-  MessagesSquare,
   Settings,
   Sparkles,
   ShoppingBasket,
@@ -38,7 +37,6 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { key: "home", href: "/", icon: Home, roles: "all" },
   { key: "calendar", href: "/calendar", icon: CalendarDays, roles: ["owner", "sales", "operations", "kitchen"] },
-  { key: "enquiries", href: "/enquiries", icon: MessagesSquare, roles: ["owner", "sales"] },
   { key: "clients", href: "/clients", icon: Contact, roles: ["owner", "sales", "accountant"] },
   { key: "orders", href: "/orders", icon: ClipboardList, roles: ["owner", "sales", "operations", "accountant"] },
   { key: "menu", href: "/menu", icon: UtensilsCrossed, roles: ["owner", "sales", "kitchen"] },

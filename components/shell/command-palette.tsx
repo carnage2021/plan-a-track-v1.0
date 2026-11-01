@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenEnquiry } from "@/components/sales/enquiry-list";
 import { Command } from "cmdk";
 import { ClipboardList, FileText, MessagesSquare, Presentation, Search, User, UtensilsCrossed, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -20,7 +21,7 @@ export function CommandPalette() {
   const router = useRouter();
   const open = useUi((s) => s.search);
   const setOpen = useUi((s) => s.setSearch);
-  const openEnquiry = useUi((s) => s.openEnquiry);
+  const openEnquiry = useOpenEnquiry();
   const openPayment = useUi((s) => s.openPayment);
   const user = useCurrentUser();
   const access = useStore((s) => s.tenant.access);

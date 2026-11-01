@@ -148,8 +148,12 @@ function EventLines({ f, itemised, lang }: { f: EventFunction; itemised: boolean
   const tenant = useStore((s) => s.tenant);
   const items = useStore((s) => s.items);
   const packages = useStore((s) => s.packages);
+  const categories = useStore((s) => s.categories);
   const t = docT(lang);
   const p = priceFunction(f, items, packages, tenant.slabs);
+  // A category priced as a whole for this booking is one line; its dishes are listed without prices.
+  const typed = p.parts.filter((x) => x.typed);
+  const catName = (id: string) => categories.find((c) => c.id === id)?.name ?? "";
   const pkg = packages.find((x) => x.id === f.packageId);
   const priceOf = (i: MenuItem) => f.itemPrices?.[i.id] ?? i.price;
   const picked = f.itemIds.map((id) => items.find((i) => i.id === id)).filter((i): i is MenuItem => !!i);
@@ -171,9 +175,11 @@ function EventLines({ f, itemised, lang }: { f: EventFunction; itemised: boolean
         // Main course dishes are paid for together by the main course rate, on its own line below.
         const main = p.needsMainRate && pricedAtBooking(i.categoryId);
         // A dish beyond the package, or one priced on top of it for this booking, is charged on its own line.
-        const extra = ((!pkg || p.extraIds.includes(i.id)) && !main) || p.addOnIds.includes(i.id);
-        return row(i.id, <span className="pl-3">{i.name}{pkg && !p.extraIds.includes(i.id) ? <span className={`text-xs ${muted}`}> · in package{p.addOnIds.includes(i.id) ? ", added on top" : ""}</span> : main ? <span className={`text-xs ${muted}`}> · {t("mainCourse").toLowerCase()}</span> : null}</span>, extra ? num(f.pax) : "", extra ? rate(priceOf(i)) : "", extra ? priceOf(i) * f.pax : null);
+        const whole = typed.find((x) => x.itemIds.includes(i.id));
+        const extra = (((!pkg || p.extraIds.includes(i.id)) && !main) || p.addOnIds.includes(i.id)) && !whole;
+        return row(i.id, <span className="pl-3">{i.name}{pkg && !p.extraIds.includes(i.id) ? <span className={`text-xs ${muted}`}> · in package{p.addOnIds.includes(i.id) ? ", added on top" : ""}</span> : main ? <span className={`text-xs ${muted}`}> · {t("mainCourse").toLowerCase()}</span> : whole ? <span className={`text-xs ${muted}`}> · {catName(whole.categoryId).toLowerCase()}</span> : null}</span>, extra ? num(f.pax) : "", extra ? rate(priceOf(i)) : "", extra ? priceOf(i) * f.pax : null);
       })}
+      {itemised && typed.map((x) => row(`cat-${x.categoryId}`, <span className="pl-3 font-medium">{catName(x.categoryId)}</span>, num(f.pax), rate(x.perPlate), x.perPlate * f.pax))}
       {itemised && p.mainRate > 0 && row("main", <span className="pl-3 font-medium">{t("mainCourse")}</span>, num(f.pax), rate(p.mainRate), p.mainRate * f.pax)}
       {itemised && slab !== 0 && row("slab", <span className="pl-3">{p.slabPct}% guest-count discount</span>, "", "", slab)}
       {itemised ? fixed.map((i) => row(i.id, <span className="pl-3">{i.name}</span>, 1, rate(priceOf(i)), priceOf(i))) : p.fixed > 0 && row("fixed", t("counters"), 1, money(p.fixed), p.fixed)}

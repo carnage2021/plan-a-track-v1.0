@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenEnquiry } from "@/components/sales/enquiry-list";
 import { ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
@@ -11,7 +12,6 @@ import { festivalsOn } from "@/lib/festivals";
 import { datesBetween, serviceLine, useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { tithiLabel } from "@/lib/tithi";
-import { useUi } from "@/lib/ui";
 import { addDays, cn, fmtDate, fmtTime, isoDate, num, parseDate } from "@/lib/utils";
 
 interface CalEvent {
@@ -89,7 +89,7 @@ function UpcomingFestivals({ today, onPick, bookings }: { today: string; onPick:
 export default function CalendarPage() {
   const { orders, enquiries, clients, locale } = useStore();
   const role = useCurrentUser().role;
-  const openEnquiry = useUi((s) => s.openEnquiry);
+  const openEnquiry = useOpenEnquiry();
   const today = isoDate(new Date());
   const [view, setView] = React.useState<"month" | "week" | "agenda">("month");
   const [cursor, setCursor] = React.useState(today);

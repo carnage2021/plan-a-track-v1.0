@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardList, FileText, PartyPopper, Plus, Save, Send, Wallet, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardList, FileText, MessagesSquare, PartyPopper, Plus, Save, Send, Wallet, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
@@ -10,6 +10,7 @@ import { MenuSelector } from "@/components/menu/menu-selector";
 import { PaymentSheet } from "@/components/sales/payment-sheet";
 import { QuoteDocument } from "@/components/sales/quote-document";
 import { DetailsForm, SummaryForm, useDraftTotals } from "@/components/sales/quote-forms";
+import { SaveEnquiry } from "@/components/sales/save-enquiry";
 import { BrandMark } from "@/components/settings/tenant-forms";
 import { Stepper, useOrderMoney } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,8 @@ function BookingFlow() {
   const params = useSearchParams();
   const enquiryId = params.get("enquiry") ?? undefined;
   const reviseId = params.get("revise") ?? undefined;
+  // A date picked on the calendar starts a new booking on that day.
+  const startOn = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") ?? "") ? params.get("date")! : undefined;
   const user = useCurrentUser();
   const tenant = useStore((s) => s.tenant);
   const createQuotation = useStore((s) => s.createQuotation);
@@ -84,10 +87,27 @@ function BookingFlow() {
       const functions = enquiry.services?.length ? enquiry.services.map((f) => ({ ...f, id: uid(), itemIds: [] })) : [blankFunction("", enquiry.date, enquiry.pax, enquiry.venue)];
       return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: enquiry.coordinatorId, coordinator: enquiry.coordinator, eventType: enquiry.eventType, enquiryId, functions, startDate: enquiry.date, endDate: enquiry.endDate ?? enquiry.date, step: 0 };
     }
+    if (startOn) {
+      const d = blankDraft();
+      return { ...d, startDate: startOn, endDate: startOn, functions: d.functions.map((f) => ({ ...f, date: startOn })) };
+    }
     return blankDraft();
-  }, [enquiryId, reviseId]);
+  }, [enquiryId, reviseId, startOn]);
 
-  const { draft, setDraft, clear, restart, resumed } = useQuoteDraft("booking", fresh, !enquiryId && !reviseId);
+  const { draft, setDraft, clear, restart, resumed } = useQuoteDraft("booking", fresh, !enquiryId && !reviseId && !startOn);
+  const [enquiryOpen, setEnquiryOpen] = React.useState(false);
+  // Next keeps a page's state while another page is open, so a booking that was saved would come back as it was left.
+  // Once one is saved, leaving booking mode starts the next visit afresh.
+  const finished = React.useRef(false);
+  /** Step 1 needs the client and every service's date and guests before it can be kept as an enquiry. */
+  const askEnquiry = () => {
+    if (issues.length) {
+      setShowErrors(true);
+      toast.error(issues[0], { description: issues.length > 1 ? `and ${issues.length - 1} more to fill in, marked in red` : undefined });
+      return;
+    }
+    setEnquiryOpen(true);
+  };
   const revising = useStore((s) => s.quotations.find((q) => q.id === draft.reviseOf));
   // The new version comes after the newest in the group, not after the one the revision started from.
   const nextVersion = useStore((s) => (revising ? Math.max(...s.quotations.filter((q) => q.groupId === revising.groupId).map((q) => q.version)) + 1 : 1));
@@ -153,6 +173,7 @@ function BookingFlow() {
     save(async () => {
       const id = await createQuotation(draft, blocked ? "pending_approval" : "draft");
       clear();
+      finished.current = true;
       toast.success(blocked ? "Quotation sent to the owner for approval" : revising ? `Saved as version ${nextVersion}` : "Quotation saved", { description: "Approve it from Orders, Quotations when the client says yes." });
       router.push(`/quotations/${id}`);
     });
@@ -161,9 +182,19 @@ function BookingFlow() {
     save(async () => {
       const id = await convertToOrder(await createQuotation(draft, "approved"));
       clear();
+      finished.current = true;
       setOrderId(id);
       window.scrollTo({ top: 0 });
     });
+  React.useEffect(
+    () => () => {
+      if (!finished.current) return;
+      finished.current = false;
+      setOrderId(null);
+      restart();
+    },
+    [restart],
+  );
   const startNew = () => {
     setOrderId(null);
     restart();
@@ -195,7 +226,22 @@ function BookingFlow() {
               <div className="mx-auto max-w-4xl">
                 <h1 className="mb-4 font-heading text-2xl font-bold md:text-3xl">Let us plan your event</h1>
                 <DetailsForm draft={draft} setDraft={setDraft} showErrors={showErrors} />
-                <div className="mt-6 flex justify-end"><Button variant="primary" size="lg" onClick={() => go(1)}>Choose the menu<ArrowRight strokeWidth={1.75} /></Button></div>
+                <div className="mt-6 flex flex-wrap justify-end gap-2">
+                  {!revising && <Button size="lg" onClick={askEnquiry}><MessagesSquare strokeWidth={1.75} />{draft.enquiryId ? "Update enquiry" : "Save as enquiry"}</Button>}
+                  <Button variant="primary" size="lg" onClick={() => go(1)}>Choose the menu<ArrowRight strokeWidth={1.75} /></Button>
+                </div>
+                <SaveEnquiry
+                  open={enquiryOpen}
+                  onOpenChange={setEnquiryOpen}
+                  draft={draft}
+                  onSaved={(_, updated) => {
+                    setEnquiryOpen(false);
+                    clear();
+                    finished.current = true;
+                    toast.success(updated ? "Enquiry updated" : "Saved as enquiry", { description: "It is in Orders, Enquiries. Continue the booking from there when the client is ready." });
+                    router.push("/orders?tab=enquiries");
+                  }}
+                />
               </div>
             )}
 
@@ -257,6 +303,12 @@ function BookingFlow() {
   );
 }
 
+/** A new link (another enquiry, a quotation to revise, a calendar date) is a new booking, not the one left open. */
+function KeyedFlow() {
+  const params = useSearchParams();
+  return <BookingFlow key={params.toString()} />;
+}
+
 /** Assisted booking mode (B5): full screen, used by the salesperson with the client sitting beside them. */
 export default function BookingPage() {
   const router = useRouter();
@@ -267,5 +319,5 @@ export default function BookingPage() {
   }, [hydrated, signedIn, router]);
   const loading = <div className="p-6"><Skeleton className="h-14 rounded-xl" /><Skeleton className="mt-6 h-96 rounded-xl" /></div>;
   if (!hydrated || !signedIn) return loading;
-  return <React.Suspense fallback={loading}><BookingFlow /></React.Suspense>;
+  return <React.Suspense fallback={loading}><KeyedFlow /></React.Suspense>;
 }

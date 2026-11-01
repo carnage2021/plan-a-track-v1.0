@@ -259,6 +259,8 @@ export interface EventFunction {
   itemPax?: Record<string, number>;
   /** The package price per plate for this quotation or order only */
   packagePrice?: number;
+  /** One price per plate for a whole top-level category on this event, keyed by category id; replaces its dishes' prices */
+  categoryPrices?: Record<string, number>;
 }
 
 export interface ExtraCharge {

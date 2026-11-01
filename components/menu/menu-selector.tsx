@@ -302,7 +302,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
               <DropdownMenuTrigger asChild><Button variant="ghost" className="shrink-0"><Copy strokeWidth={1.75} />Copy menu from</Button></DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {functions.filter((f) => f.id !== fn.id).map((f) => (
-                  <DropdownMenuItem key={f.id} onSelect={() => patch({ packageId: f.packageId, packagePrice: f.packagePrice, itemPrices: f.itemPrices && { ...f.itemPrices }, mainRate: f.mainRate, itemIds: [...f.itemIds] })}>{f.name}<span className="tnum ml-auto text-xs text-text-muted">{f.itemIds.length} dishes</span></DropdownMenuItem>
+                  <DropdownMenuItem key={f.id} onSelect={() => patch({ packageId: f.packageId, packagePrice: f.packagePrice, itemPrices: f.itemPrices && { ...f.itemPrices }, mainRate: f.mainRate, categoryPrices: f.categoryPrices && { ...f.categoryPrices }, itemIds: [...f.itemIds] })}>{f.name}<span className="tnum ml-auto text-xs text-text-muted">{f.itemIds.length} dishes</span></DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>

@@ -27,7 +27,9 @@ export interface SmallQuoteData {
 function rateParts(f: EventFunction, items: MenuItem[], pkg: MenuPackage | undefined, p: FunctionPrice) {
   const parts = new Map<string, number>();
   if (pkg) parts.set("package", p.packagePrice);
-  for (const id of f.itemIds) {
+  // Built dish by dish, each category is one part, at the price typed for it or its dishes' total.
+  else for (const part of p.parts) parts.set(part.categoryId, part.perPlate);
+  for (const id of pkg ? f.itemIds : []) {
     const i = items.find((x) => x.id === id);
     // Main course dishes are paid for by the main course rate, its own part below.
     if (!i || i.pricingType !== "plate" || (pkg ? !p.extraIds.includes(id) && !p.addOnIds.includes(id) : pricedAtBooking(i.categoryId))) continue;

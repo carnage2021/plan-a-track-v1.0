@@ -23,8 +23,12 @@ export function lineage(id: string) {
   return out;
 }
 
-/** True when dishes in this category have no price of their own: it, or a category above it, is ticked as main course. */
-export const pricedAtBooking = (categoryId: string) => lineage(categoryId).some((id) => byId.get(id)?.atBooking);
+/** A category called "Main course" is always the main course, ticked or not: its dishes are covered by one price per plate. */
+export const namedMainCourse = (name: string) => /^main\s*course$/i.test(name.trim());
+export const isMainCourse = (c?: Pick<MenuCategory, "name" | "atBooking">) => !!c && (!!c.atBooking || namedMainCourse(c.name));
+
+/** True when dishes in this category have no price of their own: it, or a category above it, is the main course. */
+export const pricedAtBooking = (categoryId: string) => lineage(categoryId).some((id) => isMainCourse(byId.get(id)));
 
 /** True when a dish's category is this one or sits anywhere under it. */
 export const isWithin = (categoryId: string, ancestorId: string) => lineage(categoryId).includes(ancestorId);

@@ -28,8 +28,9 @@ function withPrice(f: EventFunction, id: string, price: number, base: number) {
  * Step 3: every dish picked, day by day and event by event, with its price for this booking. Built dish by dish,
  * each category (Welcome drinks, Starters, Breads ...) shows its dishes under one price per plate that starts at
  * their total and can be changed; the main course (every sub-category under it) takes one price typed in; counters
- * keep their own price. With a package its price per plate can be changed, and a price typed on a dish inside it is
- * added on top.
+ * keep their own price. With a package, the package is one block: its price per plate (which can be changed) covers
+ * every dish chosen inside it, listed without prices. Dishes beyond the package each take a price that is added to
+ * the package's: a main course dish starts empty for the price to be typed in, any other starts at its menu price.
  */
 export function FoodPrices({ functions, onPatch }: { functions: EventFunction[]; onPatch: Patch }) {
   const items = useStore((s) => s.items);
@@ -88,15 +89,20 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                 </div>
                 <ul className="divide-y">
                   {pkg && (
-                    <Row
-                      name={`${pkg.name} package`}
-                      sub={ready ? "Price per plate for this booking" : "Run the 0024 database update to change the package price"}
-                      tag="Package"
+                    <Group
+                      title={`${pkg.name} package`}
+                      fnName={f.name}
+                      dishes={dishes.filter((i) => i.pricingType === "plate" && !p.extraIds.includes(i.id))}
                       value={p.packagePrice}
-                      changed={f.packagePrice !== undefined && f.packagePrice !== pkg.pricePerPlate}
-                      onChange={ready ? (v) => onPatch(f.id, () => ({ packagePrice: v === pkg.pricePerPlate ? undefined : v })) : undefined}
-                      onReset={() => onPatch(f.id, () => ({ packagePrice: undefined }))}
-                      unit="a plate"
+                      hint={!ready ? "Run the 0024 database update to change the package price" : p.addOnPerPlate ? `One price per plate for the package, plus ${rate(p.addOnPerPlate)} added earlier on its dishes; changing the price includes them` : "One price per plate for the package, every dish below included"}
+                      // The package price covers its dishes, so prices once added on top of them go with a new price.
+                      onChange={ready ? (v) => onPatch(f.id, (cur) => {
+                        const prices = { ...cur.itemPrices };
+                        for (const id of p.addOnIds) delete prices[id];
+                        return { packagePrice: v === pkg.pricePerPlate ? undefined : v, itemPrices: Object.keys(prices).length ? prices : undefined };
+                      }) : undefined}
+                      onReset={f.packagePrice !== undefined && f.packagePrice !== pkg.pricePerPlate ? () => onPatch(f.id, () => ({ packagePrice: undefined })) : undefined}
+                      resetLabel="Back to the package's own price"
                     />
                   )}
                   {dishes.map((i) => {
@@ -124,9 +130,12 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                     }
                     // Counters are priced per counter, not per plate, so they stay on their own lines at the end.
                     if (!pkg) return null;
-                    const inPkg = !!pkg && plate && !p.extraIds.includes(i.id);
-                    const value = f.itemPrices?.[i.id] ?? (inPkg || pricedAtBooking(i.categoryId) ? 0 : i.price);
-                    const tag = inPkg ? (p.addOnIds.includes(i.id) ? "In package, added on top" : "In package") : pkg && plate ? "Beyond the package" : !plate ? "Counter" : "";
+                    // Dishes inside the package are listed in its block above.
+                    if (plate && !p.extraIds.includes(i.id)) return null;
+                    // A main course dish has no menu price, so beyond the package its box starts empty for the price to be typed.
+                    const mainBeyond = plate && pricedAtBooking(i.categoryId);
+                    const value = f.itemPrices?.[i.id] ?? (mainBeyond ? 0 : i.price);
+                    const tag = plate ? (mainBeyond && !value ? "Beyond the package: enter its price" : "Beyond the package") : "Counter";
                     return (
                       <Row
                         key={i.id}
@@ -135,13 +144,19 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                         sub={[categories.find((c) => c.id === rootOf(i.categoryId))?.name, subPath(i.categoryId)].filter(Boolean).join(" › ")}
                         tag={tag}
                         value={value}
-                        changed={f.itemPrices?.[i.id] !== undefined && !inPkg}
+                        changed={f.itemPrices?.[i.id] !== undefined && !mainBeyond}
                         onChange={(v) => setDish(i, v)}
                         onReset={() => onPatch(f.id, (cur) => ({ itemPrices: withPrice(cur, i.id, i.price, i.price) }))}
                         unit={plate ? "a plate" : "a counter"}
                       />
                     );
                   })}
+                  {pkg && p.extraPerPlate + p.addOnPerPlate > 0 && (
+                    <li className="tnum flex flex-wrap justify-between gap-x-3 bg-primary-soft/40 px-3 py-2 text-sm">
+                      <span className="text-text-muted">{pkg.name} package {rate(p.packagePrice)} + beyond the package {rate(p.extraPerPlate + p.addOnPerPlate)}</span>
+                      <span className="font-semibold">{rate(p.packagePrice + p.extraPerPlate + p.addOnPerPlate)} a plate</span>
+                    </li>
+                  )}
                   {counters.length > 0 && <li className="bg-surface-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">Counters · priced per counter</li>}
                   {counters.map((i) => (
                     <Row
@@ -172,7 +187,7 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
  * One category of an event with its dishes listed by sub-category and one price per plate for all of them. The main
  * course starts empty and must be typed in; any other category starts at its dishes' total.
  */
-function Group({ title, fnName, dishes, value, onChange, onReset, hint, main }: { title: string; fnName: string; dishes: MenuItem[]; value: number; onChange?: (v: number) => void; onReset?: () => void; hint?: string; main?: boolean }) {
+function Group({ title, fnName, dishes, value, onChange, onReset, resetLabel = "Back to the dishes' total", hint, main }: { title: string; fnName: string; dishes: MenuItem[]; value: number; onChange?: (v: number) => void; onReset?: () => void; resetLabel?: string; hint?: string; main?: boolean }) {
   const groups = new Map<string, MenuItem[]>();
   for (const d of dishes) {
     const key = main ? fullPath(d.categoryId) : subPath(d.categoryId);
@@ -187,7 +202,7 @@ function Group({ title, fnName, dishes, value, onChange, onReset, hint, main }: 
           <p className={cn("text-xs", missing ? "font-medium text-warning" : "text-text-muted")}>{main ? (value ? "One price per plate for the whole main course, every dish below included" : "Enter one price per plate for the whole main course") : hint}</p>
         </div>
         <div className="flex items-center gap-1">
-          {onReset && <Button variant="ghost" size="icon" aria-label={`Back to the dishes' total for ${title}`} title="Back to the dishes' total" onClick={onReset}><RotateCcw strokeWidth={1.75} /></Button>}
+          {onReset && <Button variant="ghost" size="icon" aria-label={`${resetLabel} for ${title}`} title={resetLabel} onClick={onReset}><RotateCcw strokeWidth={1.75} /></Button>}
           {onChange ? <MoneyInput label={`${title} price per plate for ${fnName}`} value={value} onChange={onChange} className="w-28" /> : <span className="tnum w-28 text-right text-sm">{rate(value)}</span>}
           <span className="w-16 text-xs text-text-muted">a plate</span>
         </div>

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { selectAll } from "./paged";
 import type {
   Client,
   Enquiry,
@@ -343,10 +344,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   const profile = (await sb.from("profiles").select("*").eq("id", userId).maybeSingle()).data as Row | null;
   if (!profile) return null;
 
-  const all = (table: string, order?: string, ascending = true) => {
-    const q = sb.from(table).select("*");
-    return (order ? q.order(order, { ascending }) : q).range(0, 9999);
-  };
+  const all = (table: string, order?: string, ascending = true) => selectAll(sb, table, order, ascending);
   const [branchProbe, branchRows, extrasProbe] = await Promise.all([sb.from("orders").select("branch_id").limit(1), all("branches", "created_at"), sb.from("packages").select("additions").limit(1)]);
   schema.packageExtras = !extrasProbe.error;
   schema.subcategories = !(await sb.from("menu_categories").select("parent_id").limit(1)).error;

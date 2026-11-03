@@ -24,6 +24,8 @@ import { OrderTasks, StaffGate } from "@/components/staff/order-tasks";
 import { CutleryTab } from "@/components/supply/challan";
 import { SupplyGate } from "@/components/supply/common";
 import { DishGuests, dishGuestsKey } from "@/components/supply/dish-guests";
+import { CostingTab } from "@/components/billing/order-costing";
+import { useAccess } from "@/lib/access";
 import { AgenciesTab } from "@/components/supply/outsource";
 import { Requirement } from "@/components/supply/requirement";
 import { priceFunction, priceQuote } from "@/lib/pricing";
@@ -95,7 +97,11 @@ function OrderView({ order }: { order: Order }) {
   const setOrderItemPrice = useStore((s) => s.setOrderItemPrice);
   const setRawOverrides = useStore((s) => s.setRawOverrides);
   const referralsReady = useStore((s) => s.referralsReady);
-  const isOwner = useCurrentUser().role === "owner";
+  const role = useCurrentUser().role;
+  const isOwner = role === "owner";
+  // What the order costs and earns is for the owner and the accountant, unless prices are hidden from them.
+  const { hidePrices } = useAccess();
+  const seesCosting = (isOwner || role === "accountant") && !hidePrices;
   const openPayment = useUi((s) => s.openPayment);
   const { totals, bill, paid, due, pct } = useOrderMoney(order);
   const client = clients.find((c) => c.id === order.clientId);
@@ -179,6 +185,7 @@ function OrderView({ order }: { order: Order }) {
           <TabsTrigger value="dispatch">Dispatch and event day</TabsTrigger>
           <TabsTrigger value="payments">Payments<Badge>{order.payments.length}</Badge></TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
+          {seesCosting && <TabsTrigger value="costing">Costing and Profit</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="overview" className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -327,6 +334,7 @@ function OrderView({ order }: { order: Order }) {
           </BillingGate>
         </TabsContent>
 
+        {seesCosting && <TabsContent value="costing"><CostingTab order={order} /></TabsContent>}
         <TabsContent value="documents">
           <Card className="mb-4 space-y-3 p-4 md:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">

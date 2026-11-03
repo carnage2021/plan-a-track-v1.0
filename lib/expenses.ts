@@ -1,5 +1,6 @@
 "use client";
 
+import { selectAll } from "./paged";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { background, write } from "./queue";
@@ -73,7 +74,7 @@ export const useExpenses = create<State>()((set) => ({
 
   load: async () => {
     const sb = supabase();
-    const [e, p] = await Promise.all([sb.from("expenses").select("*").order("spent_on", { ascending: false }).range(0, 9999), sb.from("petty_cash").select("*").order("on_date").range(0, 9999)]);
+    const [e, p] = await Promise.all([selectAll(sb, "expenses", "spent_on", false), selectAll(sb, "petty_cash", "on_date")]);
     if (e.error) return set({ ready: false, expenses: [], petty: [] });
     if (p.error) return void toast.error("Could not load petty cash", { description: p.error.message });
     set({

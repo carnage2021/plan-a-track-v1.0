@@ -1,5 +1,6 @@
 "use client";
 
+import { selectAll } from "./paged";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { chargeAmount, priceFunction, priceQuote } from "./pricing";
@@ -175,9 +176,9 @@ export const useBilling = create<State>()((set, get) => ({
   load: async () => {
     const sb = supabase();
     const [m, inv, cn] = await Promise.all([
-      sb.from("payment_milestones").select("*").order("position").range(0, 9999),
-      sb.from("invoices").select("*").order("created_at").range(0, 9999),
-      sb.from("credit_notes").select("*").order("created_at").range(0, 9999),
+      selectAll(sb, "payment_milestones", "position"),
+      selectAll(sb, "invoices", "created_at"),
+      selectAll(sb, "credit_notes", "created_at"),
     ]);
     if (m.error) return set({ ready: false, milestones: [], invoices: [], credits: [] });
     const failed = [inv, cn].find((r) => r.error);

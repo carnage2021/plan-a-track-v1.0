@@ -1,5 +1,6 @@
 "use client";
 
+import { selectAll } from "./paged";
 import { create } from "zustand";
 import { background } from "./queue";
 import { supabase } from "./supabase/client";
@@ -58,9 +59,9 @@ export const useKitchen = create<State>()((set, get) => ({
   ready: false,
   rows: {},
   load: async () => {
-    const res = await supabase().from("kitchen_items").select("function_id,item_id,status,leftover").range(0, 9999);
+    const res = await selectAll<{ function_id: string; item_id: string; status: string; leftover: number }>(supabase(), "kitchen_items", undefined, true, "function_id,item_id,status,leftover");
     if (res.error) return set({ ready: false, rows: {} });
-    set({ ready: true, rows: Object.fromEntries(res.data.map((r) => [kitchenKey(r.function_id, r.item_id), { status: r.status as DishStatus, leftover: Number(r.leftover) }])) });
+    set({ ready: true, rows: Object.fromEntries((res.data ?? []).map((r) => [kitchenKey(r.function_id, r.item_id), { status: r.status as DishStatus, leftover: Number(r.leftover) }])) });
   },
   setStatus: (keys, status) => {
     const rows = { ...get().rows };

@@ -1,5 +1,6 @@
 "use client";
 
+import { selectAll } from "./paged";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { background, write } from "./queue";
@@ -100,7 +101,7 @@ export const useLabels = create<State>()((set, get) => {
     labels: [],
 
     load: async () => {
-      const res = await supabase().from("stock_labels").select("*").order("created_at", { ascending: false }).range(0, 19999);
+      const res = await selectAll(supabase(), "stock_labels", "created_at", false);
       if (res.error) return set({ ready: false, labels: [] });
       set({ ready: true, labels: (res.data as Row[]).map(fromRow) });
     },

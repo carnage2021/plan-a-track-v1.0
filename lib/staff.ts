@@ -1,5 +1,6 @@
 "use client";
 
+import { selectAll } from "./paged";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { background } from "./queue";
@@ -137,7 +138,7 @@ export const useStaff = create<State>()((set, get) => ({
 
   load: async () => {
     const sb = supabase();
-    const all = (table: string, order: string) => sb.from(table).select("*").order(order).range(0, 9999);
+    const all = (table: string, order: string) => selectAll(sb, table, order);
     const [workers, leaves, tasks, payments, slips] = await Promise.all([all("workers", "name"), all("worker_leaves", "leave_date"), all("tasks", "created_at"), all("worker_payments", "created_at"), all("salary_slips", "month")]);
     if (workers.error) return set({ ...empty, ready: false });
     const failed = [leaves, tasks, payments, slips].find((r) => r.error);

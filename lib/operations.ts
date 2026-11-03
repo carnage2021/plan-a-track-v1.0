@@ -1,5 +1,6 @@
 "use client";
 
+import { selectAll } from "./paged";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { background } from "./queue";
@@ -116,7 +117,7 @@ export const useOps = create<State>()((set, get) => ({
 
   load: async () => {
     const sb = supabase();
-    const all = (table: string, order: string) => sb.from(table).select("*").order(order).range(0, 9999);
+    const all = (table: string, order: string) => selectAll(sb, table, order);
     const [vehicles, trips, onsite, issues] = await Promise.all([all("vehicles", "name"), all("trips", "created_at"), all("onsite", "updated_at"), all("onsite_issues", "created_at")]);
     if (vehicles.error) return set({ ...empty, ready: false });
     const failed = [trips, onsite, issues].find((r) => r.error);

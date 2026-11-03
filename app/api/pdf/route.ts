@@ -10,7 +10,7 @@ import puppeteer from "puppeteer-core";
 
 export const maxDuration = 60;
 
-const kinds = ["quote", "menu", "confirmation", "invoice", "credit", "bill", "itemised", "workorder", "small"];
+const kinds = ["quote", "menu", "confirmation", "invoice", "credit", "bill", "itemised", "workorder", "small", "costing"];
 const langs = ["en", "hi", "gu"];
 
 function chromePath() {
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
     if (state !== "1") return Response.json({ error: "Document not found." }, { status: 404 });
     const name = ((await page.title()) || `${kind}-${id.slice(0, 8)}`).replace(/[^\w.-]+/g, "-");
     // Event documents run edge to edge, with the business and page number at the foot of every page.
-    const events = ["quote", "menu", "confirmation", "bill", "itemised", "workorder"].includes(kind);
+    const events = ["quote", "menu", "confirmation", "bill", "itemised", "workorder", "costing"].includes(kind);
     const footer = (await page.evaluate(() => document.body.dataset.footer ?? "")).replace(/[<>&"]/g, "");
     const pdf = await page.pdf({
       format: "A4",

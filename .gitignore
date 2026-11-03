@@ -45,3 +45,6 @@ brag-output*/
 
 # Private notes with live logins; never committed
 docs/private/
+
+# Client data sheets (Shyam Caterers); never committed
+/shyam caterars/

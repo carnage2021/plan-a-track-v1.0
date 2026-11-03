@@ -16,7 +16,7 @@ import { useOps } from "@/lib/operations";
 import { priceQuote } from "@/lib/pricing";
 import { taskAmount, useStaff } from "@/lib/staff";
 import { useStore } from "@/lib/store";
-import { requirementFor, withOverrides } from "@/lib/supply";
+import { costOrder } from "@/lib/costing";
 import { useSupply } from "@/lib/supply-store";
 import type { Order } from "@/lib/types";
 import { printLight } from "@/lib/ui";
@@ -63,33 +63,26 @@ const within = (d: string, from: string, to: string) => d >= from && d <= to;
 
 function useEventPL(orders: Order[]) {
   const { items, packages, tenant, clients, users } = useStore();
-  const { recipes, ingredients, outsourceOrders, challans, assets } = useSupply();
+  const { recipes, ingredients, vendors, outsourceOrders, challans, assets } = useSupply();
   const { tasks, workers } = useStaff();
   const trips = useOps((s) => s.trips);
   const expenses = useExpenses((s) => s.expenses);
   const credits = useBilling((s) => s.credits);
   return React.useMemo(() => {
-    const rate = new Map(ingredients.map((i) => [i.id, i.lastRate]));
-    const replace = new Map(assets.map((a) => [a.id, a.replacementCost]));
+    // The same costing as each order's Costing tab, so the report and the order always agree.
+    const base = {
+      items, packages, slabs: tenant.slabs, recipes, ingredients, vendors, outsourceOrders, challans, assets, trips,
+      tasks: tasks.map((t) => ({ orderId: t.orderId, functionId: t.functionId, title: t.title, role: t.role, workerId: t.workerId, qty: t.qty, rate: t.rate, amount: taskAmount(t, workers) })),
+      expenses: expenses.map((e) => ({ orderId: e.orderId, category: e.category, amount: e.amount, paidTo: e.paidTo, note: e.note })),
+    };
     return orders.map((o) => {
       const t = priceQuote(o, items, packages, tenant.slabs);
-      const credited = balanceOf(o, t.grand, credits).credited;
-      // Revenue is the bill before GST, less credit notes (also taken before GST).
-      const revenue = Math.max(0, t.taxable - credited / (1 + o.gstRate / 100));
-      let material = 0;
-      for (const [id, qty] of withOverrides(requirementFor(o.functions, items, recipes), o.rawOverrides)) material += qty * (rate.get(id) ?? 0);
-      const outsourced = outsourceOrders.filter((x) => x.orderId === o.id && x.status !== "cancelled").reduce((s, x) => s + x.lines.reduce((a, l) => a + l.qty * l.agencyRate, 0), 0);
-      const labour = tasks.filter((x) => x.orderId === o.id).reduce((s, x) => s + taskAmount(x, workers), 0);
-      const transport = trips.filter((x) => x.orderId === o.id).reduce((s, x) => s + x.cost, 0);
-      const mine = challans.filter((c) => c.orderId === o.id);
-      const rentals = mine.reduce((s, c) => s + c.lines.reduce((a, l) => a + l.rentalCost, 0), 0);
-      const breakage = mine.reduce((s, c) => s + c.lines.reduce((a, l) => a + (l.broken + l.missing) * (replace.get(l.assetId) ?? 0), 0), 0);
-      const other = expenses.filter((e) => e.orderId === o.id).reduce((s, e) => s + e.amount, 0);
-      const cost = material + outsourced + labour + transport + rentals + breakage + other;
+      const c = costOrder(o, { ...base, credited: balanceOf(o, t.grand, credits).credited });
       const first = [...o.functions].sort((a, b) => a.date.localeCompare(b.date))[0];
-      return { o, client: clients.find((c) => c.id === o.clientId)?.name ?? "", manager: users.find((u) => u.id === o.managerId)?.name ?? "", date: first?.date ?? "", pax: t.pax, revenue, material, outsourced, labour, transport, rentals, breakage, other, cost, profit: revenue - cost, margin: revenue ? ((revenue - cost) / revenue) * 100 : 0 };
+      const breakage = c.other.filter((l) => l.kind === "breakage").reduce((s, l) => s + l.amount, 0);
+      return { o, client: clients.find((x) => x.id === o.clientId)?.name ?? "", manager: users.find((u) => u.id === o.managerId)?.name ?? "", date: first?.date ?? "", pax: t.pax, revenue: c.revenue, material: c.totals.material, outsourced: c.totals.vendors, labour: c.totals.labour, transport: c.totals.transport, rentals: c.totals.rentals - breakage, breakage, other: c.totals.expenses, cost: c.totals.cost, profit: c.profit, margin: c.margin };
     });
-  }, [orders, items, packages, tenant.slabs, clients, users, recipes, ingredients, outsourceOrders, challans, assets, tasks, workers, trips, expenses, credits]);
+  }, [orders, items, packages, tenant.slabs, clients, users, recipes, ingredients, vendors, outsourceOrders, challans, assets, tasks, workers, trips, expenses, credits]);
 }
 
 function EventPL({ orders }: { orders: Order[] }) {

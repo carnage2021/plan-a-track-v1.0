@@ -1,4 +1,5 @@
 import { inBranch } from "./branch";
+import { selectAll } from "./paged";
 import { schema } from "./db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
@@ -77,8 +78,7 @@ export const emptySupply: SupplyData = { ingredients: [], recipes: [], stores: [
 
 export async function loadSupply(sb: SB): Promise<SupplyData> {
   const all = async (table: string, order?: string, ascending = true) => {
-    const q = sb.from(table).select("*");
-    const res = await (order ? q.order(order, { ascending }) : q).range(0, 9999);
+    const res = await selectAll(sb, table, order, ascending);
     if (res.error) throw new Error(`Loading ${table}: ${res.error.message}`);
     return (res.data ?? []) as Row[];
   };

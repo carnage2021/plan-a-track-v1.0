@@ -1,5 +1,6 @@
 "use client";
 
+import { byName } from "@/lib/categories";
 import { Check, Scale, Users } from "lucide-react";
 import * as React from "react";
 import { Badge } from "@/components/shared/badges";
@@ -39,7 +40,7 @@ interface Props {
 
 export function PackagePicker({ open, onOpenChange, value, pax, foodTypeId, onPick }: Props) {
   const all = useStore((s) => s.packages);
-  const packages = React.useMemo(() => offered(all).filter((p) => !foodTypeId || !p.foodTypeId || p.foodTypeId === foodTypeId), [all, foodTypeId]);
+  const packages = React.useMemo(() => offered(all).filter((p) => !foodTypeId || !p.foodTypeId || p.foodTypeId === foodTypeId).sort(byName), [all, foodTypeId]);
   const categories = useStore((s) => s.categories);
   const [compare, setCompare] = React.useState<string[]>([]);
   const pair = compare.map((id) => packages.find((p) => p.id === id)).filter((p): p is MenuPackage => !!p);

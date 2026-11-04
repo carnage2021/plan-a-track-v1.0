@@ -95,7 +95,7 @@ Seven main phases: sales, supply, staff, kitchen, operations, billing, and repor
 - **Categories:**
   - sub-categories (Main course › Sabji › Paneer sabji) with a step-by-step picker;
   - delete with or without their dishes;
-  - drag and drop or arrows to reorder, and Sort A to Z.
+  - always A to Z at every level (`byName`, used by `roots` and `treeOrder` in `lib/categories.ts`); the Categories screen shows only top-level categories until one is opened with its arrow.
 - **Fullscreen button** in the top bar.
 - **Import:** example files with 5 sample rows each, a bilingual guide, and recipe import.
 - **Decimal prices** (₹1.78) everywhere money is typed.
@@ -131,6 +131,8 @@ Seven main phases: sales, supply, staff, kitchen, operations, billing, and repor
 - **Order costing** (`lib/costing.ts` `costOrder`, `components/billing/order-costing.tsx`): Order → Costing and Profit (owner and accountant, hidden when prices are hidden) and a "Costing sheet PDF" (kind `costing`, internal). Revenue is the bill before GST less credit notes; costs are raw material (recipes at the latest rate, per dish's kitchen guests), third-party food (the agency order's line, or the menu at the dish's agency rate before one is drafted), staff tasks, transport, cutlery hire and breakage, and expenses, also split by event. A box lists what is not counted yet (no recipe, no rate, no agency rate, no staff planned). Reports' profit and loss uses the same `costOrder`.
 - **Paged loading** (`lib/paged.ts` `selectAll`): the database returns at most 1,000 rows a request, so every loader reads page by page, ordered by the table's key (two-column keys and `onsite` listed there). A new table without an `id` column must be added to that list.
 - **Client accounts from their sheets:** a caterer's own sheets are imported with `brag-output/work/shyam/build.py` (sheets to a plan, plus a report of gaps) and `load.mjs` (signs up through the app, replaces the starter menu, inserts the rest); always load a `qa-*` test account first. The client's sheet folder is git-ignored (`/shyam caterars/`).
+- **A to Z everywhere:** dishes and packages are kept sorted in the store (`byName`), booking Step 2 sorts dishes A to Z by default (Most popular one tap away), and the event type, sub-event, food service and staff role dropdowns are sorted in their hooks. Supply lists stay "missing details first", then A to Z.
+- **Booking Step 2 plate summary:** everything but the buttons scrolls, so a package with many choices or inclusions can never push "Extras and total" out of view; a chosen package has a Remove package button (the dishes stay, each at its own price).
 - **Dates:** `isoDate` always writes a four-digit year and `parseDate` keeps years below 100, so a year half typed in (0202 on the way to 2026) cannot freeze the festival code; `realDate` refuses such a year on save.
 
 ## Rules for working on it

@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useStore } from "./store";
 
 // The kinds of event a caterer takes on. Each account keeps its own list (Settings, Event types, or the Import
@@ -29,15 +30,18 @@ export interface EventType { id: string; name: string; subEvents?: string[] }
 export const splitSubEvents = (text: string) => [...new Map(text.split(/[;,\n]/).map((x) => x.trim()).filter(Boolean).map((x) => [x.toLowerCase(), x])).values()];
 
 /** Names to offer in the forms: the account's own list, or the standard one while it has none. */
+/** Every list and dropdown of event types and sub-events reads A to Z. */
+const az = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+
 export function useEventTypes(): string[] {
   const own = useStore((s) => s.eventTypes);
-  return own.length ? own.map((e) => e.name) : standardEventTypes;
+  return React.useMemo(() => [...(own.length ? own.map((e) => e.name) : standardEventTypes)].sort(az), [own]);
 }
 
 /** The sub-events of an event type: the account's own, else the usual ones for that name. */
 export function useSubEvents(eventType?: string): string[] {
   const own = useStore((s) => s.eventTypes.find((e) => e.name.toLowerCase() === (eventType ?? "").trim().toLowerCase())?.subEvents);
-  return own?.length ? own : (standardSubEvents[(eventType ?? "").trim().toLowerCase()] ?? []);
+  return React.useMemo(() => [...(own?.length ? own : (standardSubEvents[(eventType ?? "").trim().toLowerCase()] ?? []))].sort(az), [own, eventType]);
 }
 
 /** The first event type, used to start a new enquiry or quotation. */

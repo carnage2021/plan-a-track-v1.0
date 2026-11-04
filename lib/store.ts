@@ -16,7 +16,7 @@ import { useMessages } from "./messages";
 import { eventsThisMonth, usePlatform } from "./platform";
 import { useLabels } from "./labels";
 import { withBranch } from "./branch";
-import { setCategoryTree, treeOrder } from "./categories";
+import { setCategoryTree, treeOrder, byName } from "./categories";
 import { useStaff } from "./staff";
 import { useSupply } from "./supply-store";
 import type {
@@ -222,6 +222,9 @@ export const useStore = create<Store>()(
             return false;
           }
           const { me, ...rest } = loaded;
+          // A to Z whatever order the database keeps names in (it puts capitals first).
+          rest.items.sort(byName);
+          rest.packages.sort(byName);
           set({ ...rest, currentUserId: me.id, myRole: me.role, signedIn: true, hydrated: true });
           await Promise.all([useSupply.getState().load(), useStaff.getState().load(), useKitchen.getState().load(), useOps.getState().load(), useBilling.getState().load(), useExpenses.getState().load(), useMessages.getState().load(), usePlatform.getState().load(), useLabels.getState().load()]);
           return true;
@@ -354,7 +357,8 @@ export const useStore = create<Store>()(
 
       saveItem: (item) => {
         const saved: MenuItem = { ...item, id: item.id ?? uid() };
-        set((s) => ({ items: item.id ? s.items.map((i) => (i.id === saved.id ? saved : i)) : [saved, ...s.items] }));
+        // Dishes are kept A to Z, so every list of them (the menu, booking mode, documents) reads alphabetically.
+        set((s) => ({ items: (item.id ? s.items.map((i) => (i.id === saved.id ? saved : i)) : [saved, ...s.items]).sort(byName) }));
         background((sb) => run(sb.from("menu_items").upsert(itemRow(saved)), "Saving the dish"));
       },
       deleteItem: async (id) => {
@@ -395,7 +399,7 @@ export const useStore = create<Store>()(
       },
       savePackage: (pkg) => {
         const saved: MenuPackage = { ...pkg, id: pkg.id ?? uid() };
-        set((s) => ({ packages: pkg.id ? s.packages.map((p) => (p.id === saved.id ? saved : p)) : [...s.packages, saved] }));
+        set((s) => ({ packages: (pkg.id ? s.packages.map((p) => (p.id === saved.id ? saved : p)) : [...s.packages, saved]).sort(byName) }));
         background((sb) => savePackageRows(sb, saved));
       },
       saveCategory: (category) => {

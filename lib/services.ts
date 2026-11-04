@@ -53,7 +53,8 @@ export function defaultFoodTypes(all: MenuCategory[]): FoodType[] {
 export function useFoodTypes(): FoodType[] {
   const saved = useStore((s) => s.tenant.foodTypes);
   const categories = useStore((s) => s.categories);
-  return React.useMemo(() => (saved?.length ? saved : defaultFoodTypes(categories)), [saved, categories]);
+  // A to Z in every list and dropdown.
+  return React.useMemo(() => [...(saved?.length ? saved : defaultFoodTypes(categories))].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })), [saved, categories]);
 }
 
 /** "Gala Dinner · Night · 9 pm to 11 pm" */

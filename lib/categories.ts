@@ -36,14 +36,17 @@ export const isWithin = (categoryId: string, ancestorId: string) => lineage(cate
 /** The top-level category a category sits under (itself when it is top-level). */
 export const rootOf = (id: string) => lineage(id).at(-1) ?? id;
 
-/** Top-level categories, in order. */
-export const roots = (list: MenuCategory[]) => list.filter((c) => !c.parentId || !list.some((p) => p.id === c.parentId));
+/** Categories are listed A to Z at every level, on every screen and document. */
+export const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
 
-/** Every category with its depth (0 for top-level), each followed by its sub-categories, keeping list order. */
+/** Top-level categories, A to Z. */
+export const roots = (list: MenuCategory[]) => list.filter((c) => !c.parentId || !list.some((p) => p.id === c.parentId)).sort(byName);
+
+/** Every category with its depth (0 for top-level), each followed by its sub-categories, A to Z at each level. */
 export function treeOrder(list: MenuCategory[]) {
   const out: { c: MenuCategory; depth: number }[] = [];
   const walk = (parent: string | undefined, depth: number) => {
-    for (const c of list.filter((x) => (parent ? x.parentId === parent : !x.parentId || !list.some((p) => p.id === x.parentId)))) {
+    for (const c of list.filter((x) => (parent ? x.parentId === parent : !x.parentId || !list.some((p) => p.id === x.parentId))).sort(byName)) {
       if (out.some((o) => o.c.id === c.id)) continue;
       out.push({ c, depth });
       walk(c.id, depth + 1);

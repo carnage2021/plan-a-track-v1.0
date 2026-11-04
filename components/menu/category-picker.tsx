@@ -5,7 +5,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
-import { lineage, roots } from "@/lib/categories";
+import { byName, lineage, roots } from "@/lib/categories";
 import { useStore } from "@/lib/store";
 
 /**
@@ -22,7 +22,7 @@ export function CategoryPicker({ value, onChange, canAdd }: { value: string; onC
 
   // Top-level first: the picked category and everything above it.
   const path = value ? lineage(value).reverse() : [];
-  const childrenOf = (id: string) => categories.filter((c) => c.parentId === id);
+  const childrenOf = (id: string) => categories.filter((c) => c.parentId === id).sort(byName);
   const levels: { options: typeof categories; picked: string; parent?: string }[] = [{ options: roots(categories), picked: path[0] ?? "" }];
   for (let k = 1; k <= path.length; k++) {
     const parent = path[k - 1];

@@ -73,6 +73,7 @@
   --animate-sheet-up: sheet-up 200ms ease-out;
   --animate-fade: fade 150ms ease-out;
   --animate-pop: pop 150ms ease-out;
+  --animate-unfold: unfold 180ms ease-out;
 }
 
 @keyframes sheet-right {
@@ -86,6 +87,9 @@
 }
 @keyframes pop {
   from { transform: scale(0.97); opacity: 0; }
+}
+@keyframes unfold {
+  from { transform: translateY(-6px); opacity: 0; }
 }
 
 @layer base {

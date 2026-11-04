@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowDownAZ, ArrowUp, CornerDownRight, GripVertical, PencilLine, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, CornerDownRight, PencilLine, Plus, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -208,74 +208,44 @@ export function CategoriesEditor({ canEdit }: { canEdit: boolean }) {
   const categories = useStore((s) => s.categories);
   const items = useStore((s) => s.items);
   const subReady = useStore((s) => s.subcategoriesReady);
-  const reorderCategories = useStore((s) => s.reorderCategories);
   const foodTypes = useFoodTypes();
   const [editing, setEditing] = React.useState<Editing | null>(null);
   const [deleting, setDeleting] = React.useState<MenuCategory | null>(null);
   const tree = treeOrder(categories);
-
-  /** Swaps a category with its neighbour at the same level; everything inside each moves with it. */
-  const move = (c: MenuCategory, by: -1 | 1) => {
-    const level = tree.filter((x) => (x.c.parentId ?? "") === (c.parentId ?? "")).map((x) => x.c.id);
-    const other = level[level.indexOf(c.id) + by];
-    if (!other) return;
-    const ids = categories.map((x) => x.id);
-    const a = ids.indexOf(c.id), b = ids.indexOf(other);
-    [ids[a], ids[b]] = [ids[b], ids[a]];
-    reorderCategories(treeOrder(ids.map((id) => categories.find((x) => x.id === id)!)).map((x) => x.c.id));
-  };
-
-  /** Dragging: a category drops onto another at the same level and takes its place; everything inside moves with it. */
-  const [drag, setDrag] = React.useState<MenuCategory | null>(null);
-  const [over, setOver] = React.useState("");
-  const sameLevel = (a: MenuCategory, b: MenuCategory) => (a.parentId ?? "") === (b.parentId ?? "");
-  const place = (c: MenuCategory, target: MenuCategory) => {
-    if (c.id === target.id || !sameLevel(c, target)) return;
-    const ids = categories.map((x) => x.id).filter((id) => id !== c.id);
-    const down = tree.findIndex((x) => x.c.id === c.id) < tree.findIndex((x) => x.c.id === target.id);
-    ids.splice(ids.indexOf(target.id) + (down ? 1 : 0), 0, c.id);
-    reorderCategories(treeOrder(ids.map((id) => categories.find((x) => x.id === id)!)).map((x) => x.c.id));
-  };
-  /** Every level in alphabetical order, sub-categories too. */
-  const sortAZ = () => reorderCategories(treeOrder([...categories].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))).map((x) => x.c.id));
+  // Sub-categories stay folded under their category until it is opened, so the list starts as just the categories.
+  const [open, setOpen] = React.useState<Set<string>>(() => new Set());
+  const toggle = (id: string) => setOpen((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const kidsOf = (id: string) => categories.filter((x) => x.parentId === id).length;
+  const shown = (c: MenuCategory): boolean => { const p = c.parentId && categories.find((x) => x.id === c.parentId); return !p || (open.has(p.id) && shown(p)); };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-2xl text-sm text-text-muted">Drag a row, or use the arrows, to change the order. The order here is the order on the menu screen, in packages and on every menu card and quotation. {subReady ? "Put sub-categories inside a category, like Main course › Sabji › Paneer sabji." : "Run the 0015 database update to add sub-categories."}</p>
-        {canEdit && <div className="flex flex-wrap gap-2"><Button onClick={sortAZ}><ArrowDownAZ strokeWidth={1.75} />Sort A to Z</Button><Button variant="primary" onClick={() => setEditing({})}><Plus strokeWidth={2} />Add category</Button></div>}
+        <p className="max-w-2xl text-sm text-text-muted">Categories and sub-categories are listed A to Z, here, on the menu screen, in packages and on every menu card and quotation. Open a category to see its sub-categories. {subReady ? "Put sub-categories inside a category, like Main course › Sabji › Paneer sabji." : "Run the 0015 database update to add sub-categories."}</p>
+        {canEdit && <Button variant="primary" onClick={() => setEditing({})}><Plus strokeWidth={2} />Add category</Button>}
       </div>
       <Card className="divide-y overflow-hidden">
-        {tree.map(({ c, depth }) => {
+        {tree.filter(({ c }) => shown(c)).map(({ c, depth }) => {
           const Icon = categoryIcon(c.icon);
+          const kids = kidsOf(c.id);
           const own = items.filter((x) => x.categoryId === c.id).length;
           const all = items.filter((x) => isWithin(x.categoryId, c.id)).length;
           const subs = branch(categories, c.id).length - 1;
           const types = depth === 0 ? foodTypes.filter((t) => t.categoryIds.includes(c.id)).map((t) => t.name) : [];
-          const level = tree.filter((x) => (x.c.parentId ?? "") === (c.parentId ?? ""));
-          const at = level.findIndex((x) => x.c.id === c.id);
           return (
             <div
               key={c.id}
-              draggable={canEdit}
-              onDragStart={(e) => { setDrag(c); e.dataTransfer.effectAllowed = "move"; }}
-              onDragOver={(e) => { if (drag && drag.id !== c.id && sameLevel(drag, c)) { e.preventDefault(); setOver(c.id); } }}
-              onDragLeave={() => setOver((o) => (o === c.id ? "" : o))}
-              onDrop={(e) => { e.preventDefault(); if (drag) place(drag, c); setDrag(null); setOver(""); }}
-              onDragEnd={() => { setDrag(null); setOver(""); }}
-              className={cn("flex items-center gap-3 py-2.5 pr-3 md:pr-4", depth > 0 && "bg-surface-muted/40", canEdit && "cursor-grab active:cursor-grabbing", drag?.id === c.id && "opacity-50", over === c.id && "bg-primary-soft ring-2 ring-inset ring-primary")}
+              className={cn("flex items-center gap-3 py-2.5 pr-3 md:pr-4", depth > 0 && "animate-unfold bg-surface-muted/40")}
               style={{ paddingLeft: 12 + depth * 28 }}
             >
-              {canEdit && (
-                <span className="flex shrink-0 items-center">
-                <GripVertical className="size-4 text-text-muted" strokeWidth={1.75} aria-hidden />
-                <span className="flex shrink-0 flex-col">
-                  <button type="button" disabled={at === 0} onClick={() => move(c, -1)} aria-label={`Move ${c.name} up`} className="grid size-6 place-items-center rounded text-text-muted hover:bg-surface-muted hover:text-text disabled:opacity-30"><ArrowUp className="size-4" strokeWidth={1.75} /></button>
-                  <button type="button" disabled={at === level.length - 1} onClick={() => move(c, 1)} aria-label={`Move ${c.name} down`} className="grid size-6 place-items-center rounded text-text-muted hover:bg-surface-muted hover:text-text disabled:opacity-30"><ArrowDown className="size-4" strokeWidth={1.75} /></button>
-                </span>
-                </span>
-              )}
               {depth > 0 && <CornerDownRight className="size-4 shrink-0 text-text-muted" strokeWidth={1.75} />}
+              {kids > 0 ? (
+                <button type="button" onClick={() => toggle(c.id)} aria-expanded={open.has(c.id)} aria-label={`${open.has(c.id) ? "Hide" : "Show"} the ${kids} sub-${kids === 1 ? "category" : "categories"} of ${c.name}`} title={open.has(c.id) ? "Hide sub-categories" : "Show sub-categories"} className="grid size-8 shrink-0 place-items-center rounded-lg text-text-muted hover:bg-surface-muted hover:text-text">
+                  <ChevronRight className={cn("size-5 transition-transform duration-200", open.has(c.id) && "rotate-90")} strokeWidth={1.75} />
+                </button>
+              ) : (
+                <span className="size-8 shrink-0" aria-hidden />
+              )}
               <span className={cn("grid shrink-0 place-items-center rounded-xl bg-primary-soft text-primary", depth ? "size-8" : "size-10")}><Icon className={depth ? "size-4" : "size-5"} strokeWidth={1.75} /></span>
               <span className="min-w-0 flex-1">
                 <span className={cn("block truncate", depth ? "text-sm font-medium" : "font-medium")}>{c.name}{isMainCourse(c) && <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 align-middle text-[11px] font-medium text-primary">Main course · rate at booking</span>}</span>
@@ -286,8 +256,8 @@ export function CategoriesEditor({ canEdit }: { canEdit: boolean }) {
               </span>
               {canEdit && (
                 <span className="flex shrink-0 items-center gap-1">
-                  {subReady && <Button variant="ghost" className="max-sm:hidden" onClick={() => setEditing({ parentId: c.id })}><Plus strokeWidth={1.75} />Sub-category</Button>}
-                  {subReady && <Button variant="ghost" size="icon" className="sm:hidden" aria-label={`Add a sub-category to ${c.name}`} onClick={() => setEditing({ parentId: c.id })}><Plus strokeWidth={1.75} /></Button>}
+                  {subReady && <Button variant="ghost" className="max-sm:hidden" onClick={() => { setEditing({ parentId: c.id }); setOpen((cur) => new Set(cur).add(c.id)); }}><Plus strokeWidth={1.75} />Sub-category</Button>}
+                  {subReady && <Button variant="ghost" size="icon" className="sm:hidden" aria-label={`Add a sub-category to ${c.name}`} onClick={() => { setEditing({ parentId: c.id }); setOpen((cur) => new Set(cur).add(c.id)); }}><Plus strokeWidth={1.75} /></Button>}
                   <Button variant="ghost" size="icon" aria-label={`Edit ${c.name}`} onClick={() => setEditing({ category: c })}><PencilLine strokeWidth={1.75} /></Button>
                   <Button variant="ghost" size="icon" aria-label={`Delete ${c.name}`} onClick={() => setDeleting(c)}><Trash2 strokeWidth={1.75} /></Button>
                 </span>

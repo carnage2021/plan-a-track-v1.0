@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Check, ChevronUp, Clock, Copy, Eye, EyeOff, LayoutGrid, List, Package, Plus, Search, SlidersHorizontal, Star, UtensilsCrossed, X } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import { Badge, VegMark, dietLabel } from "@/components/shared/badges";
 import { PaxInput } from "@/components/shared/blocks";
 import { DishCard, DishImage } from "@/components/shared/dish";
@@ -56,7 +57,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const [bestsellers, setBestsellers] = React.useState(false);
   const [source, setSource] = React.useState<"all" | "inhouse" | "outsourced">("all");
   const [cuisine, setCuisine] = React.useState("");
-  const [sort, setSort] = React.useState<"popular" | "name">("popular");
+  // A to Z first, like every other list; Popular stays one tap away.
+  const [sort, setSort] = React.useState<"popular" | "name">("name");
   const [more, setMore] = React.useState(false);
   const [view, setView] = React.useState<"grid" | "list">("grid");
   const [detail, setDetail] = React.useState<MenuItem | null>(null);
@@ -117,9 +119,9 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
 
   const cuisines = React.useMemo(() => [...new Set(allItems.map((i) => i.cuisine).filter(Boolean))].sort(), [allItems]);
   const selected = new Set(fn.itemIds);
-  const extraFilters = (source !== "all" ? 1 : 0) + (cuisine ? 1 : 0) + (sort !== "popular" ? 1 : 0);
+  const extraFilters = (source !== "all" ? 1 : 0) + (cuisine ? 1 : 0) + (sort !== "name" ? 1 : 0);
   const filtering = !!query || diets.length > 0 || bestsellers || extraFilters > 0;
-  const clearFilters = () => { setQuery(""); setDiets([]); setBestsellers(false); setSource("all"); setCuisine(""); setSort("popular"); };
+  const clearFilters = () => { setQuery(""); setDiets([]); setBestsellers(false); setSource("all"); setCuisine(""); setSort("name"); };
 
   const visible = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -130,7 +132,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
       .filter((i) => !bestsellers || i.bestseller)
       .filter((i) => source === "all" || (source === "outsourced") === i.outsourced)
       .filter((i) => !cuisine || i.cuisine === cuisine)
-      .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : (popularity.get(b.id) ?? 0) - (popularity.get(a.id) ?? 0) || Number(b.bestseller) - Number(a.bestseller)));
+      .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }) : (popularity.get(b.id) ?? 0) - (popularity.get(a.id) ?? 0) || Number(b.bestseller) - Number(a.bestseller)));
   }, [allItems, fn.itemIds, query, diets, bestsellers, source, cuisine, sort, popularity]);
 
   // One section per top-level category, in the menu's own order, holding the dishes in it and in its
@@ -185,15 +187,22 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
     if (unmapped.length) warnings.push(`${unmapped.map((i) => i.name).join(", ")} ${unmapped.length === 1 ? "is" : "are"} outsourced with no agency chosen.`);
   }
 
+  // Everything but the buttons scrolls, so a package with a long list of choices and inclusions can never push
+  // "Extras and total" out of the panel.
   const summary = (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 space-y-3 border-b p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="space-y-3 border-b p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="truncate font-heading text-base font-semibold" title={`${fn.name} plate`}>{fn.name}</h2>
             <p className="tnum truncate text-xs text-text-muted">{serviceLine(fn, foodTypes)}</p>
           </div>
-          <Button variant="ghost" className="-mr-2 shrink-0" onClick={() => setPickPackage(true)}><Package strokeWidth={1.75} />{pkg ? pkg.name : "Choose package"}</Button>
+          <span className="-mr-2 flex shrink-0 items-center">
+            <Button variant="ghost" onClick={() => setPickPackage(true)}><Package strokeWidth={1.75} />{pkg ? pkg.name : "Choose package"}</Button>
+            {/* Back to a menu built dish by dish: the dishes chosen stay on the plate. */}
+            {pkg && <Button variant="ghost" size="icon" aria-label={`Remove the ${pkg.name} package`} title="Remove package" onClick={() => { choosePackage(undefined); toast(`${pkg.name} package removed`, { description: "The dishes stay on the plate, each at its own price." }); }}><X strokeWidth={1.75} /></Button>}
+          </span>
         </div>
         <PaxInput value={fn.pax} onChange={(pax) => patch({ pax })} compact />
         {pkg && price.rules.length > 0 && (
@@ -211,7 +220,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="p-4">
         {fn.itemIds.length === 0 && <p className="py-8 text-center text-sm text-text-muted">Tap a dish to add it to the plate.</p>}
         {tops.map((c) => {
           const picked = fn.itemIds.map((id) => allItems.find((i) => i.id === id)).filter((i): i is MenuItem => !!i && isWithin(i.categoryId, c.id));
@@ -236,7 +245,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
         })}
       </div>
 
-      <div className="shrink-0 space-y-3 border-t p-4">
+      <div className="space-y-3 border-t p-4">
         {warnings.length > 0 && (
           <ul className="space-y-1 rounded-lg bg-warning/10 p-2 text-xs text-warning">
             {warnings.slice(0, 3).map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />{w}</li>)}
@@ -260,8 +269,9 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
             <Badge tone={marginTone(totals.marginPct)}>{Math.round(totals.marginPct)}% margin</Badge>
           </div>
         )}
-        <div className="flex flex-col gap-2">{actions}</div>
       </div>
+      </div>
+      <div className="flex shrink-0 flex-col gap-2 border-t bg-surface p-4">{actions}</div>
     </div>
   );
 
@@ -370,7 +380,7 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
               {!booking && <Chip active={source === "inhouse"} onClick={() => setSource(source === "inhouse" ? "all" : "inhouse")}>In-house</Chip>}
               {!booking && <Chip active={source === "outsourced"} onClick={() => setSource(source === "outsourced" ? "all" : "outsourced")}>Outsourced</Chip>}
               <Select aria-label="Cuisine" value={cuisine} onChange={(e) => setCuisine(e.target.value)} className="!h-9 w-auto rounded-full bg-surface"><option value="">Any cuisine</option>{cuisines.map((c) => <option key={c}>{c}</option>)}</Select>
-              <Select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="!h-9 w-auto rounded-full bg-surface"><option value="popular">Most popular</option><option value="name">Name</option></Select>
+              <Select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="!h-9 w-auto rounded-full bg-surface"><option value="name">A to Z</option><option value="popular">Most popular</option></Select>
               {filtering && <Button variant="ghost" onClick={clearFilters}>Clear all</Button>}
             </div>
           )}

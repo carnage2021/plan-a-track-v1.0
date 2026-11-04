@@ -38,7 +38,7 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
   const items = useStore((s) => s.items);
   const packages = useStore((s) => s.packages);
   const assets = useSupply((s) => s.assets);
-  const rates = React.useMemo(() => tenant.staffRates ?? [], [tenant.staffRates]);
+  const rates = React.useMemo(() => [...(tenant.staffRates ?? [])].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })), [tenant.staffRates]);
   // Sample photos to show the client: a uniform for each staff role, a photo for each cutlery item.
   const photos = useStore((s) => s.samplePhotos);
   const [gallery, setGallery] = React.useState<{ open: boolean; start?: SamplePhoto }>({ open: false });

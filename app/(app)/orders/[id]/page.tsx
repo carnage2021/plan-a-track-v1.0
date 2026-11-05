@@ -30,6 +30,7 @@ import { AgenciesTab } from "@/components/supply/outsource";
 import { Requirement } from "@/components/supply/requirement";
 import { priceFunction, priceQuote } from "@/lib/pricing";
 import { useBilling } from "@/lib/billing";
+import { ChangeMenu } from "@/components/sales/change-menu";
 import { useSupply } from "@/lib/supply-store";
 import { referrerOf, useCurrentUser, useStore } from "@/lib/store";
 import type { EventFunction, Order, Payment, Locale } from "@/lib/types";
@@ -117,6 +118,7 @@ function OrderView({ order }: { order: Order }) {
   const agencyCount = workOrders.length;
   const vendors = useSupply((s) => s.vendors);
   const [paxFn, setPaxFn] = React.useState<EventFunction | null>(null);
+  const [menuFn, setMenuFn] = React.useState<EventFunction | null>(null);
   const [cancel, setCancel] = React.useState(false);
   const [cancelNote, setCancelNote] = React.useState("");
   const [receipt, setReceipt] = React.useState<Payment | null>(null);
@@ -288,7 +290,8 @@ function OrderView({ order }: { order: Order }) {
               toast.success("Price changed", { description: `Order total ${impact >= 0 ? "up" : "down"} by ${money(Math.abs(impact))}. Logged in the change log.` });
             }}
           />
-          {functions.map((f) => <DishGuests key={dishGuestsKey(f)} order={order} fn={f} readOnly={locked} />)}
+          {functions.map((f) => <DishGuests key={dishGuestsKey(f)} order={order} fn={f} readOnly={locked} action={!locked && (isOwner || role === "sales") ? <Button onClick={() => setMenuFn(f)}><UtensilsCrossed strokeWidth={1.75} />Change menu</Button> : undefined} />)}
+          {menuFn && <ChangeMenu order={order} fn={order.functions.find((f) => f.id === menuFn.id) ?? menuFn} open={!!menuFn} onOpenChange={(o) => !o && setMenuFn(null)} />}
         </TabsContent>
 
         <TabsContent value="agencies"><SupplyGate><AgenciesTab order={order} /></SupplyGate></TabsContent>

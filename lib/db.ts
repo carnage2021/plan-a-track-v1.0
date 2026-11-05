@@ -122,6 +122,8 @@ function tenantFrom(r: Row): Tenant {
 
 /** True once 0009 has added the birthday and anniversary columns; until then they are not sent. */
 let clientDates = false;
+/** Whether clients have birthday and anniversary columns yet */
+export const hasClientDates = () => clientDates;
 
 export const clientRow = (c: Client): Row => ({
   id: c.id,

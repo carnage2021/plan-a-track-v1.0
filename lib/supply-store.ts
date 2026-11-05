@@ -77,6 +77,8 @@ interface Actions {
   patchOutsource: (id: string, patch: Partial<OutsourceOrder>) => void;
   /** Agency orders of a booking still in draft take each dish's kitchen guests; sent ones stay as agreed */
   syncOutsourceQty: (orderId: string) => void;
+  /** Food cost of every dish whose recipe uses these raw materials, from their rates now */
+  recostDishes: (ingredientIds: string[]) => void;
   saveAsset: (asset: Omit<Asset, "id"> & { id?: string }) => void;
   createChallan: (orderId: string, functionId: string) => Promise<string>;
   saveChallan: (challan: Challan) => void;
@@ -366,6 +368,8 @@ export const useSupply = create<SupplyStore>()((set, get) => {
       });
     },
 
+    recostDishes: (ingredientIds) => { if (ingredientIds.length) recost(ingredientIds); },
+
     syncOutsourceQty: (orderId) => {
       const main = useStore.getState();
       const order = main.orders.find((o) => o.id === orderId);
@@ -373,8 +377,20 @@ export const useSupply = create<SupplyStore>()((set, get) => {
       for (const o of get().outsourceOrders.filter((x) => x.orderId === orderId && x.status === "draft")) {
         const fn = order.functions.find((f) => f.id === o.functionId);
         if (!fn) continue;
-        const lines = o.lines.map((l) => (main.items.find((i) => i.id === l.itemId)?.pricingType === "plate" ? { ...l, qty: dishGuests(fn, l.itemId) } : l));
-        if (lines.some((l, i) => l.qty !== o.lines[i].qty)) get().patchOutsource(o.id, { lines });
+        // A dish taken off the event's menu leaves the draft; one of this agency's dishes added to it comes in.
+        const gone = o.lines.filter((l) => !fn.itemIds.includes(l.itemId)).map((l) => l.id);
+        const fresh = main.items.filter((i) => fn.itemIds.includes(i.id) && i.outsourced && i.agencyId === o.vendorId && !o.lines.some((l) => l.itemId === i.id));
+        const lines = [
+          ...o.lines.filter((l) => !gone.includes(l.id)).map((l) => (main.items.find((i) => i.id === l.itemId)?.pricingType === "plate" ? { ...l, qty: dishGuests(fn, l.itemId) } : l)),
+          ...fresh.map((d) => ({ id: uid(), itemId: d.id, qty: d.pricingType === "plate" ? dishGuests(fn, d.id) : 1, agencyRate: d.agencyRate, clientRate: d.price })),
+        ];
+        if (gone.length) {
+          set((s) => ({ outsourceOrders: s.outsourceOrders.map((x) => (x.id === o.id ? { ...x, lines: x.lines.filter((l) => !gone.includes(l.id)) } : x)) }));
+          background((sb) => ok(sb.from("outsource_lines").delete().in("id", gone), "Updating the agency order"));
+        }
+        // A draft left with no dishes is cancelled rather than sent empty.
+        if (!lines.length) get().patchOutsource(o.id, { status: "cancelled" });
+        else if (fresh.length || gone.length || lines.some((l) => l.qty !== o.lines.find((x) => x.id === l.id)?.qty)) get().patchOutsource(o.id, { lines });
       }
     },
 

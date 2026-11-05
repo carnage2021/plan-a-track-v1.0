@@ -158,6 +158,8 @@ interface Actions {
   setOrderItemPrice: (orderId: string, functionId: string, itemId: string, price: number | undefined, priceImpact: number) => void;
   /** Guests each dish of one event is cooked for; dishes left out use the booked guests */
   setOrderItemPax: (orderId: string, functionId: string, itemPax: Record<string, number>) => void;
+  /** Dishes added to or taken off a confirmed order's event, with the main course rate when one is now needed */
+  setOrderMenu: (orderId: string, functionId: string, itemIds: string[], priceImpact: number, mainRate?: number) => void;
   /** The client's referral code, made and saved the first time it is needed. */
   ensureReferralCode: (clientId: string) => string;
 }
@@ -665,6 +667,32 @@ export const useStore = create<Store>()(
           for (const id of changed) await run(sb.from("function_items").update({ prep_pax: next[id] ?? null }).eq("function_id", functionId).eq("item_id", id), "Saving the kitchen guests");
           await run(sb.from("order_changes").insert({ id: entry.id, order_id: orderId, description: entry.text, price_impact: 0, changed_by: s.currentUserId }), "Logging the change");
         });
+        useSupply.getState().syncOutsourceQty(orderId);
+      },
+      setOrderMenu: (orderId, functionId, itemIds, priceImpact, mainRate) => {
+        const s = get();
+        const fn = s.orders.find((o) => o.id === orderId)?.functions.find((f) => f.id === functionId);
+        if (!fn) return;
+        const ids = [...new Set(itemIds)];
+        const added = ids.filter((id) => !fn.itemIds.includes(id));
+        const removed = fn.itemIds.filter((id) => !ids.includes(id));
+        const rateChanged = mainRate !== undefined && mainRate !== fn.mainRate;
+        if (!added.length && !removed.length && !rateChanged) return;
+        const name = (id: string) => s.items.find((i) => i.id === id)?.name ?? "a dish";
+        const list = (xs: string[]) => (xs.length > 4 ? `${xs.length} dishes` : xs.map(name).join(", "));
+        const text = `${fn.name}: menu changed${added.length ? `, added ${list(added)}` : ""}${removed.length ? `, removed ${list(removed)}` : ""}${rateChanged ? `, main course ${money(mainRate!)} per plate` : ""}`;
+        const entry = { id: uid(), at: today(), by: s.users.find((u) => u.id === s.currentUserId)?.name ?? "", text, priceImpact };
+        // What a removed dish carried on this event (its price, note, kitchen guests) goes with it.
+        const keep = <T,>(m?: Record<string, T>) => { if (!m) return undefined; const next = Object.fromEntries(Object.entries(m).filter(([id]) => ids.includes(id))); return Object.keys(next).length ? next : undefined; };
+        const next = { ...fn, itemIds: ids, itemPrices: keep(fn.itemPrices), itemNotes: keep(fn.itemNotes), itemPax: keep(fn.itemPax), ...(rateChanged ? { mainRate } : {}) };
+        set((st) => ({ orders: st.orders.map((o) => (o.id === orderId ? { ...o, functions: o.functions.map((f) => (f.id === functionId ? next : f)), changeLog: [entry, ...o.changeLog] } : o)) }));
+        background(async (sb) => {
+          if (removed.length) await run(sb.from("function_items").delete().eq("function_id", functionId).in("item_id", removed), "Saving the menu");
+          if (added.length) await run(sb.from("function_items").insert(added.map((itemId, i) => ({ function_id: functionId, item_id: itemId, note: "", sort_order: fn.itemIds.length + i }))), "Saving the menu");
+          if (rateChanged && schema.mainRate) await run(sb.from("event_functions").update({ main_rate: mainRate }).eq("id", functionId), "Saving the main course rate");
+          await run(sb.from("order_changes").insert({ id: entry.id, order_id: orderId, description: entry.text, price_impact: priceImpact, changed_by: s.currentUserId }), "Logging the change");
+        });
+        // Agency orders not yet sent take the new dishes and drop the removed ones.
         useSupply.getState().syncOutsourceQty(orderId);
       },
       setRawOverrides: (orderId, overrides) => {

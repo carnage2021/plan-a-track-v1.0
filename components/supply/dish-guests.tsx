@@ -26,7 +26,7 @@ const digits = (v: string) => Number(v.replace(/\D/g, "").slice(0, 6)) || 0;
 /** Keyed by this so the card starts again from the saved counts after a save or a change of booked guests. */
 export const dishGuestsKey = (fn: EventFunction) => `${fn.id}-${fn.pax}-${JSON.stringify(fn.itemPax ?? {})}`;
 
-export function DishGuests({ order, fn, readOnly }: { order: Order; fn: EventFunction; readOnly?: boolean }) {
+export function DishGuests({ order, fn, readOnly, action }: { order: Order; fn: EventFunction; readOnly?: boolean; action?: React.ReactNode }) {
   const items = useStore((s) => s.items);
   const categories = useStore((s) => s.categories);
   const ready = useStore((s) => s.dishGuestsReady);
@@ -49,7 +49,7 @@ export function DishGuests({ order, fn, readOnly }: { order: Order; fn: EventFun
 
   return (
     <Card>
-      <CardTitle action={<span className="tnum text-xs text-text-muted">{fn.itemIds.length} dishes · {num(fn.pax)} guests booked{lowered ? ` · ${lowered} cooked for a different count` : ""}</span>}>{fn.name}</CardTitle>
+      <CardTitle action={<span className="flex flex-wrap items-center justify-end gap-3"><span className="tnum text-xs text-text-muted">{fn.itemIds.length} dishes · {num(fn.pax)} guests booked{lowered ? ` · ${lowered} cooked for a different count` : ""}</span>{action}</span>}>{fn.name}</CardTitle>
       {!ready && <p className="mx-4 rounded-lg bg-warning/10 p-2 text-xs text-warning md:mx-5">Run the 0024 database update to set kitchen guests per dish.</p>}
       <div className="grid gap-x-6 gap-y-5 p-4 sm:grid-cols-2 md:px-5 lg:grid-cols-3">
         {roots(categories).map((c) => {

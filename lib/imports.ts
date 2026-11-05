@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { subPath, pricedAtBooking } from "./categories";
+import { isWithin, subPath, pricedAtBooking } from "./categories";
 import { splitSubEvents } from "./event-types";
 import { defaultFoodTypes } from "./services";
-import { itemRow, clientRow, packageRow, schema } from "./db";
+import { itemRow, clientRow, hasClientDates, packageRow, schema } from "./db";
 import { useStaff } from "./staff";
 import { useStore } from "./store";
 import { assetRow, ingredientRow, vendorRow } from "./supply-db";
 import { useSupply } from "./supply-store";
 import { uid } from "./utils";
-import { baseUnit } from "./recipe-import";
+import { baseUnit, convert } from "./recipe-import";
 
 // Phase 7 (plan A3): every master list can come from an Excel or CSV file, checked row by row before
 // anything is saved. Each import remembers what it created so the last one can be undone.
@@ -23,6 +23,24 @@ type Row = Record<string, any>;
 /** Rows to insert, by table, in the order they must go in; `update` changes rows already there (not undone). */
 export type Plan = { table: string; rows: Row[]; update?: { ids: string[]; values: Row }[] }[];
 
+/**
+ * A row of the sheet that is already in the account, and what the sheet changes on it: uploading the list again
+ * with a new price updates the price. A blank cell keeps what is there. `before` is kept so the upload can be undone.
+ */
+export interface Update {
+  table: string;
+  id: string;
+  values: Row;
+  before: Row;
+  /** "Last rate: ₹100 → ₹90", shown before anything is saved */
+  changes: string[];
+  /** Rows added alongside, such as a stock adjustment */
+  also?: { table: string; rows: Row[] }[];
+  /** Child rows replaced whole, such as a package's choices */
+  replace?: { table: string; key: string; rows: Row[]; before: Row[] };
+  errors?: string[];
+}
+
 export interface ListSpec {
   key: ListKey;
   label: string;
@@ -31,6 +49,8 @@ export interface ListSpec {
   existing: () => Set<string>;
   identity: (r: Record<string, string>) => string;
   build: (records: Record<string, string>[]) => Plan;
+  /** For a row already in the account: what the sheet changes on it (null when it is not there) */
+  diff?: (r: Record<string, string>) => Update | null;
   /** Checks a row against what is already in the account (categories, food types), beyond its own columns */
   check?: (r: Record<string, string>) => string[];
   rows: () => Record<string, string | number>[];
@@ -140,6 +160,26 @@ export function validate(spec: ListSpec, r: Record<string, string>) {
   if (spec.check) errors.push(...spec.check(r));
   return errors;
 }
+/** Collects what a row changes: only cells with something in them count, and only when they differ. */
+function changeSet(table: string, id: string) {
+  const u: Update = { table, id, values: {}, before: {}, changes: [] };
+  const show = (v: unknown, fmt?: (v: never) => string) => (v === null || v === undefined || v === "" ? "blank" : fmt ? fmt(v as never) : String(v));
+  return {
+    u,
+    /** label, database column, value now, value from the sheet (undefined when the cell is blank) */
+    field<T>(label: string, column: string, now: T, next: T | undefined, fmt?: (v: T) => string) {
+      if (next === undefined || next === null || (typeof next === "string" && !next.trim())) return;
+      if (JSON.stringify(now ?? "") === JSON.stringify(next)) return;
+      u.values[column] = next;
+      u.before[column] = now ?? null;
+      u.changes.push(`${label}: ${show(now, fmt as never)} → ${show(next, fmt as never)}`);
+    },
+  };
+}
+const cellNum = (v?: string) => (v && v.trim() ? num(v) : undefined);
+const rupees = (v: number) => `₹${Number(v.toFixed(2))}`;
+const text = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+
 const pick = (c: Column | undefined, v: string, fallback: string) => (v && c?.options ? (c.options[norm(v)] ?? fallback) : fallback);
 const col = (spec: { columns: Column[] }, label: string) => spec.columns.find((c) => c.label === label);
 
@@ -196,6 +236,31 @@ export const lists: ListSpec[] = [
       const switchOver = [...mainCats].filter((id) => s.categories.some((c) => c.id === id && !c.atBooking));
       return [{ table: "menu_categories", rows: newCats, update: [{ ids: switchOver, values: { priced_at_booking: true } }] }, { table: "menu_items", rows: items }];
     },
+    diff(r) {
+      const s = useStore.getState();
+      const item = s.items.find((i) => norm(i.name) === norm(r.Name));
+      if (!item) return null;
+      const c = changeSet("menu_items", item.id);
+      // The dish moves only when the sheet names another category; a dish in a sub-category of the one named stays.
+      const root = s.categories.find((x) => !x.parentId && norm(x.name) === norm(r.Category));
+      const subPathText = schema.subcategories ? (r["Sub-category"] ?? "").trim() : "";
+      const sub = root && subPathText ? findCategory(`${root.name} > ${subPathText.replace(/[>›/]/g, ">")}`) : undefined;
+      if (!root || (subPathText && !sub)) {
+        c.u.errors = [`Category "${[r.Category, subPathText].filter(Boolean).join(" > ")}" is not on your menu yet: add it on the Menu page, or upload the dish under a category you have`];
+        return c.u;
+      }
+      c.field("Category", "category_id", item.categoryId, sub ?? (isWithin(item.categoryId, root.id) ? item.categoryId : root.id), categoryLabel);
+      c.field("Local name", "name_local", item.nameLocal, text(r["Local name"]));
+      c.field("Diet", "diet", item.diet, r.Diet ? pick(col(this, "Diet"), r.Diet, item.diet) : undefined);
+      c.field("Cuisine", "cuisine", item.cuisine, text(r.Cuisine));
+      c.field("Unit", "unit", item.unit, r.Unit ? pick(col(this, "Unit"), r.Unit, item.unit) : undefined);
+      c.field("Priced", "pricing_type", item.pricingType, r.Priced ? pick(col(this, "Priced"), r.Priced, item.pricingType) : undefined);
+      c.field("Cost", "cost", item.cost, cellNum(r.Cost), rupees);
+      c.field("Price", "price", item.price, cellNum(r.Price), rupees);
+      c.field("Description", "description", item.description, text(r.Description));
+      c.field("Photo", "photo_paths", item.photo ? [item.photo] : [], text(r["Photo link"]) ? [r["Photo link"].trim()] : undefined, (v: string[]) => (v[0] ? "new link" : "none"));
+      return c.u;
+    },
     rows: () => {
       const s = useStore.getState();
       // The category is the top-level one; anything below it goes in Sub-category as "Sabji > Paneer sabji".
@@ -247,6 +312,35 @@ export const lists: ListSpec[] = [
       }
       return [{ table: "packages", rows: packages }, { table: "package_rules", rows: rules }];
     },
+    diff(r) {
+      const s = useStore.getState();
+      const pkg = s.packages.find((p) => !p.archived && norm(p.name) === norm(r.Name));
+      if (!pkg) return null;
+      const c = changeSet("packages", pkg.id);
+      c.field("Price per plate", "price_per_plate", pkg.pricePerPlate, cellNum(r["Price per plate"]), rupees);
+      c.field("Minimum guests", "min_pax", pkg.minPax, cellNum(r["Minimum guests"]));
+      const types = foodTypes();
+      if (schema.services && text(r["Food type"])) c.field("Food type", "food_type_id", pkg.foodTypeId ?? null, findFoodType(r["Food type"]) ?? null, (id: string | null) => types.find((t) => t.id === id)?.name ?? "none");
+      c.field("Description", "description", pkg.description, text(r.Description));
+      const same = (a: { name: string; count: number }[], b: { name: string; count: number }[]) => a.length === b.length && a.every((x, i) => norm(x.name) === norm(b[i].name) && x.count === b[i].count);
+      const asText = (xs: { name: string; count: number }[]) => xs.map((a) => (a.count ? `${a.name} ${a.count}` : a.name)).join("; ") || "none";
+      if (schema.packageExtras && text(r["Special additions"])) {
+        const was = pkg.additions ?? [];
+        const next = splitList(r["Special additions"]).map((part) => { const p = parseCount(part); return { id: was.find((a) => norm(a.name) === norm(p.name))?.id ?? uid(), name: p.name, count: p.count }; });
+        if (!same(was, next)) { c.u.values.additions = next; c.u.before.additions = was; c.u.changes.push(`Special additions: ${asText(was)} → ${asText(next)}`); }
+      }
+      if (text(r.Choices)) {
+        const next = new Map<string, number>();
+        for (const part of splitList(r.Choices)) { const p = parseCount(part); const id = findCategory(p.name); if (id && p.count) next.set(id, p.count); }
+        const key = (xs: { categoryId: string; choose: number }[]) => [...xs].sort((a, b) => a.categoryId.localeCompare(b.categoryId)).map((x) => `${x.categoryId}:${x.choose}`).join("|");
+        const now = [...next].map(([categoryId, choose]) => ({ categoryId, choose }));
+        if (key(pkg.rules) !== key(now)) {
+          c.u.replace = { table: "package_rules", key: "package_id", rows: now.map((x) => ({ package_id: pkg.id, category_id: x.categoryId, choose: x.choose })), before: pkg.rules.map((x) => ({ package_id: pkg.id, category_id: x.categoryId, choose: x.choose })) };
+          c.u.changes.push(`Choices: ${pkg.rules.map((x) => `${categoryLabel(x.categoryId)} ${x.choose}`).join("; ") || "none"} → ${now.map((x) => `${categoryLabel(x.categoryId)} ${x.choose}`).join("; ")}`);
+        }
+      }
+      return c.u;
+    },
     rows: () => {
       const s = useStore.getState();
       const types = foodTypes();
@@ -275,6 +369,17 @@ export const lists: ListSpec[] = [
     build(records) {
       return [{ table: "vendors", rows: records.map((r) => vendorRow({ id: uid(), name: r.Name, type: pick(col(this, "Type"), r.Type, "raw_material") as "raw_material", phone: r.Phone ?? "", gstin: (r.GSTIN ?? "").toUpperCase(), terms: r["Payment terms"] ?? "", rating: 0, notes: r.Notes ?? "" })) }];
     },
+    diff(r) {
+      const v = useSupply.getState().vendors.find((x) => norm(x.name) === norm(r.Name));
+      if (!v) return null;
+      const c = changeSet("vendors", v.id);
+      c.field("Type", "vendor_type", v.type, r.Type ? pick(col(this, "Type"), r.Type, v.type) : undefined);
+      c.field("Phone", "phone", v.phone, text(r.Phone));
+      c.field("GSTIN", "gstin", v.gstin, text(r.GSTIN)?.toUpperCase());
+      c.field("Payment terms", "payment_terms", v.terms, text(r["Payment terms"]));
+      c.field("Notes", "notes", v.notes, text(r.Notes));
+      return c.u;
+    },
     rows: () => useSupply.getState().vendors.map((v) => ({ Name: v.name, Type: v.type, Phone: v.phone, GSTIN: v.gstin, "Payment terms": v.terms, Notes: v.notes })),
   },
   {
@@ -296,6 +401,20 @@ export const lists: ListSpec[] = [
     build(records) {
       return [{ table: "workers", rows: records.map((r) => ({ id: uid(), name: r.Name, phone: r.Phone ?? "", role: r.Role || "Helper", worker_type: pick(col(this, "Type"), r.Type, "daily"), rate_day: num(r["Rate per day"]), rate_event: num(r["Rate per event"]), monthly_salary: num(r["Monthly salary"]), id_proof: r["ID proof"] ?? "", upi: r.UPI ?? "" })) }];
     },
+    diff(r) {
+      const w = useStaff.getState().workers.find((x) => norm(x.name) === norm(r.Name));
+      if (!w) return null;
+      const c = changeSet("workers", w.id);
+      c.field("Phone", "phone", w.phone, text(r.Phone));
+      c.field("Role", "role", w.role, text(r.Role));
+      c.field("Type", "worker_type", w.type, r.Type ? pick(col(this, "Type"), r.Type, w.type) : undefined);
+      c.field("Rate per day", "rate_day", w.rateDay, cellNum(r["Rate per day"]), rupees);
+      c.field("Rate per event", "rate_event", w.rateEvent, cellNum(r["Rate per event"]), rupees);
+      c.field("Monthly salary", "monthly_salary", w.monthlySalary, cellNum(r["Monthly salary"]), rupees);
+      c.field("ID proof", "id_proof", w.idProof, text(r["ID proof"]));
+      c.field("UPI", "upi", w.upi, text(r.UPI));
+      return c.u;
+    },
     rows: () => useStaff.getState().workers.map((w) => ({ Name: w.name, Phone: w.phone, Role: w.role, Type: w.type, "Rate per day": w.rateDay, "Rate per event": w.rateEvent, "Monthly salary": w.monthlySalary, "ID proof": w.idProof, UPI: w.upi })),
   },
   {
@@ -314,6 +433,23 @@ export const lists: ListSpec[] = [
     identity: (r) => (r.Phone ?? "").replace(/\D/g, "").slice(-10),
     build(records) {
       return [{ table: "clients", rows: records.map((r) => clientRow({ id: uid(), name: r.Name, phone: (r.Phone ?? "").replace(/\D/g, "").slice(-10), email: r.Email || undefined, address: r.Address || undefined, gstin: r.GSTIN ? r.GSTIN.toUpperCase() : undefined, type: r.GSTIN ? "corporate" : "retail", tags: [], language: "en", birthday: r.Birthday || undefined, anniversary: r.Anniversary || undefined })) }];
+    },
+    diff(r) {
+      const phone = (r.Phone ?? "").replace(/\D/g, "").slice(-10);
+      const cl = useStore.getState().clients.find((x) => x.phone.replace(/\D/g, "").slice(-10) === phone);
+      if (!cl) return null;
+      const c = changeSet("clients", cl.id);
+      c.field("Name", "name", cl.name, text(r.Name));
+      c.field("Email", "email", cl.email ?? null, text(r.Email));
+      c.field("Address", "address", cl.address ?? null, text(r.Address));
+      const gstin = text(r.GSTIN)?.toUpperCase();
+      c.field("GSTIN", "gstin", cl.gstin ?? null, gstin);
+      if (gstin && cl.type !== "corporate") { c.u.values.client_type = "corporate"; c.u.before.client_type = cl.type; }
+      if (hasClientDates()) {
+        c.field("Birthday", "birthday", cl.birthday ?? null, text(r.Birthday));
+        c.field("Anniversary", "anniversary", cl.anniversary ?? null, text(r.Anniversary));
+      }
+      return c.u;
     },
     rows: () => useStore.getState().clients.map((c) => ({ Name: c.name, Phone: c.phone, Email: c.email ?? "", Address: c.address ?? "", GSTIN: c.gstin ?? "", Birthday: c.birthday ?? "", Anniversary: c.anniversary ?? "" })),
   },
@@ -343,6 +479,37 @@ export const lists: ListSpec[] = [
       const opening = ingredients.filter((i) => i._stock > 0).map((i) => ({ id: uid(), ingredient_id: i.id, store_id: storeId, movement: "opening", qty: i._stock, rate: i.last_rate, note: "Opening stock from import" }));
       return [{ table: "stores", rows: newStore }, { table: "ingredients", rows: ingredients.map((i) => Object.fromEntries(Object.entries(i).filter(([k]) => k !== "_stock"))) }, { table: "stock_movements", rows: opening }];
     },
+    diff(r) {
+      const { ingredients, movements, stores } = useSupply.getState();
+      const ing = ingredients.find((x) => norm(x.name) === norm(r.Name));
+      if (!ing) return null;
+      const c = changeSet("ingredients", ing.id);
+      // The sheet's unit is turned into the one the raw material is kept in (500 g is 0.5 kg, ₹0.09 a gram is ₹90 a
+      // kg). The unit itself never changes by an upload, since stock and recipes are counted in it.
+      const factor = text(r.Unit) ? convert(1, r.Unit, ing.unit) : 1;
+      if (factor === null) {
+        c.u.errors = [`${ing.name} is kept in ${ing.unit}; the sheet says ${r.Unit}, which does not change into ${ing.unit}`];
+        return c.u;
+      }
+      const per = (v?: number) => (v === undefined ? undefined : Math.round((v / factor) * 100) / 100);
+      const times = (v?: number) => (v === undefined ? undefined : Math.round(v * factor * 1e6) / 1e6);
+      c.field("Section", "section", ing.section, r.Section ? pick(col(this, "Section"), r.Section, ing.section) : undefined);
+      c.field("Reorder level", "reorder_level", ing.reorderLevel, times(cellNum(r["Reorder level"])), (v: number) => `${v} ${ing.unit}`);
+      c.field("Last rate", "last_rate", ing.lastRate, per(cellNum(r["Last rate"])), (v: number) => `${rupees(v)} per ${ing.unit}`);
+      // Stock in the sheet is a count: the difference goes in as a stock-take adjustment.
+      const counted = times(cellNum(r["Current stock"]));
+      if (counted !== undefined) {
+        const have = Math.round(movements.filter((m) => m.ingredientId === ing.id).reduce((t, m) => t + m.qty, 0) * 1e6) / 1e6;
+        if (Math.abs(counted - have) >= 0.001) {
+          if (!stores[0]) c.u.errors = ["There is no store yet to count the stock in: add one on the Purchase and Stock page"];
+          else {
+            c.u.also = [{ table: "stock_movements", rows: [{ id: uid(), ingredient_id: ing.id, store_id: stores[0].id, movement: "adjustment", qty: Math.round((counted - have) * 1e6) / 1e6, rate: ing.lastRate, note: "Stock count from import" }] }];
+            c.u.changes.push(`Stock: ${have} → ${counted} ${ing.unit}`);
+          }
+        }
+      }
+      return c.u;
+    },
     rows: () => {
       const { ingredients, movements } = useSupply.getState();
       const stock = new Map<string, number>();
@@ -365,6 +532,17 @@ export const lists: ListSpec[] = [
     identity: (r) => norm(r.Item),
     build(records) {
       return [{ table: "assets", rows: records.map((r) => assetRow({ id: uid(), name: r.Item, category: r.Category || "Crockery", totalQty: num(r["Total quantity"]), replacementCost: num(r["Replacement cost"]), rentRate: num(r["Rent per piece"]), location: r["Storage location"] ?? "", ruleBasis: "manual", ruleValue: 0 })) }];
+    },
+    diff(r) {
+      const a = useSupply.getState().assets.find((x) => norm(x.name) === norm(r.Item));
+      if (!a) return null;
+      const c = changeSet("assets", a.id);
+      c.field("Category", "category", a.category, text(r.Category));
+      c.field("Total quantity", "total_qty", a.totalQty, cellNum(r["Total quantity"]));
+      c.field("Replacement cost", "replacement_cost", a.replacementCost, cellNum(r["Replacement cost"]), rupees);
+      if (schema.charges) c.field("Rent per piece", "rent_rate", a.rentRate ?? 0, cellNum(r["Rent per piece"]), rupees);
+      c.field("Storage location", "location", a.location, text(r["Storage location"]));
+      return c.u;
     },
     rows: () => useSupply.getState().assets.map((a) => ({ Item: a.name, Category: a.category, "Total quantity": a.totalQty, "Replacement cost": a.replacementCost, "Rent per piece": a.rentRate ?? 0, "Storage location": a.location })),
   },

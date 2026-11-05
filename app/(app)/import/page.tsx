@@ -9,12 +9,31 @@ import { PageHeader } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, Chip } from "@/components/ui/primitives";
 import { RecipeImport, undoRecipeUpload } from "@/components/import/recipe-import";
-import { download, lists, readTable, useLeaveGuard, sheetSummary, toCsv, validate, type ListSpec } from "@/lib/imports";
+import { download, lists, readTable, useLeaveGuard, sheetSummary, toCsv, validate, type ListSpec, type Update } from "@/lib/imports";
+import { useSupply } from "@/lib/supply-store";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase/client";
 import { cn, fmtDate, isoDate, localDay } from "@/lib/utils";
 
-interface Parsed { file: string; records: { r: Record<string, string>; errors: string[]; duplicate: boolean; where: string }[]; unknown: string[]; sheets: string }
+interface Parsed { file: string; records: { r: Record<string, string>; errors: string[]; duplicate: boolean; repeat: boolean; update?: Update; where: string }[]; unknown: string[]; sheets: string }
+
+type SB = ReturnType<typeof supabase>;
+/** What an update looked like before, kept with the upload so Undo can put it back. */
+type Before = { table: string; id: string; before: Record<string, unknown>; replace?: { table: string; key: string; before: Record<string, unknown>[] } };
+async function putBack(sb: SB, b: Before) {
+  if (Object.keys(b.before).length) {
+    const { error } = await sb.from(b.table).update(b.before).eq("id", b.id);
+    if (error) throw new Error(error.message);
+  }
+  if (b.replace) {
+    await sb.from(b.replace.table).delete().eq(b.replace.key, b.id);
+    if (b.replace.before.length) {
+      const { error } = await sb.from(b.replace.table).insert(b.replace.before);
+      if (error) throw new Error(error.message);
+    }
+  }
+}
+const beforeOf = (u: Update): Before => ({ table: u.table, id: u.id, before: u.before, ...(u.replace ? { replace: { table: u.replace.table, key: u.replace.key, before: u.replace.before } } : {}) });
 interface ImportRow { id: string; list: string; file_name: string; row_count: number; ids: Record<string, string[]>; undone: boolean; created_at: string }
 
 /** Reads every sheet of an .xlsx, or a .csv, into records keyed by the template's column names. */
@@ -25,9 +44,20 @@ async function readFile(file: File, spec: ListSpec): Promise<Parsed> {
   const records = table.rows.map((row, i) => {
     const r = Object.fromEntries(spec.columns.map((c, j) => [c.label, row[j]]));
     const id = spec.identity(r);
-    const duplicate = !!id && (existing.has(id) || seen.has(id));
+    // The same row twice in the file: the first one counts.
+    const repeat = !!id && seen.has(id);
     if (id) seen.add(id);
-    return { r, errors: validate(spec, r), duplicate, where: table.where[i] };
+    const errors = validate(spec, r);
+    let duplicate = repeat;
+    let update: Update | undefined;
+    // Already in the account: the sheet's values replace what is there (blank cells keep it); nothing new, skipped.
+    if (!repeat && id && existing.has(id)) {
+      const u = !errors.length && spec.diff ? spec.diff(r) : null;
+      if (u?.errors?.length) errors.push(...u.errors);
+      else if (u && (u.changes.length || u.replace || u.also?.length)) update = u;
+      else duplicate = true;
+    }
+    return { r, errors, duplicate, repeat, update, where: table.where[i] };
   });
   return { file: file.name, records, unknown: table.head.filter((h) => !spec.columns.some((c) => c.label === h)), sheets: sheetSummary(table.sheets) };
 }
@@ -49,7 +79,8 @@ function Import() {
   }, []);
   React.useEffect(loadHistory, [loadHistory]);
 
-  const ok = parsed?.records.filter((x) => !x.errors.length && !x.duplicate) ?? [];
+  const ok = parsed?.records.filter((x) => !x.errors.length && !x.duplicate && !x.update) ?? [];
+  const updates = parsed?.records.filter((x) => !x.errors.length && x.update).map((x) => x.update!) ?? [];
   const pickList = (l: ListSpec) => { setList(l); setParsed(null); setRecipesOpen(false); };
   const onFile = async (file?: File) => {
     if (!file) return;
@@ -63,12 +94,13 @@ function Import() {
   };
 
   const save = async () => {
-    if (!parsed || !ok.length) return;
+    if (!parsed || (!ok.length && !updates.length)) return;
     setBusy(true);
     const sb = supabase();
     const done: Record<string, string[]> = {};
+    const applied: Update[] = [];
     try {
-      for (const step of list.build(ok.map((x) => x.r))) {
+      for (const step of ok.length ? list.build(ok.map((x) => x.r)) : []) {
         for (const u of step.update ?? []) {
           if (!u.ids.length) continue;
           const { error } = await sb.from(step.table).update(u.values).in("id", u.ids);
@@ -82,15 +114,39 @@ function Import() {
           if (chunk.every((r) => r.id)) done[step.table] = [...(done[step.table] ?? []), ...chunk.map((r) => r.id as string)];
         }
       }
-      await sb.from("imports").insert({ list: list.key, file_name: parsed.file, row_count: ok.length, ids: done });
-      toast.success(`${ok.length} ${list.label.toLowerCase()} imported`, { description: "You can undo this upload below." });
+      // Rows already there take the sheet's values.
+      for (const u of updates) {
+        applied.push(u);
+        if (Object.keys(u.values).length) {
+          const { error } = await sb.from(u.table).update(u.values).eq("id", u.id);
+          if (error) throw new Error(error.message);
+        }
+        if (u.replace) {
+          const del = await sb.from(u.replace.table).delete().eq(u.replace.key, u.id);
+          if (del.error) throw new Error(del.error.message);
+          if (u.replace.rows.length) {
+            const { error } = await sb.from(u.replace.table).insert(u.replace.rows);
+            if (error) throw new Error(error.message);
+          }
+        }
+        for (const a of u.also ?? []) {
+          const { error } = await sb.from(a.table).insert(a.rows);
+          if (error) throw new Error(error.message);
+          done[a.table] = [...(done[a.table] ?? []), ...a.rows.map((r) => r.id as string)];
+        }
+      }
+      await sb.from("imports").insert({ list: list.key, file_name: parsed.file, row_count: ok.length + updates.length, ids: { ...done, ...(applied.length ? { _updates: applied.map((u) => JSON.stringify(beforeOf(u))) } : {}) } });
+      toast.success([ok.length ? `${ok.length} added` : "", updates.length ? `${updates.length} updated` : ""].filter(Boolean).join(", "), { description: "You can undo this upload below." });
       setParsed(null);
     } catch (e) {
       // Take back whatever went in before the failure, so a half import never lingers.
       for (const [table, ids] of Object.entries(done).reverse()) await sb.from(table).delete().in("id", ids);
+      for (const u of [...applied].reverse()) await putBack(sb, beforeOf(u)).catch(() => undefined);
       toast.error("Nothing was imported", { description: e instanceof Error ? e.message : undefined });
     } finally {
       await reload();
+      // New purchase rates flow into the food cost of every dish whose recipe uses them.
+      if (list.key === "ingredients") useSupply.getState().recostDishes(applied.filter((u) => "last_rate" in u.values).map((u) => u.id));
       loadHistory();
       setBusy(false);
     }
@@ -101,9 +157,13 @@ function Import() {
     const sb = supabase();
     try {
       if (imp.list === "recipes") await undoRecipeUpload(imp.ids);
-      else for (const [table, ids] of Object.entries(imp.ids).reverse()) {
-        const { error } = await sb.from(table).delete().in("id", ids);
-        if (error) throw new Error(/foreign key|violates/i.test(error.message) ? "Some of these records are already used in orders or quotations, so they cannot be removed." : error.message);
+      else {
+        // Rows the upload changed get their old values back; rows it added are removed.
+        for (const text of [...(imp.ids._updates ?? [])].reverse()) await putBack(sb, JSON.parse(text) as Before);
+        for (const [table, ids] of Object.entries(imp.ids).filter(([k]) => !k.startsWith("_")).reverse()) {
+          const { error } = await sb.from(table).delete().in("id", ids);
+          if (error) throw new Error(/foreign key|violates/i.test(error.message) ? "Some of these records are already used in orders or quotations, so they cannot be removed." : error.message);
+        }
       }
       await sb.from("imports").update({ undone: true }).eq("id", imp.id);
       toast.success("Upload undone");
@@ -111,6 +171,8 @@ function Import() {
       toast.error("Could not undo", { description: e instanceof Error ? e.message : undefined });
     } finally {
       await reload();
+      // The old purchase rates are back: dishes using them get their food cost from them again.
+      if (imp.list === "ingredients") useSupply.getState().recostDishes((imp.ids._updates ?? []).map((t) => JSON.parse(t) as Before).filter((b) => "last_rate" in b.before).map((b) => b.id));
       loadHistory();
       setBusy(false);
     }
@@ -138,17 +200,18 @@ function Import() {
           <button type="button" onClick={() => input.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void onFile(e.dataTransfer.files[0]); }} className="mt-4 flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center text-text-muted transition-colors hover:border-primary hover:text-primary">
             <Upload className="size-8" strokeWidth={1.5} />
             <span className="font-medium text-text">Drop your Excel or CSV file here, or tap to choose</span>
-            <span className="text-xs">Fill in the template. Every sheet with the column names is read; rows already in your list are skipped.</span>
+            <span className="text-xs">Fill in the template. Every sheet with the column names is read. A row already in your list is updated with the sheet&apos;s values (a blank cell keeps what is there).</span>
           </button>
 
           {parsed && (
             <div className="mt-5 space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-medium">{parsed.file}</span>
-                <Badge tone="success">{ok.length} ready</Badge>
+                {ok.length > 0 && <Badge tone="success">{ok.length} new</Badge>}
                 {parsed.records.some((x) => x.errors.length) && <Badge tone="danger">{parsed.records.filter((x) => x.errors.length).length} with problems</Badge>}
-                {parsed.records.some((x) => x.duplicate && !x.errors.length) && <Badge>{parsed.records.filter((x) => x.duplicate && !x.errors.length).length} already there</Badge>}
-                <Button variant="primary" className="ml-auto" loading={busy} disabled={!ok.length} onClick={save}><CheckCircle2 strokeWidth={1.75} />Import {ok.length} {ok.length === 1 ? "row" : "rows"}</Button>
+                {updates.length > 0 && <Badge tone="info">{updates.length} to update</Badge>}
+                {parsed.records.some((x) => x.duplicate && !x.errors.length) && <Badge>{parsed.records.filter((x) => x.duplicate && !x.errors.length).length} unchanged</Badge>}
+                <Button variant="primary" className="ml-auto" loading={busy} disabled={!ok.length && !updates.length} onClick={save}><CheckCircle2 strokeWidth={1.75} />{[ok.length ? `Add ${ok.length}` : "", updates.length ? `update ${updates.length}` : ""].filter(Boolean).join(", ").replace(/^u/, "U") || "Import"} {ok.length + updates.length === 1 ? "row" : "rows"}</Button>
               </div>
               {parsed.sheets && <p className="rounded-lg bg-surface-muted p-2 text-sm text-text-muted">{parsed.sheets}</p>}
               {!parsed.records.length && <p className="rounded-lg bg-danger/10 p-3 text-sm text-danger">No rows were found. Each sheet needs a row with the column names from the template ({list.columns.slice(0, 3).map((c) => c.label).join(", ")} …) and the data below it.</p>}
@@ -158,10 +221,10 @@ function Import() {
                   <thead className="sticky top-0 bg-surface-muted text-xs text-text-muted"><tr><th className="px-3 py-2 font-medium">Row</th>{list.columns.slice(0, 5).map((c) => <th key={c.label} className="py-2 pr-3 font-medium">{c.label}</th>)}<th className="py-2 pr-3 font-medium">Check</th></tr></thead>
                   <tbody className="divide-y">
                     {parsed.records.slice(0, 300).map((x, i) => (
-                      <tr key={i} className={cn(x.errors.length ? "bg-danger/5" : x.duplicate ? "text-text-muted" : "")}>
+                      <tr key={i} className={cn(x.errors.length ? "bg-danger/5" : x.update ? "bg-info/5" : x.duplicate ? "text-text-muted" : "")}>
                         <td className="whitespace-nowrap px-3 py-1.5 text-text-muted">{x.where}</td>
                         {list.columns.slice(0, 5).map((c) => <td key={c.label} className="max-w-48 truncate py-1.5 pr-3">{x.r[c.label]}</td>)}
-                        <td className="py-1.5 pr-3">{x.errors.length ? <span className="text-danger">{x.errors.join("; ")}</span> : x.duplicate ? "Already there, skipped" : <span className="text-success">OK</span>}</td>
+                        <td className="py-1.5 pr-3">{x.errors.length ? <span className="text-danger">{x.errors.join("; ")}</span> : x.update ? <span className="text-info">Update: {x.update.changes.join("; ")}</span> : x.repeat ? "Repeats a row above, skipped" : x.duplicate ? "Already there, nothing changed" : <span className="text-success">New</span>}</td>
                       </tr>
                     ))}
                   </tbody>

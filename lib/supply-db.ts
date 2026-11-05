@@ -2,6 +2,7 @@ import { inBranch } from "./branch";
 import { selectAll } from "./paged";
 import { schema } from "./db";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BookRecipe } from "./recipe-book";
 import type {
   Asset,
   Challan,
@@ -72,9 +73,14 @@ export interface SupplyData {
   outsourceOrders: OutsourceOrder[];
   assets: Asset[];
   challans: Challan[];
+  /** The Recipes page's recipes (0026); empty until that update is run */
+  book: BookRecipe[];
 }
 
-export const emptySupply: SupplyData = { ingredients: [], recipes: [], stores: [], movements: [], vendors: [], vendorRates: [], purchaseOrders: [], bills: [], vendorPayments: [], outsourceOrders: [], assets: [], challans: [] };
+export const bookRow = (r: BookRecipe): Row => ({ id: r.id, name: r.name, item_id: r.itemId ?? null, recipe_base: r.recipeBase, buffer_pct: r.bufferPct, lines: r.lines, updated_at: new Date().toISOString() });
+const bookFrom = (r: Row): BookRecipe => ({ id: r.id, name: r.name, itemId: r.item_id ?? undefined, recipeBase: r.recipe_base, bufferPct: Number(r.buffer_pct), lines: Array.isArray(r.lines) ? r.lines.map((l: Row) => ({ name: String(l.name ?? ""), qty: Number(l.qty) || 0, unit: String(l.unit ?? ""), ...(l.ingredientId ? { ingredientId: String(l.ingredientId) } : {}) })) : [], updatedAt: day(r.updated_at) });
+
+export const emptySupply: SupplyData = { book: [], ingredients: [], recipes: [], stores: [], movements: [], vendors: [], vendorRates: [], purchaseOrders: [], bills: [], vendorPayments: [], outsourceOrders: [], assets: [], challans: [] };
 
 export async function loadSupply(sb: SB): Promise<SupplyData> {
   const all = async (table: string, order?: string, ascending = true) => {
@@ -99,7 +105,9 @@ export async function loadSupply(sb: SB): Promise<SupplyData> {
     all("challans", "created_at", false),
     all("challan_lines"),
   ]);
+  const book = schema.recipeBook ? await all("recipe_book", "name") : [];
   return {
+    book: book.map(bookFrom),
     ingredients: ingredients.map((i) => ({ id: i.id, name: i.name, unit: i.unit, section: i.section, reorderLevel: Number(i.reorder_level), lastRate: Number(i.last_rate), location: i.location, expiresOn: i.expires_on ? day(i.expires_on) : undefined })),
     recipes: recipes.map((r) => ({ itemId: r.item_id, ingredientId: r.ingredient_id, qty: Number(r.qty) })),
     // A branch sees its own stores (and those with no branch), and only the stock movements in them.

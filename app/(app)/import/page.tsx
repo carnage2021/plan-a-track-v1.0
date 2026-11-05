@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Download, FileSpreadsheet, ImagePlus, Undo2, Upload } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/shared/badges";
@@ -31,11 +32,12 @@ async function readFile(file: File, spec: ListSpec): Promise<Parsed> {
   return { file: file.name, records, unknown: table.head.filter((h) => !spec.columns.some((c) => c.label === h)), sheets: sheetSummary(table.sheets) };
 }
 
-export default function ImportPage() {
+function Import() {
   const reload = useStore((s) => s.reload);
   const [list, setList] = React.useState<ListSpec>(lists[0]);
   /** Recipes have their own panel: they replace whole recipes and can add missing raw materials. */
-  const [recipesOpen, setRecipesOpen] = React.useState(false);
+  // The Recipes page's Upload button opens straight on the recipe panel.
+  const [recipesOpen, setRecipesOpen] = React.useState(useSearchParams().get("list") === "recipes");
   const [parsed, setParsed] = React.useState<Parsed | null>(null);
   const [busy, setBusy] = React.useState(false);
   useLeaveGuard(busy);
@@ -233,5 +235,13 @@ function PhotoMatcher() {
         </div>
       )}
     </Card>
+  );
+}
+
+export default function ImportPage() {
+  return (
+    <React.Suspense>
+      <Import />
+    </React.Suspense>
   );
 }

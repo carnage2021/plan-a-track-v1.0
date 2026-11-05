@@ -14,7 +14,7 @@ const tables = [
   "salary_slips", "worker_payments", "tasks", "worker_leaves", "workers",
   "challan_lines", "challans", "assets",
   "outsource_lines", "outsource_orders", "vendor_payments", "vendor_bills", "po_lines", "purchase_orders", "vendor_rates",
-  "stock_movements", "recipe_lines",
+  "stock_movements", "recipe_book", "recipe_lines",
   "credit_notes", "invoices", "payment_milestones", "payments", "order_changes", "extra_charges", "function_items", "event_functions",
   "orders", "quotations", "enquiries", "clients",
   "expenses", "petty_cash",

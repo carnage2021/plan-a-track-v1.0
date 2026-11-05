@@ -6,9 +6,11 @@ import { schema } from "./db";
 import { background, write } from "./queue";
 import { useStore } from "./store";
 import { assetRequirement, dishGuests, recipeCost } from "./supply";
+import { dishLines, summarise, type BookRecipe } from "./recipe-book";
 import {
   assetRow,
   billRow,
+  bookRow,
   challanLineRow,
   challanRow,
   emptySupply,
@@ -48,11 +50,22 @@ interface Actions {
   load: () => Promise<void>;
   loadStarter: () => Promise<void>;
   addStore: (name: string) => void;
-  saveIngredient: (ingredient: Omit<Ingredient, "id"> & { id?: string }, openingQty?: number) => void;
+  /** Returns the raw material's id (a new one for a new raw material) */
+  saveIngredient: (ingredient: Omit<Ingredient, "id"> & { id?: string }, openingQty?: number) => string;
   addMovement: (movement: Omit<Movement, "id" | "at">) => void;
   transfer: (ingredientId: string, from: string, to: string, qty: number) => void;
   stockTake: (storeId: string, counted: Record<string, number>) => number;
   saveRecipe: (itemId: string, lines: { ingredientId: string; qty: number }[], recipeBase: number, bufferPct: number) => void;
+  /** False until 0026 is run: then recipes are kept for dishes not on the menu, or still missing raw materials */
+  bookReady: boolean;
+  saveBook: (recipe: BookRecipe) => void;
+  deleteBook: (id: string) => void;
+  /** Makes a recipe the recipe of a dish (or of none). The dish takes it at once if all its raw materials are in. */
+  linkBook: (id: string, itemId?: string) => BookResult;
+  /** A linked recipe with every raw material in becomes its dish's recipe */
+  applyBook: (id: string) => BookResult;
+  /** After raw materials are added: every linked recipe now complete goes to its dish. Returns how many did. */
+  applyBookAll: () => number;
   saveVendor: (vendor: Omit<Vendor, "id"> & { id?: string }) => string;
   setVendorRate: (vendorId: string, ingredientId: string, rate: number | null) => void;
   createPos: (drafts: PoDraft[]) => Promise<PurchaseOrder[]>;
@@ -71,6 +84,7 @@ interface Actions {
 }
 
 export type SupplyStore = SupplyData & Actions;
+export type BookResult = "applied" | "waiting" | "unlinked";
 
 const today = () => isoDate(new Date());
 const docNo = (prefix: string, n: number) => `${prefix}/${financialYear()}/${String(n).padStart(4, "0")}`;
@@ -99,6 +113,7 @@ export const useSupply = create<SupplyStore>()((set, get) => {
   return {
     ...emptySupply,
     ready: false,
+    bookReady: false,
 
     load: async () => {
       if (!schema.supply) {
@@ -106,7 +121,7 @@ export const useSupply = create<SupplyStore>()((set, get) => {
         return;
       }
       try {
-        set({ ...(await loadSupply(supabase())), ready: true });
+        set({ ...(await loadSupply(supabase())), ready: true, bookReady: schema.recipeBook });
         // Stock always lives in a store, so an account with none gets a first one.
         const role = useStore.getState().myRole;
         if (get().stores.length === 0 && (role === "owner" || role === "store")) get().addStore("Main kitchen");
@@ -136,6 +151,7 @@ export const useSupply = create<SupplyStore>()((set, get) => {
       background((sb) => ok(sb.from("ingredients").upsert(ingredientRow(saved)), "Saving the ingredient"));
       if (!ingredient.id && openingQty && get().stores[0]) get().addMovement({ ingredientId: saved.id, storeId: get().stores[0].id, type: "opening", qty: openingQty, rate: saved.lastRate, note: "Opening stock" });
       if (ingredient.id && rateChanged) recost([saved.id]);
+      return saved.id;
     },
 
     addMovement: (movement) => {
@@ -175,6 +191,49 @@ export const useSupply = create<SupplyStore>()((set, get) => {
       if (!item) return;
       const cost = recipeCost({ id: itemId, recipeBase }, get().recipes, get().ingredients);
       main.saveItem({ ...item, recipeBase, bufferPct, cost: cost === null ? item.cost : Math.round(cost * 100) / 100 });
+    },
+
+    saveBook: (recipe) => {
+      set((s) => ({ book: [...s.book.filter((r) => r.id !== recipe.id), recipe].sort((a, b) => a.name.localeCompare(b.name)) }));
+      background((sb) => ok(sb.from("recipe_book").upsert(bookRow(recipe)), "Saving the recipe"));
+    },
+
+    deleteBook: (id) => {
+      set((s) => ({ book: s.book.filter((r) => r.id !== id) }));
+      background((sb) => ok(sb.from("recipe_book").delete().eq("id", id), "Deleting the recipe"));
+    },
+
+    linkBook: (id, itemId) => {
+      const recipe = get().book.find((r) => r.id === id);
+      if (!recipe) return "unlinked";
+      // A dish has one recipe: one linked to it before lets go first.
+      for (const other of get().book) if (itemId && other.id !== id && other.itemId === itemId) get().saveBook({ ...other, itemId: undefined });
+      get().saveBook({ ...recipe, itemId });
+      return get().applyBook(id);
+    },
+
+    applyBook: (id) => {
+      const recipe = get().book.find((r) => r.id === id);
+      if (!recipe?.itemId || !useStore.getState().items.some((i) => i.id === recipe.itemId)) return "unlinked";
+      const sum = summarise(recipe, get().ingredients);
+      if (!sum.complete) return "waiting";
+      get().saveRecipe(recipe.itemId, dishLines(sum.states), recipe.recipeBase, recipe.bufferPct);
+      return "applied";
+    },
+
+    applyBookAll: () => {
+      let n = 0;
+      for (const recipe of get().book) {
+        if (!recipe.itemId) continue;
+        const sum = summarise(recipe, get().ingredients);
+        if (!sum.complete) continue;
+        // Only dishes whose recipe would change, so nothing is rewritten for no reason.
+        const want = dishLines(sum.states);
+        const have = get().recipes.filter((r) => r.itemId === recipe.itemId);
+        const same = have.length === want.length && want.every((w) => have.some((h) => h.ingredientId === w.ingredientId && Math.abs(h.qty - w.qty) < 1e-6));
+        if (!same && get().applyBook(recipe.id) === "applied") n++;
+      }
+      return n;
     },
 
     saveVendor: (vendor) => {

@@ -11,7 +11,8 @@ import { download, readTable, useLeaveGuard, sheetSummary, toCsv, type Table } f
 import { analyse, recipeColumns, type RecipeSnapshot } from "@/lib/recipe-import";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase/client";
-import { ingredientRow } from "@/lib/supply-db";
+import { nameKey, type BookRecipe } from "@/lib/recipe-book";
+import { bookRow, ingredientRow } from "@/lib/supply-db";
 import { useSupply } from "@/lib/supply-store";
 import { sections, units, type Section } from "@/lib/supply-types";
 import { cn, isoDate, uid } from "@/lib/utils";
@@ -41,13 +42,17 @@ async function writeRecipes(sb: SB, list: RecipeSnapshot[]) {
 export async function undoRecipeUpload(ids: Record<string, string[]>) {
   const sb = supabase();
   await writeRecipes(sb, (ids._before ?? []).map((text) => JSON.parse(text) as RecipeSnapshot));
+  // The Recipes page: recipes the upload added go, and those it replaced come back as they were.
+  for (let i = 0; i < (ids.recipe_book ?? []).length; i += 100) await ok(sb.from("recipe_book").delete().in("id", ids.recipe_book.slice(i, i + 100)), "Removing the recipes");
+  const back = (ids._book_before ?? []).map((text) => bookRow(JSON.parse(text) as BookRecipe));
+  for (let i = 0; i < back.length; i += 200) await ok(sb.from("recipe_book").upsert(back.slice(i, i + 200)), "Putting back the recipes");
   await useSupply.getState().load();
 }
 
 export function RecipeImport({ onSaved }: { onSaved: () => void }) {
   const items = useStore((s) => s.items);
   const reload = useStore((s) => s.reload);
-  const { ingredients, recipes, ready } = useSupply();
+  const { ingredients, recipes, ready, book, bookReady } = useSupply();
   const [file, setFile] = React.useState<{ name: string; table: Table } | null>(null);
   const [overrides, setOverrides] = React.useState<Record<string, { unit?: string; section?: Section }>>({});
   const [busy, setBusy] = React.useState<"" | "adding" | "importing">("");
@@ -55,7 +60,7 @@ export function RecipeImport({ onSaved }: { onSaved: () => void }) {
   useLeaveGuard(!!busy);
 
   // Rechecked whenever the inventory changes, so added raw materials free up their dishes at once.
-  const result = React.useMemo(() => (file ? analyse(file.table, items, ingredients, recipes) : null), [file, items, ingredients, recipes]);
+  const result = React.useMemo(() => (file ? analyse(file.table, items, ingredients, recipes, bookReady) : null), [file, items, ingredients, recipes, bookReady]);
 
   const onFile = async (f?: File) => {
     if (!f) return;
@@ -90,7 +95,7 @@ export function RecipeImport({ onSaved }: { onSaved: () => void }) {
   };
 
   const importRecipes = async () => {
-    if (!result?.ready.length) return;
+    if (!result?.ready.length && !result?.book.length) return;
     setBusy("importing");
     const sb = supabase();
     const rate = new Map(ingredients.map((i) => [i.id, i.lastRate]));
@@ -102,14 +107,29 @@ export function RecipeImport({ onSaved }: { onSaved: () => void }) {
       const cost = priced ? Math.round((lines.reduce((s, l) => s + l.qty * rate.get(l.ingredientId)!, 0) / p.recipeBase) * 100) / 100 : p.item.cost;
       return { itemId: p.item.id, recipeBase: p.recipeBase, bufferPct: p.bufferPct, cost, lines };
     });
+    // Every recipe in the sheet also goes on the Recipes page: one already there for the same dish (or with the
+    // same name) is replaced, keeping its link to a dish.
+    const bookBefore: BookRecipe[] = [], bookNew: string[] = [];
+    const bookRows = result.book.map((d) => {
+      const old = (d.item && book.find((r) => r.itemId === d.item!.id)) || book.find((r) => !r.itemId && nameKey(r.name) === nameKey(d.name)) || book.find((r) => nameKey(r.name) === nameKey(d.name));
+      if (old) bookBefore.push(old);
+      else bookNew.push("");
+      const row: BookRecipe = { id: old?.id ?? uid(), name: old?.name ?? d.name.trim(), itemId: d.item?.id ?? old?.itemId, recipeBase: d.recipeBase, bufferPct: d.bufferPct, lines: d.lines, updatedAt: "" };
+      if (!old) bookNew[bookNew.length - 1] = row.id;
+      return bookRow(row);
+    });
     try {
       await writeRecipes(sb, next);
-      await ok(sb.from("imports").insert({ list: "recipes", file_name: file!.name, row_count: result.ready.length, ids: { recipes: result.ready.map((p) => p.item.id), _before: before.map((b) => JSON.stringify(b)) } }), "Recording the upload");
-      toast.success(`Recipes saved for ${result.ready.length} ${result.ready.length === 1 ? "dish" : "dishes"}`, { description: "You can undo this upload below." });
+      for (let i = 0; i < bookRows.length; i += 200) await ok(sb.from("recipe_book").upsert(bookRows.slice(i, i + 200)), "Saving to the Recipes page");
+      await ok(sb.from("imports").insert({ list: "recipes", file_name: file!.name, row_count: Math.max(result.ready.length, result.book.length), ids: { recipes: result.ready.map((p) => p.item.id), _before: before.map((b) => JSON.stringify(b)), ...(bookReady ? { recipe_book: bookNew, _book_before: bookBefore.map((b) => JSON.stringify(b)) } : {}) } }), "Recording the upload");
+      const later = result.book.length - result.ready.length;
+      toast.success(bookReady ? `${result.book.length} ${result.book.length === 1 ? "recipe" : "recipes"} saved on the Recipes page` : `Recipes saved for ${result.ready.length} ${result.ready.length === 1 ? "dish" : "dishes"}`, { description: bookReady && later > 0 ? `${result.ready.length} went straight to their dishes. The other ${later} wait there for a dish or a raw material. You can undo this upload below.` : "You can undo this upload below." });
       setFile(null);
     } catch (e) {
       // Put back every dish as it was, so a half upload never lingers.
       await writeRecipes(sb, before).catch(() => undefined);
+      if (bookNew.length) await sb.from("recipe_book").delete().in("id", bookNew).then(() => undefined, () => undefined);
+      if (bookBefore.length) await sb.from("recipe_book").upsert(bookBefore.map(bookRow)).then(() => undefined, () => undefined);
       toast.error("No recipes were changed", { description: e instanceof Error ? e.message : undefined });
     } finally {
       await useSupply.getState().load();
@@ -142,6 +162,7 @@ export function RecipeImport({ onSaved }: { onSaved: () => void }) {
   const problems = result?.rows.filter((r) => r.errors.length) ?? [];
   const waiting = result?.plans.filter((p) => p.blocked && !p.lines.size && !problems.some((r) => r.dish.toLowerCase() === p.item.name.toLowerCase())).length ?? 0;
   const replacing = result?.ready.filter((p) => p.replaces).length ?? 0;
+  const unlisted = result?.book.filter((d) => !d.item).length ?? 0;
 
   return (
     <Card className="p-4 md:p-5">
@@ -168,10 +189,11 @@ export function RecipeImport({ onSaved }: { onSaved: () => void }) {
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-medium">{file.name}</span>
             <Badge tone="success">{result.ready.length} {result.ready.length === 1 ? "dish" : "dishes"} ready</Badge>
+            {bookReady && unlisted > 0 && <Badge tone="neutral">{unlisted} not on your menu, kept on the Recipes page</Badge>}
             {replacing > 0 && <Badge tone="warning">{replacing} will replace an existing recipe</Badge>}
             {result.missing.length > 0 && <Badge tone="warning">{result.missing.length} raw materials to add</Badge>}
             {problems.length > 0 && <Badge tone="danger">{problems.length} rows with problems</Badge>}
-            <Button variant="primary" className="ml-auto" loading={busy === "importing"} disabled={!result.ready.length || !!busy} onClick={importRecipes}><CheckCircle2 strokeWidth={1.75} />Import recipes for {result.ready.length} {result.ready.length === 1 ? "dish" : "dishes"}</Button>
+            <Button variant="primary" className="ml-auto" loading={busy === "importing"} disabled={!(bookReady ? result.book.length : result.ready.length) || !!busy} onClick={importRecipes}><CheckCircle2 strokeWidth={1.75} />{bookReady ? `Save ${result.book.length} ${result.book.length === 1 ? "recipe" : "recipes"}` : `Import recipes for ${result.ready.length} ${result.ready.length === 1 ? "dish" : "dishes"}`}</Button>
           </div>
           {sheetSummary(file.table.sheets) && <p className="rounded-lg bg-surface-muted p-2 text-sm text-text-muted">{sheetSummary(file.table.sheets)}</p>}
           {result.unknown.length > 0 && <p className="rounded-lg bg-warning/10 p-2 text-sm text-warning">Columns not in the template are ignored: {result.unknown.join(", ")}</p>}
@@ -222,7 +244,7 @@ export function RecipeImport({ onSaved }: { onSaved: () => void }) {
                     <td className="max-w-48 truncate py-1.5 pr-3">{r.dish}</td>
                     <td className="max-w-48 truncate py-1.5 pr-3">{r.raw}</td>
                     <td className="py-1.5 pr-3">{r.qty} {r.unit}</td>
-                    <td className="py-1.5 pr-3">{r.errors.length ? <span className="text-danger">{r.errors.join("; ")}</span> : r.waiting ? <span className="text-warning">Add this raw material first</span> : <span className="text-success">OK</span>}</td>
+                    <td className="py-1.5 pr-3">{r.errors.length ? <span className="text-danger">{r.errors.join("; ")}</span> : r.unlisted ? <span className="text-text-muted">Not on your menu: kept on the Recipes page{r.waiting ? ", raw material not included yet" : ""}</span> : r.waiting ? <span className="text-warning">{bookReady ? "Raw material not included yet: the recipe waits on the Recipes page" : "Add this raw material first"}</span> : <span className="text-success">OK</span>}</td>
                   </tr>
                 ))}
               </tbody>

@@ -11,6 +11,7 @@
     "dispatch": "Dispatch",
     "onsite": "Event day",
     "purchase": "Purchase and Stock",
+    "recipes": "Recipes",
     "labels": "QR labels",
     "scan": "Scan",
     "vendors": "Vendors",

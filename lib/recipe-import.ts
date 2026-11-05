@@ -70,6 +70,8 @@ export interface RecipeRow {
   errors: string[];
   /** Waiting for a raw material that is not in the inventory yet */
   waiting?: boolean;
+  /** The dish is not on the menu; the recipe is kept on the Recipes page */
+  unlisted?: boolean;
 }
 
 export interface DishPlan {
@@ -86,8 +88,14 @@ export interface DishPlan {
 
 export interface Missing { name: string; unit: string; section: Section; dishes: string[] }
 
-/** Checks every row of a recipe sheet against the menu and the inventory. */
-export function analyse(table: { head: string[]; rows: string[][]; where: string[] }, items: MenuItem[], ingredients: Ingredient[], recipes: RecipeLine[]) {
+/** A recipe for the Recipes page (0026): every dish in the sheet, on the menu or not, as the sheet wrote it. */
+export interface BookDraft { name: string; item?: MenuItem; recipeBase: number; bufferPct: number; lines: { name: string; qty: number; unit: string }[] }
+
+/**
+ * Checks every row of a recipe sheet against the menu and the inventory. With `keepAll` (the Recipes page is set
+ * up), a dish not on the menu is not an error: its recipe is kept on the Recipes page to link to a dish later.
+ */
+export function analyse(table: { head: string[]; rows: string[][]; where: string[] }, items: MenuItem[], ingredients: Ingredient[], recipes: RecipeLine[], keepAll = false) {
   // Rows come in the template's column order (see readTable); head lists only the columns the file had.
   const body = table.rows;
   const at = new Map(recipeColumns.map((c, i) => [c.label as string, i]));
@@ -100,6 +108,7 @@ export function analyse(table: { head: string[]; rows: string[][]; where: string
   const plans = new Map<string, DishPlan>();
   const missing = new Map<string, Missing>();
   const rows: RecipeRow[] = [];
+  const book = new Map<string, BookDraft>();
 
   body.forEach((r, i) => {
     const row: RecipeRow = { row: table.where[i] ?? `Row ${i + 2}`, dish: cell(r, "Dish"), raw: cell(r, "Raw material"), qty: cell(r, "Quantity"), unit: cell(r, "Unit"), errors: [] };
@@ -107,14 +116,33 @@ export function analyse(table: { head: string[]; rows: string[][]; where: string
     const item = itemByName.get(key(row.dish));
     const qty = num(row.qty);
     if (!row.dish) row.errors.push("Dish is missing");
-    else if (!item) row.errors.push(`No dish called "${row.dish}" on your menu`);
+    else if (!item && !keepAll) row.errors.push(`No dish called "${row.dish}" on your menu`);
     if (!row.raw) row.errors.push("Raw material is missing");
     if (!row.qty) row.errors.push("Quantity is missing");
     else if (!Number.isFinite(qty) || qty <= 0) row.errors.push("Quantity must be a number above 0");
     const baseText = cell(r, "For guests"), wasteText = cell(r, "Wastage %");
     if (baseText && !(num(baseText) > 0)) row.errors.push("For guests must be a number above 0");
     if (wasteText && !(num(wasteText) >= 0)) row.errors.push("Wastage % must be a number");
-    if (!item || row.errors.length) return;
+    if (row.errors.length) return;
+
+    if (keepAll) {
+      const d = book.get(key(row.dish)) ?? { name: row.dish, item, recipeBase: item?.recipeBase || 100, bufferPct: item?.bufferPct ?? 5, lines: [] };
+      if (baseText && !book.has(key(row.dish))) d.recipeBase = num(baseText);
+      if (wasteText && !book.has(key(row.dish))) d.bufferPct = num(wasteText);
+      d.lines.push({ name: row.raw, qty, unit: row.unit });
+      book.set(key(row.dish), d);
+    }
+    if (!item) {
+      // Not on the menu: kept on the Recipes page, and its new raw materials are offered with the rest.
+      row.unlisted = true;
+      if (!ingByName.has(key(row.raw))) {
+        const m = missing.get(key(row.raw)) ?? { name: row.raw, unit: row.unit ? baseUnit(row.unit).unit : "kg", section: guessSection(row.raw), dishes: [] };
+        if (!m.dishes.includes(row.dish)) m.dishes.push(row.dish);
+        missing.set(key(row.raw), m);
+        row.waiting = true;
+      }
+      return;
+    }
 
     const plan = plans.get(item.id) ?? { item, recipeBase: item.recipeBase || 100, bufferPct: item.bufferPct ?? 5, lines: new Map(), replaces: recipes.some((x) => x.itemId === item.id), blocked: false };
     // The first row of a dish that gives For guests or Wastage % sets it for the whole dish.
@@ -150,13 +178,17 @@ export function analyse(table: { head: string[]; rows: string[][]; where: string
   for (const row of rows) {
     const k = key(row.dish);
     if (!k || ready.some((p) => key(p.item.name) === k)) continue;
+    // Kept on the Recipes page, so not held back; said so in the import screen instead.
+    if (keepAll && book.has(k) && !rows.some((r) => key(r.dish) === k && r.errors.length)) continue;
     const reason = row.errors[0] ?? (row.waiting ? `waiting for raw material "${row.raw}"` : "");
     const h = held.get(k);
     if (!h) held.set(k, { dish: row.dish, reason: reason ? `${row.row}: ${reason}` : "" });
     else if (!h.reason && reason) h.reason = `${row.row}: ${reason}`;
   }
   const blankDish = rows.filter((r) => !r.dish).length;
-  return { rows, plans: [...plans.values()], ready, held: [...held.values()], blankDish, missing: [...missing.values()], unknown, missingColumns };
+  // A dish with a row in error is not kept either, so a recipe is never saved half right.
+  const kept = [...book.values()].filter((d) => !rows.some((r) => key(r.dish) === key(d.name) && r.errors.length));
+  return { rows, plans: [...plans.values()], ready, held: [...held.values()], blankDish, missing: [...missing.values()], unknown, missingColumns, book: kept };
 }
 
 /** What a dish's recipe was before an upload, so the upload can be undone. */

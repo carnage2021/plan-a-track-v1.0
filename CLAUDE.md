@@ -54,7 +54,7 @@ lib/store.ts      main store: load, every write, the write queue
 lib/db.ts         row mappers (app object <-> table row) and the database feature checks
 lib/pricing.ts    all money maths (per plate, packages, event charges, discount, GST)
 lib/imports.ts    Excel/CSV import: all sheets, every list's columns and checks
-supabase/migrations/  0001 to 0025, run by hand in the Supabase SQL editor, in order
+supabase/migrations/  0001 to 0026, run by hand in the Supabase SQL editor, in order
 docs/import-examples/ example .xlsx files and a bilingual (English and Gujarati) import guide PDF for caterers
 ```
 
@@ -133,6 +133,7 @@ Seven main phases: sales, supply, staff, kitchen, operations, billing, and repor
 - **Client accounts from their sheets:** a caterer's own sheets are imported with `brag-output/work/shyam/build.py` (sheets to a plan, plus a report of gaps) and `load.mjs` (signs up through the app, replaces the starter menu, inserts the rest); always load a `qa-*` test account first. The client's sheet folder is git-ignored (`/shyam caterars/`).
 - **A to Z everywhere:** dishes and packages are kept sorted in the store (`byName`), booking Step 2 sorts dishes A to Z by default (Most popular one tap away), and the event type, sub-event, food service and staff role dropdowns are sorted in their hooks. Supply lists stay "missing details first", then A to Z.
 - **Booking Step 2 plate summary:** everything but the buttons scrolls, so a package with many choices or inclusions can never push "Extras and total" out of view; a chosen package has a Remove package button (the dishes stay, each at its own price).
+- **Recipes page (0026):** `/recipes` (sidebar after Purchase and Stock; follows the purchase module in plans and role settings, `follows` in `lib/nav.ts`) lists every recipe: those in `recipe_book` and those written straight on a dish (`fromDish`). Expanding one shows each raw material with quantity, rate and amount, total and per plate (`summarise` in `lib/recipe-book.ts`). Lines keep the sheet's name, quantity and unit and are matched to the inventory when shown; one not in it is "Not included" with an Include dialog (name and rate required) that adds the raw material and completes every recipe using it (`applyBookAll`). A recipe upload saves every dish in the sheet to `recipe_book`, on the menu or not; a book recipe linked to a dish (`item_id`, one per dish) becomes its `recipe_lines` only once complete (`applyBook`). Link from the recipe's "Dish on the menu" drop-down or from the dish's details ("Use a recipe from the Recipes page"). Undo of an upload removes the book recipes it added and restores those it replaced.
 - **Dates:** `isoDate` always writes a four-digit year and `parseDate` keeps years below 100, so a year half typed in (0202 on the way to 2026) cannot freeze the festival code; `realDate` refuses such a year on save.
 
 ## Rules for working on it

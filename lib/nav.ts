@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Contact,
   BarChart3,
   CalendarDays,
@@ -44,6 +45,7 @@ export const navItems: NavItem[] = [
   { key: "dispatch", href: "/dispatch", icon: Truck, roles: ["owner", "operations", "store"] },
   { key: "onsite", href: "/onsite", icon: ClipboardCheck, roles: ["owner", "operations"] },
   { key: "purchase", href: "/purchase", icon: ShoppingBasket, roles: ["owner", "store", "kitchen"] },
+  { key: "recipes", href: "/recipes", icon: BookOpen, roles: ["owner", "store", "kitchen"] },
   { key: "labels", href: "/labels", icon: QrCode, roles: ["owner", "operations", "store"] },
   { key: "scan", href: "/scan", icon: ScanLine, roles: ["owner", "operations", "store", "kitchen"] },
   { key: "vendors", href: "/vendors", icon: Store, roles: ["owner", "store", "accountant"] },
@@ -59,11 +61,15 @@ export const navItems: NavItem[] = [
 ];
 
 /** Items a role cannot use are hidden, not greyed. The owner's role settings can narrow this further. */
+/** Pages added later go with the module they belong to, so plans and role settings made before them still work. */
+const follows: Record<string, string> = { recipes: "purchase" };
+
 export function navFor(role: Role, access?: TenantAccess, planModules?: string[]) {
   const narrowed = role === "owner" ? undefined : access?.roles[role];
+  const has = (list: string[], key: string) => list.includes(key) || (!!follows[key] && list.includes(follows[key]));
   // The subscription plan can switch modules off for everyone; an empty list means all are included.
-  const inPlan = (key: string) => !planModules?.length || key === "home" || key === "settings" || planModules.includes(key);
-  return navItems.filter((n) => (n.roles === "all" || n.roles.includes(role)) && inPlan(n.key) && (!narrowed || n.key === "home" || narrowed.modules.includes(n.key)));
+  const inPlan = (key: string) => !planModules?.length || key === "home" || key === "settings" || has(planModules, key);
+  return navItems.filter((n) => (n.roles === "all" || n.roles.includes(role)) && inPlan(n.key) && (!narrowed || n.key === "home" || has(narrowed.modules, n.key)));
 }
 
 /** The nav item a path belongs to, if any. */

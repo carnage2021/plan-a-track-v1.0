@@ -62,6 +62,9 @@ export interface EventCharge {
   label: string;
   qty: number;
   rate: number;
+  /** The third-party vendor or agency that supplies it; none means in-house. What the vendor is paid is not kept
+   * here: it comes from the vendor's price list, on their work order only. */
+  vendorId?: string;
 }
 
 export interface ReferralSettings {

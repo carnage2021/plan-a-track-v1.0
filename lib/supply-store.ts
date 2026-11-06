@@ -11,6 +11,7 @@ import {
   assetRow,
   billRow,
   bookRow,
+  vendorItemRow,
   challanLineRow,
   challanRow,
   emptySupply,
@@ -27,7 +28,7 @@ import {
   vendorRow,
   type SupplyData,
 } from "./supply-db";
-import type { Asset, Challan, Ingredient, Movement, OutsourceOrder, PoStatus, PurchaseOrder, RecipeLine, Vendor, VendorBill, VendorPayment } from "./supply-types";
+import type { Asset, Challan, Ingredient, Movement, OutsourceOrder, PoStatus, PurchaseOrder, RecipeLine, Vendor, VendorBill, VendorItem, VendorPayment } from "./supply-types";
 import { supabase } from "./supabase/client";
 import { financialYear, isoDate, uid } from "./utils";
 import { withBranch } from "./branch";
@@ -67,6 +68,10 @@ interface Actions {
   /** After raw materials are added: every linked recipe now complete goes to its dish. Returns how many did. */
   applyBookAll: () => number;
   saveVendor: (vendor: Omit<Vendor, "id"> & { id?: string }) => string;
+  /** False until 0027 is run: then each vendor has a price list */
+  vendorItemsReady: boolean;
+  saveVendorItem: (item: Omit<VendorItem, "id"> & { id?: string }) => void;
+  deleteVendorItem: (id: string) => void;
   setVendorRate: (vendorId: string, ingredientId: string, rate: number | null) => void;
   createPos: (drafts: PoDraft[]) => Promise<PurchaseOrder[]>;
   setPoStatus: (id: string, status: PoStatus) => void;
@@ -116,6 +121,7 @@ export const useSupply = create<SupplyStore>()((set, get) => {
     ...emptySupply,
     ready: false,
     bookReady: false,
+    vendorItemsReady: false,
 
     load: async () => {
       if (!schema.supply) {
@@ -123,7 +129,7 @@ export const useSupply = create<SupplyStore>()((set, get) => {
         return;
       }
       try {
-        set({ ...(await loadSupply(supabase())), ready: true, bookReady: schema.recipeBook });
+        set({ ...(await loadSupply(supabase())), ready: true, bookReady: schema.recipeBook, vendorItemsReady: schema.vendorItems });
         // Stock always lives in a store, so an account with none gets a first one.
         const role = useStore.getState().myRole;
         if (get().stores.length === 0 && (role === "owner" || role === "store")) get().addStore("Main kitchen");
@@ -236,6 +242,17 @@ export const useSupply = create<SupplyStore>()((set, get) => {
         if (!same && get().applyBook(recipe.id) === "applied") n++;
       }
       return n;
+    },
+
+    saveVendorItem: (item) => {
+      const saved: VendorItem = { ...item, id: item.id ?? uid() };
+      set((s) => ({ vendorItems: [...s.vendorItems.filter((v) => v.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)) }));
+      background((sb) => ok(sb.from("vendor_items").upsert(vendorItemRow(saved)), "Saving the price list"));
+    },
+
+    deleteVendorItem: (id) => {
+      set((s) => ({ vendorItems: s.vendorItems.filter((v) => v.id !== id) }));
+      background((sb) => ok(sb.from("vendor_items").delete().eq("id", id), "Saving the price list"));
     },
 
     saveVendor: (vendor) => {

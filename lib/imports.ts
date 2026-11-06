@@ -7,7 +7,7 @@ import { defaultFoodTypes } from "./services";
 import { itemRow, clientRow, hasClientDates, packageRow, schema } from "./db";
 import { useStaff } from "./staff";
 import { useStore } from "./store";
-import { assetRow, ingredientRow, vendorRow } from "./supply-db";
+import { assetRow, ingredientRow, vendorItemRow, vendorRow } from "./supply-db";
 import { useSupply } from "./supply-store";
 import { uid } from "./utils";
 import { baseUnit, convert } from "./recipe-import";
@@ -15,7 +15,7 @@ import { baseUnit, convert } from "./recipe-import";
 // Phase 7 (plan A3): every master list can come from an Excel or CSV file, checked row by row before
 // anything is saved. Each import remembers what it created so the last one can be undone.
 
-export type ListKey = "menu" | "packages" | "vendors" | "workers" | "clients" | "ingredients" | "cutlery" | "events" | "photos";
+export type ListKey = "menu" | "packages" | "vendors" | "vendoritems" | "workers" | "clients" | "ingredients" | "cutlery" | "events" | "photos";
 type Cell = string | number | boolean | Date | null | undefined;
 export interface Column { label: string; required?: boolean; example: string; kind?: "number" | "date"; options?: Record<string, string> }
 /* eslint-disable @typescript-eslint/no-explicit-any -- rows go straight to PostgREST */
@@ -49,6 +49,8 @@ export interface ListSpec {
   existing: () => Set<string>;
   identity: (r: Record<string, string>) => string;
   build: (records: Record<string, string>[]) => Plan;
+  /** Shown only when this returns true (a list whose table needs a database update) */
+  available?: () => boolean;
   /** For a row already in the account: what the sheet changes on it (null when it is not there) */
   diff?: (r: Record<string, string>) => Update | null;
   /** Checks a row against what is already in the account (categories, food types), beyond its own columns */
@@ -383,6 +385,43 @@ export const lists: ListSpec[] = [
     rows: () => useSupply.getState().vendors.map((v) => ({ Name: v.name, Type: v.type, Phone: v.phone, GSTIN: v.gstin, "Payment terms": v.terms, Notes: v.notes })),
   },
   {
+    key: "vendoritems",
+    label: "Vendor price list",
+    // What each vendor supplies and at what rate (0027): picking a vendor for a line in a booking fills its rate.
+    available: () => schema.vendorItems,
+    columns: [
+      { label: "Vendor", required: true, example: "Shree Hospitality Services" },
+      { label: "Item", required: true, example: "Waiter" },
+      { label: "Unit", example: "person" },
+      { label: "Rate", required: true, kind: "number", example: "650" },
+    ],
+    existing: () => {
+      const { vendors, vendorItems } = useSupply.getState();
+      return new Set(vendorItems.map((i) => `${norm(vendors.find((v) => v.id === i.vendorId)?.name ?? "")}:${norm(i.name)}`));
+    },
+    identity: (r) => `${norm(r.Vendor)}:${norm(r.Item)}`,
+    check(r) {
+      if (!schema.vendorItems) return ["Run the 0027 database update first"];
+      return r.Vendor && !findVendor(r.Vendor) ? [`No vendor called "${r.Vendor}": add it under Vendors and suppliers first, then upload the price list`] : [];
+    },
+    build(records) {
+      return [{ table: "vendor_items", rows: records.map((r) => vendorItemRow({ id: uid(), vendorId: findVendor(r.Vendor)!, name: r.Item.trim(), unit: (r.Unit ?? "").trim(), rate: num(r.Rate) })) }];
+    },
+    diff(r) {
+      const vendorId = findVendor(r.Vendor);
+      const item = useSupply.getState().vendorItems.find((i) => i.vendorId === vendorId && norm(i.name) === norm(r.Item));
+      if (!item) return null;
+      const c = changeSet("vendor_items", item.id);
+      c.field("Unit", "unit", item.unit, text(r.Unit));
+      c.field("Rate", "rate", item.rate, cellNum(r.Rate), rupees);
+      return c.u;
+    },
+    rows: () => {
+      const { vendors, vendorItems } = useSupply.getState();
+      return vendorItems.map((i) => ({ Vendor: vendors.find((v) => v.id === i.vendorId)?.name ?? "", Item: i.name, Unit: i.unit, Rate: i.rate })).sort((a, b) => a.Vendor.localeCompare(b.Vendor) || a.Item.localeCompare(b.Item));
+    },
+  },
+  {
     key: "workers",
     label: "Workers",
     columns: [
@@ -653,6 +692,7 @@ const foodTypes = () => {
   const s = useStore.getState();
   return s.tenant.foodTypes?.length ? s.tenant.foodTypes : defaultFoodTypes(s.categories);
 };
+const findVendor = (name: string) => useSupply.getState().vendors.find((v) => norm(v.name) === norm(name))?.id;
 const findFoodType = (name: string) => foodTypes().find((t) => norm(t.name) === norm(name))?.id;
 
 /** CSV text, quoted for Excel; a leading byte-order mark keeps Gujarati and Hindi readable. */

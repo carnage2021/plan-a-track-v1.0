@@ -10,7 +10,7 @@ import puppeteer from "puppeteer-core";
 
 export const maxDuration = 60;
 
-const kinds = ["quote", "menu", "confirmation", "invoice", "credit", "bill", "itemised", "workorder", "small", "costing"];
+const kinds = ["quote", "menu", "confirmation", "invoice", "credit", "bill", "itemised", "workorder", "service", "small", "costing"];
 const langs = ["en", "hi", "gu"];
 
 function chromePath() {
@@ -31,6 +31,9 @@ export async function GET(request: Request) {
   const day = url.searchParams.get("day") ?? "";
   if (day && (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !["quote", "menu", "confirmation"].includes(kind))) return Response.json({ error: "Unknown day." }, { status: 400 });
   if (!kinds.includes(kind) || !/^[0-9a-f-]{36}$/i.test(id) || (lang && !langs.includes(lang))) return Response.json({ error: "Unknown document." }, { status: 400 });
+  // A vendor's work order for extra services is one event (id) and one vendor.
+  const vendor = url.searchParams.get("vendor") ?? "";
+  if ((kind === "service") !== !!vendor || (vendor && !/^[0-9a-f-]{36}$/i.test(vendor))) return Response.json({ error: "Unknown document." }, { status: 400 });
   const cookies = (request.headers.get("cookie") ?? "").split(/;\s*/).filter(Boolean).map((c) => {
     const i = c.indexOf("=");
     return { name: c.slice(0, i), value: c.slice(i + 1), domain: host.split(":")[0], path: "/" };
@@ -52,7 +55,7 @@ export async function GET(request: Request) {
   try {
     await browser.setCookie(...cookies);
     const page = await browser.newPage();
-    const query = new URLSearchParams({ ...(lang ? { lang } : {}), ...(day ? { day } : {}) }).toString();
+    const query = new URLSearchParams({ ...(lang ? { lang } : {}), ...(day ? { day } : {}), ...(vendor ? { vendor } : {}) }).toString();
     await page.goto(`${origin}/print/${kind}/${id}${query ? `?${query}` : ""}`, { waitUntil: "networkidle0", timeout: 45000 });
     await page.waitForFunction(() => !!document.body.dataset.ready, { timeout: 30000 });
     const state = await page.evaluate(() => document.body.dataset.ready);
@@ -60,7 +63,7 @@ export async function GET(request: Request) {
     if (state !== "1") return Response.json({ error: "Document not found." }, { status: 404 });
     const name = ((await page.title()) || `${kind}-${id.slice(0, 8)}`).replace(/[^\w.-]+/g, "-");
     // Event documents run edge to edge, with the business and page number at the foot of every page.
-    const events = ["quote", "menu", "confirmation", "bill", "itemised", "workorder", "costing"].includes(kind);
+    const events = ["quote", "menu", "confirmation", "bill", "itemised", "workorder", "service", "costing"].includes(kind);
     const footer = (await page.evaluate(() => document.body.dataset.footer ?? "")).replace(/[<>&"]/g, "");
     const pdf = await page.pdf({
       format: "A4",

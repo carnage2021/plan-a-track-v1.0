@@ -1,3 +1,5 @@
+import { vendorPrice } from "./vendor-services";
+import type { VendorItem } from "./supply-types";
 import { priceFunction, priceQuote } from "./pricing";
 import { dishGuests, functionNeed } from "./supply";
 import type { Asset, Challan, Ingredient, OutsourceOrder, RecipeLine, Vendor } from "./supply-types";
@@ -16,6 +18,8 @@ export interface CostContext {
   ingredients: Ingredient[];
   vendors: Vendor[];
   outsourceOrders: OutsourceOrder[];
+  /** Vendors' price lists: what extra services given to a vendor cost (0027) */
+  vendorItems?: VendorItem[];
   tasks: { orderId: string; functionId: string; title: string; role: string; workerId?: string; qty: number; rate: number; amount: number }[];
   trips: { orderId: string; functionId: string; cost: number; driverName: string }[];
   challans: Challan[];
@@ -100,6 +104,14 @@ export function costOrder(o: Order, c: CostContext): OrderCost {
       const qty = line ? line.qty : item.pricingType === "plate" ? dishGuests(fn, id) : 1;
       const rate = line ? line.agencyRate : item.agencyRate;
       vendors.push({ functionId: fn.id, itemId: id, dish: item.name, vendor: vendorName(ordered?.vendorId ?? item.agencyId), qty, rate, amount: qty * rate, estimated: !line });
+    }
+
+  // Extra lines given to a vendor (waiters, water, decoration): what the vendor is paid, from their price list.
+  for (const fn of o.functions)
+    for (const ch of fn.charges ?? []) {
+      if (!ch.vendorId) continue;
+      const r = vendorPrice(ch, c.vendorItems ?? [])?.rate ?? 0;
+      vendors.push({ functionId: fn.id, itemId: ch.id, dish: ch.label || "Extra service", vendor: vendorName(ch.vendorId), qty: ch.qty, rate: r, amount: ch.qty * r, estimated: false });
     }
 
   const labour: LabourLine[] = c.tasks.filter((x) => x.orderId === o.id).map((x) => ({ functionId: x.functionId, label: [x.title || x.role, x.qty > 1 ? `${x.qty} × ${x.rate}` : ""].filter(Boolean).join(" · "), amount: x.amount }));

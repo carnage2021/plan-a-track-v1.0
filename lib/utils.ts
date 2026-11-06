@@ -130,3 +130,9 @@ export function whatsappLink(phone: string, text: string) {
 export function missingFirst<T>(rows: T[], name: (r: T) => string, missing: (r: T) => boolean) {
   return [...rows].sort((a, b) => Number(missing(b)) - Number(missing(a)) || name(a).localeCompare(name(b), undefined, { sensitivity: "base" }));
 }
+
+/** Whether two names mean the same thing: equal, or one inside the other ("Dinner plate, steel", "Waiters"). */
+export const sameThing = (a: string, b: string) => {
+  const x = a.toLowerCase().replace(/[^a-z0-9]/g, ""), y = b.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return !!x && !!y && (x === y || (Math.min(x.length, y.length) >= 3 && (x.includes(y) || y.includes(x))));
+};

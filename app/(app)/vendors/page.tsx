@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Card, Chip, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
+import { VendorPriceList } from "@/components/supply/vendor-price-list";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { agencyScore, vendorBalance, vendorsFor } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
@@ -92,6 +93,7 @@ function VendorSheet({ vendor, onClose }: { vendor?: Vendor; onClose: () => void
           <TabsList>
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
             <TabsTrigger value="rates">{vendor.type === "food_agency" ? "Dishes" : "Rates"}</TabsTrigger>
+            <TabsTrigger value="prices">Price list</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
@@ -159,6 +161,7 @@ function VendorSheet({ vendor, onClose }: { vendor?: Vendor; onClose: () => void
               </>
             )}
           </TabsContent>
+          <TabsContent value="prices"><VendorPriceList vendor={vendor} /></TabsContent>
           <TabsContent value="profile">{profile}</TabsContent>
         </Tabs>
       )}

@@ -160,6 +160,8 @@ interface Actions {
   setOrderItemPax: (orderId: string, functionId: string, itemPax: Record<string, number>) => void;
   /** Dishes added to or taken off a confirmed order's event, with the main course rate when one is now needed */
   setOrderMenu: (orderId: string, functionId: string, itemIds: string[], priceImpact: number, mainRate?: number) => void;
+  /** Who supplies an extra line of a confirmed order's event, and what they are paid; the client's price stays */
+  setChargeVendor: (orderId: string, functionId: string, chargeId: string, vendorId?: string) => void;
   /** The client's referral code, made and saved the first time it is needed. */
   ensureReferralCode: (clientId: string) => string;
 }
@@ -694,6 +696,13 @@ export const useStore = create<Store>()(
         });
         // Agency orders not yet sent take the new dishes and drop the removed ones.
         useSupply.getState().syncOutsourceQty(orderId);
+      },
+      setChargeVendor: (orderId, functionId, chargeId, vendorId) => {
+        const fn = get().orders.find((o) => o.id === orderId)?.functions.find((f) => f.id === functionId);
+        if (!fn || !schema.charges) return;
+        const charges = (fn.charges ?? []).map((c) => (c.id === chargeId ? { ...c, vendorId } : c));
+        set((st) => ({ orders: st.orders.map((o) => (o.id === orderId ? { ...o, functions: o.functions.map((f) => (f.id === functionId ? { ...f, charges } : f)) } : o)) }));
+        background((sb) => run(sb.from("event_functions").update({ charges }).eq("id", functionId), "Saving the vendor"));
       },
       setRawOverrides: (orderId, overrides) => {
         set((s) => ({ orders: s.orders.map((o) => (o.id === orderId ? { ...o, rawOverrides: Object.keys(overrides).length ? overrides : undefined } : o)) }));

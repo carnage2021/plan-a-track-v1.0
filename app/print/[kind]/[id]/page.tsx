@@ -5,7 +5,8 @@ import * as React from "react";
 import { CreditNoteDocument, InvoiceDocument } from "@/components/billing/documents";
 import { useOrderMoney } from "@/components/shared/blocks";
 import { EventPdf } from "@/components/documents/event-pdf";
-import { OrderBillDoc, WorkOrderDoc } from "@/components/documents/order-docs";
+import { OrderBillDoc, ServiceWorkOrderDoc, WorkOrderDoc } from "@/components/documents/order-docs";
+import { serviceWorkOrders } from "@/lib/vendor-services";
 import { SmallQuote } from "@/components/documents/small-quote";
 import { CostingDoc } from "@/components/billing/order-costing";
 import { useStaff } from "@/lib/staff";
@@ -43,10 +44,14 @@ function Doc() {
   const invoice = useBilling((s) => s.invoices.find((i) => i.id === id));
   const credit = useBilling((s) => s.credits.find((c) => c.id === id));
   const quote = quotations.find((q) => q.id === id);
-  const order = orders.find((o) => o.id === id || o.id === invoice?.orderId || o.id === credit?.orderId || o.id === work?.orderId);
+  // A vendor's work order for extra services is found by its event (id) and the vendor.
+  const vendorId = params.get("vendor") ?? "";
+  const order = orders.find((o) => o.id === id || o.id === invoice?.orderId || o.id === credit?.orderId || o.id === work?.orderId || (kind === "service" && o.functions.some((f) => f.id === id)));
+  const vendorItems = useSupply((s) => s.vendorItems);
+  const service = kind === "service" && order ? serviceWorkOrders(order, vendorItems).find((w) => w.fn.id === id && w.vendorId === vendorId) : undefined;
   const clientLang = clients.find((c) => c.id === (quote?.clientId ?? order?.clientId))?.language;
   const lang = ((params.get("lang") as Locale | null) ?? clientLang ?? "en") as Locale;
-  const loaded = hydrated && signedIn && (["quote", "menu", "confirmation", "bill", "itemised", "small"].includes(kind) || (kind === "workorder" ? supplyReady : kind === "costing" ? supplyReady && billingReady && staffReady && opsReady && expensesReady : billingReady));
+  const loaded = hydrated && signedIn && (["quote", "menu", "confirmation", "bill", "itemised", "small"].includes(kind) || (kind === "workorder" || kind === "service" ? supplyReady : kind === "costing" ? supplyReady && billingReady && staffReady && opsReady && expensesReady : billingReady));
 
   let body: React.ReactNode = null;
   if (loaded) {
@@ -61,12 +66,13 @@ function Doc() {
       body = <SmallQuote data={{ ...src, clientName: clients.find((c) => c.id === src.clientId)?.name ?? "" }} />;
     } else if (kind === "costing" && order) body = <CostingDoc order={order} />;
     else if (kind === "workorder" && work && order) body = <WorkOrderDoc o={work} order={order} />;
+    else if (kind === "service" && service && order) body = <ServiceWorkOrderDoc order={order} functionId={id} vendorId={vendorId} />;
     else if (kind === "invoice" && invoice && order) body = <InvoiceDocument invoice={invoice} order={order} lang={lang} />;
     else if (kind === "credit" && credit && order) body = <CreditNoteDocument note={credit} order={order} lang={lang} />;
   }
 
   const found = body !== null;
-  const title = kind === "costing" ? `${order?.number ?? ""} Costing` : kind === "small" ? `${(quote ?? order)?.number ?? ""} Small quotation` : kind === "invoice" ? invoice?.number : kind === "credit" ? credit?.number : kind === "quote" ? quote?.number : kind === "workorder" ? work?.number : kind === "bill" || kind === "itemised" ? `${order?.number ?? ""} ${kind === "bill" ? "Bill" : "Itemised bill"}` : order?.number;
+  const title = kind === "costing" ? `${order?.number ?? ""} Costing` : kind === "small" ? `${(quote ?? order)?.number ?? ""} Small quotation` : kind === "invoice" ? invoice?.number : kind === "credit" ? credit?.number : kind === "quote" ? quote?.number : kind === "workorder" ? work?.number : kind === "service" ? service?.number : kind === "bill" || kind === "itemised" ? `${order?.number ?? ""} ${kind === "bill" ? "Bill" : "Itemised bill"}` : order?.number;
   // Tells the PDF route the page is finished: data in, fonts and photos loaded.
   React.useEffect(() => {
     if (hydrated && !signedIn) document.body.dataset.ready = "signedout";

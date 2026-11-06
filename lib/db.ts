@@ -38,12 +38,14 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
  * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
  * added the client's second phone and the coordinator. */
-export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false, dishGuests: false, categoryPrices: false, recipeBook: false };
+export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false, dishGuests: false, categoryPrices: false, recipeBook: false, vendorItems: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
   // Recipes kept for dishes not on the menu, or waiting for raw materials (0026)
   schema.recipeBook = schema.supply && !(await sb.from("recipe_book").select("id").limit(1)).error;
+  // Vendors' price lists (0027)
+  schema.vendorItems = schema.supply && !(await sb.from("vendor_items").select("id").limit(1)).error;
   return schema.supply;
 }
 

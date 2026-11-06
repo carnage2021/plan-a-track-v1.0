@@ -8,6 +8,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { sameThing } from "@/lib/utils";
 import { starterPhotos } from "@/lib/starter-photos";
 import type { SamplePhoto } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -19,11 +20,7 @@ export const photoKinds: { id: SamplePhoto["kind"]; label: string }[] = [
 ];
 
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-/** Whether two names mean the same thing: equal, or one inside the other ("Dinner plate, steel", "Waiters"). */
-export const sameThing = (a: string, b: string) => {
-  const x = key(a), y = key(b);
-  return !!x && !!y && (x === y || (Math.min(x.length, y.length) >= 3 && (x.includes(y) || y.includes(x))));
-};
+export { sameThing };
 
 /** The photo for a staff role, cutlery item or decoration line: the same name first, then a close one. */
 export function findPhoto(photos: SamplePhoto[], kind: SamplePhoto["kind"], name: string) {

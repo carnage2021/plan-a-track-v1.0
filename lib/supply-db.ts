@@ -17,6 +17,7 @@ import type {
   Vendor,
   VendorBill,
   VendorPayment,
+  VendorItem,
   VendorRate,
 } from "./supply-types";
 
@@ -75,12 +76,16 @@ export interface SupplyData {
   challans: Challan[];
   /** The Recipes page's recipes (0026); empty until that update is run */
   book: BookRecipe[];
+  /** Vendors' price lists (0027); empty until that update is run */
+  vendorItems: VendorItem[];
 }
+
+export const vendorItemRow = (v: VendorItem): Row => ({ id: v.id, vendor_id: v.vendorId, name: v.name, unit: v.unit, rate: v.rate });
 
 export const bookRow = (r: BookRecipe): Row => ({ id: r.id, name: r.name, item_id: r.itemId ?? null, recipe_base: r.recipeBase, buffer_pct: r.bufferPct, lines: r.lines, updated_at: new Date().toISOString() });
 const bookFrom = (r: Row): BookRecipe => ({ id: r.id, name: r.name, itemId: r.item_id ?? undefined, recipeBase: r.recipe_base, bufferPct: Number(r.buffer_pct), lines: Array.isArray(r.lines) ? r.lines.map((l: Row) => ({ name: String(l.name ?? ""), qty: Number(l.qty) || 0, unit: String(l.unit ?? ""), ...(l.ingredientId ? { ingredientId: String(l.ingredientId) } : {}) })) : [], updatedAt: day(r.updated_at) });
 
-export const emptySupply: SupplyData = { book: [], ingredients: [], recipes: [], stores: [], movements: [], vendors: [], vendorRates: [], purchaseOrders: [], bills: [], vendorPayments: [], outsourceOrders: [], assets: [], challans: [] };
+export const emptySupply: SupplyData = { book: [], vendorItems: [], ingredients: [], recipes: [], stores: [], movements: [], vendors: [], vendorRates: [], purchaseOrders: [], bills: [], vendorPayments: [], outsourceOrders: [], assets: [], challans: [] };
 
 export async function loadSupply(sb: SB): Promise<SupplyData> {
   const all = async (table: string, order?: string, ascending = true) => {
@@ -106,8 +111,10 @@ export async function loadSupply(sb: SB): Promise<SupplyData> {
     all("challan_lines"),
   ]);
   const book = schema.recipeBook ? await all("recipe_book", "name") : [];
+  const vendorItems = schema.vendorItems ? await all("vendor_items", "name") : [];
   return {
     book: book.map(bookFrom),
+    vendorItems: vendorItems.map((v) => ({ id: v.id, vendorId: v.vendor_id, name: v.name, unit: v.unit ?? "", rate: Number(v.rate) })),
     ingredients: ingredients.map((i) => ({ id: i.id, name: i.name, unit: i.unit, section: i.section, reorderLevel: Number(i.reorder_level), lastRate: Number(i.last_rate), location: i.location, expiresOn: i.expires_on ? day(i.expires_on) : undefined })),
     recipes: recipes.map((r) => ({ itemId: r.item_id, ingredientId: r.ingredient_id, qty: Number(r.qty) })),
     // A branch sees its own stores (and those with no branch), and only the stock movements in them.

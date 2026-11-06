@@ -183,7 +183,7 @@ function Import() {
     <>
       <PageHeader title="Import and export" subtitle="Bring your lists in from Excel, check every row before it is saved, and take any list back out." />
       <div className="flex flex-wrap gap-2">
-        {lists.map((l) => <Chip key={l.key} active={!recipesOpen && l.key === list.key} onClick={() => pickList(l)}>{l.label}</Chip>)}
+        {lists.filter((l) => !l.available || l.available()).map((l) => <Chip key={l.key} active={!recipesOpen && l.key === list.key} onClick={() => pickList(l)}>{l.label}</Chip>)}
         <Chip active={recipesOpen} onClick={() => { setRecipesOpen(true); setParsed(null); }}>Recipes</Chip>
       </div>
 

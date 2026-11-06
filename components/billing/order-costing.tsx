@@ -39,6 +39,7 @@ export function useOrderCost(order: Order): OrderCost | null {
       ingredients: supply.ingredients,
       vendors: supply.vendors,
       outsourceOrders: supply.outsourceOrders,
+      vendorItems: supply.vendorItems,
       tasks: tasks.map((t) => ({ orderId: t.orderId, functionId: t.functionId, title: t.title, role: t.role, workerId: t.workerId, qty: t.qty, rate: t.rate, amount: taskAmount(t, workers) })),
       trips,
       challans: supply.challans,
@@ -60,7 +61,7 @@ export function CostingTab({ order }: { order: Order }) {
   const { totals, gaps } = cost;
   const parts = [
     { key: "material", label: "Raw material", icon: Leaf, amount: totals.material, help: "Recipes at the latest purchase rate, for each dish's kitchen guests" },
-    { key: "vendors", label: "Third-party food", icon: ChefHat, amount: totals.vendors, help: "Agency orders, or the menu at each dish's agency rate" },
+    { key: "vendors", label: "Third-party food and services", icon: ChefHat, amount: totals.vendors, help: "Agency orders, or the menu at each dish's agency rate, and extra services given to vendors" },
     { key: "labour", label: "Staff", icon: Users, amount: totals.labour, help: "Tasks planned in Staff and Tasks" },
     { key: "transport", label: "Transport", icon: Truck, amount: totals.transport, help: "Trips on the dispatch board" },
     { key: "rentals", label: "Cutlery hire and breakage", icon: IndianRupee, amount: totals.rentals, help: "From the cutlery challans" },
@@ -185,7 +186,7 @@ function VendorTable({ cost }: { cost: OrderCost }) {
   const fnName = (id: string) => cost.events.find((e) => e.fn.id === id)?.fn.name ?? "";
   return (
     <Card className="overflow-hidden">
-      <CardTitle action={<span className="tnum text-sm font-semibold">{money(cost.totals.vendors)}</span>}>Third-party food · {cost.vendors.length} dishes</CardTitle>
+      <CardTitle action={<span className="tnum text-sm font-semibold">{money(cost.totals.vendors)}</span>}>Third-party food and services · {cost.vendors.length} lines</CardTitle>
       <div className="overflow-x-auto">
         <table className="tnum w-full min-w-[640px] text-sm">
           <thead className="bg-surface-muted text-left text-xs text-text-muted"><tr>{["Dish", "Vendor", "Event", "Quantity", "Agency rate", "Amount"].map((h, i) => <th key={h} className={cn("px-4 py-2 font-medium", i > 2 && "text-right")}>{h}</th>)}</tr></thead>
@@ -227,7 +228,7 @@ export function CostingDoc({ order }: { order: Order }) {
   const docs = useDocs();
   if (!cost) return null;
   const th = "py-1.5 text-[10px] font-medium uppercase tracking-wide text-[#6b6158]";
-  const parts: [string, number][] = [["Raw material", cost.totals.material], ["Third-party food", cost.totals.vendors], ["Staff", cost.totals.labour], ["Transport", cost.totals.transport], ["Cutlery hire and breakage", cost.totals.rentals], ["Other expenses", cost.totals.expenses]];
+  const parts: [string, number][] = [["Raw material", cost.totals.material], ["Third-party food and services", cost.totals.vendors], ["Staff", cost.totals.labour], ["Transport", cost.totals.transport], ["Cutlery hire and breakage", cost.totals.rentals], ["Other expenses", cost.totals.expenses]];
   const fnName = (id: string) => cost.events.find((e) => e.fn.id === id)?.fn.name ?? "";
   return (
     <article className="bg-white text-[12px] leading-relaxed text-[#1f1a17]" style={docStyle(tenant.brandColor, docs.theme)}>
@@ -262,7 +263,7 @@ export function CostingDoc({ order }: { order: Order }) {
       )}
       {cost.vendors.length > 0 && (
         <section className="px-8 py-3">
-          <p className="mb-1 font-heading text-[13px] font-semibold">Third-party food · {money(cost.totals.vendors)}</p>
+          <p className="mb-1 font-heading text-[13px] font-semibold">Third-party food and services · {money(cost.totals.vendors)}</p>
           <table className="tnum w-full">
             <thead><tr className="border-b text-left">{["Dish", "Vendor", "Event", "Quantity", "Rate", "Amount"].map((h, i) => <th key={h} className={cn(th, i > 2 && "text-right")}>{h}</th>)}</tr></thead>
             <tbody className="divide-y">{cost.vendors.map((l) => <tr key={`${l.functionId}-${l.itemId}`} className="break-inside-avoid"><td className="py-0.5">{l.dish}</td><td className="py-0.5">{l.vendor}</td><td className="py-0.5">{fnName(l.functionId)}</td><td className="py-0.5 text-right">{num(l.qty)}</td><td className="py-0.5 text-right">{l.rate ? rate(l.rate) : "No rate"}</td><td className="py-0.5 text-right">{money(l.amount)}</td></tr>)}</tbody>

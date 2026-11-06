@@ -13,6 +13,7 @@ import { useSupply } from "@/lib/supply-store";
 import type { OutsourceOrder } from "@/lib/supply-types";
 import type { EventFunction, Locale, MenuItem, Order } from "@/lib/types";
 import { fmtDate, fmtTime, money, num, rate } from "@/lib/utils";
+import { serviceWorkOrders } from "@/lib/vendor-services";
 
 const muted = "text-[#6b6158]";
 const label = "text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6b6158]";
@@ -68,6 +69,65 @@ export function WorkOrderDoc({ o, order }: { o: OutsourceOrder; order: Order }) 
         <ul className={`mt-4 list-disc space-y-1 pl-5 text-xs ${muted}`}>
           <li>Deliver fresh, packed and labelled with the work order number {o.number}.</li>
           <li>Please confirm on WhatsApp when you accept, and again when it leaves for the venue.</li>
+          {vendor?.terms && <li>Payment terms: {vendor.terms}</li>}
+        </ul>
+      </section>
+      <footer className="grid grid-cols-2 gap-10 px-8 pb-8 pt-10 text-xs text-[#6b6158]">
+        <div className="border-t pt-1">Received and accepted by {vendor?.name}</div>
+        <div className="border-t pt-1 text-right">For {tenant.name} · Authorised signatory</div>
+      </footer>
+    </article>
+  );
+}
+
+/**
+ * The work order a vendor receives for the extra lines they supply on one event (waiters, water, cutlery, decoration):
+ * what, how many, when and where, at the vendor's rate. Like the agency work order, it never shows the client.
+ */
+export function ServiceWorkOrderDoc({ order, functionId, vendorId }: { order: Order; functionId: string; vendorId: string }) {
+  const tenant = useStore((s) => s.tenant);
+  const manager = useStore((s) => s.users.find((u) => u.id === order.managerId));
+  const vendor = useSupply((s) => s.vendors.find((v) => v.id === vendorId));
+  const vendorItems = useSupply((s) => s.vendorItems);
+  const docs = useDocs();
+  const w = serviceWorkOrders(order, vendorItems).find((x) => x.fn.id === functionId && x.vendorId === vendorId);
+  if (!w) return null;
+  const fn = w.fn;
+  const contact = [manager?.name, manager?.phone].filter(Boolean).join(", ");
+  return (
+    <article className="bg-white text-[12.5px] leading-relaxed text-[#1f1a17]" style={docStyle(tenant.brandColor, docs.theme)}>
+      <DocHeader title="Work order" lines={[w.number, `Date: ${fmtDate(new Date().toISOString().slice(0, 10))}`, order.number]} contact />
+      <section className="grid grid-cols-2 gap-6 border-b px-8 py-4">
+        <div>
+          <p className={label}>To</p>
+          <p className="font-heading text-base font-semibold">{vendor?.name}</p>
+          {vendor?.phone && <p className={`tnum ${muted}`}>{vendor.phone}</p>}
+          {vendor?.gstin && <p className={`tnum ${muted}`}>GSTIN {vendor.gstin}</p>}
+        </div>
+        <div>
+          <p className={label}>Report at</p>
+          <p className="font-medium">{fmtDate(fn.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}, by {fmtTime(fn.time)}</p>
+          <p className={muted}>{fn.venue || "Venue to be confirmed"}</p>
+          {contact && <p className={`tnum ${muted}`}>Contact on site: {contact}</p>}
+        </div>
+      </section>
+      <section className="border-b px-8 py-3">
+        <p className={label}>For the event</p>
+        <p className="tnum"><span className="font-medium">{fn.name}</span><span className={muted}> · {fmtDate(fn.date, { weekday: "short", day: "numeric", month: "short" })} · {timeRange(fn)} · {num(fn.pax)} guests</span></p>
+      </section>
+      <section className="px-8 py-4">
+        <table className="tnum w-full">
+          <thead><tr className={`border-b text-left text-[10px] uppercase tracking-wide ${muted}`}><th className="py-1.5 font-medium">#</th><th className="py-1.5 font-medium">Item</th><th className="py-1.5 text-right font-medium">Quantity</th><th className="py-1.5 text-right font-medium">Rate</th><th className="py-1.5 text-right font-medium">Amount</th></tr></thead>
+          <tbody className="divide-y">
+            {w.lines.map((l, i) => (
+              <tr key={l.charge.id}><td className="py-2 pr-2">{i + 1}</td><td className="py-2 font-medium">{l.charge.label}</td><td className="py-2 text-right">{num(l.charge.qty)}{l.price?.unit ? ` ${l.price.unit}` : ""}</td><td className="py-2 text-right">{l.price ? rate(l.price.rate) : "As agreed"}</td><td className="py-2 text-right">{l.price ? rate(l.amount) : "-"}</td></tr>
+            ))}
+          </tbody>
+          <tfoot><tr className="border-t-2 border-brand"><td className="py-2 font-heading text-[15px] font-semibold" colSpan={4}>Total{w.unpriced ? <span className={`ml-2 text-xs font-normal ${muted}`}>(plus {w.unpriced === 1 ? "one line" : `${w.unpriced} lines`} as agreed)</span> : null}</td><td className="py-2 text-right font-heading text-lg font-bold">{money(w.total)}</td></tr></tfoot>
+        </table>
+        <ul className={`mt-4 list-disc space-y-1 pl-5 text-xs ${muted}`}>
+          <li>Be at the venue by {fmtTime(fn.time)} with everything above, and quote the work order number {w.number}.</li>
+          <li>Please confirm on WhatsApp when you accept, and again when you reach the venue.</li>
           {vendor?.terms && <li>Payment terms: {vendor.terms}</li>}
         </ul>
       </section>

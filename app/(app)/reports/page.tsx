@@ -63,7 +63,7 @@ const within = (d: string, from: string, to: string) => d >= from && d <= to;
 
 function useEventPL(orders: Order[]) {
   const { items, packages, tenant, clients, users } = useStore();
-  const { recipes, ingredients, vendors, outsourceOrders, challans, assets } = useSupply();
+  const { recipes, ingredients, vendors, outsourceOrders, challans, assets, vendorItems } = useSupply();
   const { tasks, workers } = useStaff();
   const trips = useOps((s) => s.trips);
   const expenses = useExpenses((s) => s.expenses);
@@ -71,7 +71,7 @@ function useEventPL(orders: Order[]) {
   return React.useMemo(() => {
     // The same costing as each order's Costing tab, so the report and the order always agree.
     const base = {
-      items, packages, slabs: tenant.slabs, recipes, ingredients, vendors, outsourceOrders, challans, assets, trips,
+      items, packages, slabs: tenant.slabs, recipes, ingredients, vendors, outsourceOrders, vendorItems, challans, assets, trips,
       tasks: tasks.map((t) => ({ orderId: t.orderId, functionId: t.functionId, title: t.title, role: t.role, workerId: t.workerId, qty: t.qty, rate: t.rate, amount: taskAmount(t, workers) })),
       expenses: expenses.map((e) => ({ orderId: e.orderId, category: e.category, amount: e.amount, paidTo: e.paidTo, note: e.note })),
     };
@@ -82,7 +82,7 @@ function useEventPL(orders: Order[]) {
       const breakage = c.other.filter((l) => l.kind === "breakage").reduce((s, l) => s + l.amount, 0);
       return { o, client: clients.find((x) => x.id === o.clientId)?.name ?? "", manager: users.find((u) => u.id === o.managerId)?.name ?? "", date: first?.date ?? "", pax: t.pax, revenue: c.revenue, material: c.totals.material, outsourced: c.totals.vendors, labour: c.totals.labour, transport: c.totals.transport, rentals: c.totals.rentals - breakage, breakage, other: c.totals.expenses, cost: c.totals.cost, profit: c.profit, margin: c.margin };
     });
-  }, [orders, items, packages, tenant.slabs, clients, users, recipes, ingredients, vendors, outsourceOrders, challans, assets, tasks, workers, trips, expenses, credits]);
+  }, [orders, items, packages, tenant.slabs, clients, users, recipes, ingredients, vendors, outsourceOrders, vendorItems, challans, assets, tasks, workers, trips, expenses, credits]);
 }
 
 function EventPL({ orders }: { orders: Order[] }) {

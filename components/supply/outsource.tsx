@@ -19,6 +19,7 @@ import { cn, fmtDate, fmtTime, isoDate, money, num, whatsappLink } from "@/lib/u
 import { Num } from "./common";
 import { logWhatsApp } from "@/lib/messages";
 import { DownloadPdf } from "@/components/documents/doc-actions";
+import { ServiceVendors } from "./service-vendors";
 
 const flow: OutsourceStatus[] = ["draft", "sent", "accepted", "preparing", "dispatched", "delivered"];
 const label: Record<OutsourceStatus, string> = { draft: "Draft", sent: "Sent", accepted: "Accepted", preparing: "In preparation", dispatched: "Dispatched", delivered: "Delivered", cancelled: "Cancelled" };
@@ -156,7 +157,12 @@ export function AgenciesTab({ order }: { order: Order }) {
         <p className="flex items-start gap-2 rounded-lg bg-warning/10 p-3 text-xs text-warning"><AlertTriangle className="size-4 shrink-0" strokeWidth={1.75} />{unmapped.map((i) => i.name).join(", ")} {unmapped.length === 1 ? "is" : "are"} outsourced but no agency is chosen. Open the dish on the Menu page and pick one.</p>
       )}
       {outsourced.length === 0 ? (
-        <EmptyState icon={ChefHat} title="Nothing is outsourced on this order" help="Every dish is made in-house. Mark a dish as outsourced on the Menu page to send it to an agency." />
+        // Extra services can still go to vendors, below; the empty state only when there is nothing at all.
+        order.functions.some((f) => (f.charges ?? []).length) ? (
+          <p className="rounded-xl border border-dashed p-4 text-sm text-text-muted">No dish on this order is outsourced: every dish is made in-house. Mark a dish as outsourced on the Menu page to send it to an agency.</p>
+        ) : (
+          <EmptyState icon={ChefHat} title="Nothing is outsourced on this order" help="Every dish is made in-house. Mark a dish as outsourced on the Menu page to send it to an agency, or add staff, cutlery or other lines in Step 3 and give them to a vendor." />
+        )
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -167,6 +173,7 @@ export function AgenciesTab({ order }: { order: Order }) {
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{mine.map((o) => <OutsourceCard key={o.id} o={o} order={order} />)}</div>
         </>
       )}
+      <ServiceVendors order={order} readOnly={order.status === "cancelled" || order.status === "completed"} />
       {client?.type === "agency" && (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div className="min-w-0"><h3 className="font-heading text-base font-semibold">Partner commission</h3><p className="text-sm text-text-muted">{client.name} booked you as their caterer. Commission is taken off your margin, not shown to their client.</p></div>

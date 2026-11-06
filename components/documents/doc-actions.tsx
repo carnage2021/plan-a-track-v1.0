@@ -8,7 +8,7 @@ import { docLanguages } from "@/lib/doc-i18n";
 import type { EventFunction, Locale } from "@/lib/types";
 import { cn, fmtDate } from "@/lib/utils";
 
-export type PdfKind = "quote" | "menu" | "confirmation" | "invoice" | "credit" | "bill" | "itemised" | "workorder" | "small" | "costing";
+export type PdfKind = "quote" | "menu" | "confirmation" | "invoice" | "credit" | "bill" | "itemised" | "workorder" | "service" | "small" | "costing";
 
 /** English, Hindi or Gujarati for the document; starts in the client's own language. */
 export function DocLangPicker({ value, onChange, className }: { value: Locale; onChange: (l: Locale) => void; className?: string }) {
@@ -22,12 +22,12 @@ export function DocLangPicker({ value, onChange, className }: { value: Locale; o
 }
 
 /** Saves the document as a real PDF file, made on the server in the chosen language. */
-export function DownloadPdf({ kind, id, lang, variant = "secondary", day, label = "Download PDF", className }: { kind: PdfKind; id: string; lang: Locale; variant?: "primary" | "secondary" | "ghost"; day?: string; label?: string; className?: string }) {
+export function DownloadPdf({ kind, id, lang, variant = "secondary", day, vendor, label = "Download PDF", className }: { kind: PdfKind; id: string; lang: Locale; variant?: "primary" | "secondary" | "ghost"; day?: string; /** A vendor's work order for extra services: the event is `id` */ vendor?: string; label?: string; className?: string }) {
   const [busy, setBusy] = React.useState(false);
   const download = async () => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/pdf?kind=${kind}&id=${id}&lang=${lang}${day ? `&day=${day}` : ""}`);
+      const res = await fetch(`/api/pdf?kind=${kind}&id=${id}&lang=${lang}${day ? `&day=${day}` : ""}${vendor ? `&vendor=${vendor}` : ""}`);
       if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? "The PDF could not be made.");
       const name = res.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? `${kind}.pdf`;
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await res.blob()), download: name });

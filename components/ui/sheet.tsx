@@ -64,12 +64,15 @@ export function Modal({ open, onOpenChange, title, description, children, footer
         <Dialog.Overlay className="fixed inset-0 z-40 animate-fade bg-text/40 dark:bg-bg/70 print:hidden" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 animate-fade rounded-2xl bg-surface p-6 shadow-sheet focus:outline-none"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 animate-fade flex-col rounded-2xl bg-surface shadow-sheet focus:outline-none"
         >
-          <Dialog.Title className="font-heading text-lg font-semibold">{title}</Dialog.Title>
-          {description && <p className="mt-1 text-sm text-text-muted">{description}</p>}
-          {children && <div className="mt-4">{children}</div>}
-          {footer && <div className="mt-6 flex justify-end gap-2">{footer}</div>}
+          {/* A tall dialog (a category with its icons and food types) scrolls inside; its title and buttons stay in view. */}
+          <div className="shrink-0 px-6 pt-6">
+            <Dialog.Title className="font-heading text-lg font-semibold">{title}</Dialog.Title>
+            {description && <p className="mt-1 text-sm text-text-muted">{description}</p>}
+          </div>
+          {children && <div className="mt-4 min-h-0 flex-1 overflow-y-auto px-6 pb-1">{children}</div>}
+          {footer ? <div className="flex shrink-0 justify-end gap-2 px-6 pb-6 pt-4">{footer}</div> : <div className="h-6 shrink-0" />}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

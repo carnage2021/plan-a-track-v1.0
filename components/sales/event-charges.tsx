@@ -14,6 +14,7 @@ import { assetRequirement } from "@/lib/supply";
 import { useSupply } from "@/lib/supply-store";
 import type { Asset } from "@/lib/supply-types";
 import type { EventCharge, EventFunction, QuoteDraft, SamplePhoto } from "@/lib/types";
+import { VendorPicker } from "./vendor-picker";
 import { findPhoto, NoPhotosYet, PhotoStrip, PhotoThumb, SamplePhotoGallery, sameThing, ShowPhotosButton } from "./sample-photos";
 import { cn, fmtDate, money, num, rate, uid } from "@/lib/utils";
 
@@ -94,7 +95,7 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
       <div className="flex flex-wrap items-end justify-between gap-2 px-1">
         <div>
           <h2 className="font-heading text-base font-semibold">Staff, cutlery and charges for each event</h2>
-          <p className="text-xs text-text-muted">Prices come from your rates in Settings and Cutlery; change any line for this booking only.</p>
+          <p className="text-xs text-text-muted">Prices come from your rates in Settings and Cutlery; change any line for this booking only. Under Supplied by, give a line to a third-party vendor: their work order is made for the order.</p>
         </div>
         <ShowPhotosButton onClick={() => setGallery({ open: true })} />
       </div>
@@ -149,7 +150,8 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
                         )}
                         {price.fixed > 0 && <tr><td className="py-2 text-text-muted" colSpan={3}>Counters and add-ons</td><td className="py-2 text-right">{money(price.fixed)}</td><td /></tr>}
                         {charges.map((c) => (
-                          <tr key={c.id}>
+                          <React.Fragment key={c.id}>
+                          <tr className="border-b-0">
                             <td className="py-1.5 pr-2">
                               {c.kind === "other" ? (
                                 <span className="flex items-center gap-2">
@@ -165,6 +167,9 @@ export function EventCharges({ draft, setDraft }: { draft: QuoteDraft; setDraft:
                             <td className="py-1.5 text-right">{rate(chargeAmount(c))}</td>
                             <td className="py-1.5 text-right"><Button variant="ghost" size="icon" aria-label={`Remove ${c.label || "charge"} from ${f.name}`} onClick={() => setCharges(f.id, (list) => list.filter((x) => x.id !== c.id))}><Trash2 strokeWidth={1.75} /></Button></td>
                           </tr>
+                          {/* Who supplies the line: in-house, or a vendor with what they are paid (their work order). */}
+                          <tr className="!border-t-0"><td colSpan={5} className="pb-2 pl-6"><VendorPicker inline charge={c} onChange={(vendorId) => patch(f.id, c.id, { vendorId })} /></td></tr>
+                          </React.Fragment>
                         ))}
                       </tbody>
                       <tfoot>

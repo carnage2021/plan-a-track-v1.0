@@ -31,6 +31,7 @@ import { Requirement } from "@/components/supply/requirement";
 import { priceFunction, priceQuote } from "@/lib/pricing";
 import { useBilling } from "@/lib/billing";
 import { ChangeMenu } from "@/components/sales/change-menu";
+import { serviceWorkOrders } from "@/lib/vendor-services";
 import { useSupply } from "@/lib/supply-store";
 import { referrerOf, useCurrentUser, useStore } from "@/lib/store";
 import type { EventFunction, Order, Payment, Locale } from "@/lib/types";
@@ -115,6 +116,8 @@ function OrderView({ order }: { order: Order }) {
   // Filtered outside the selector: a selector that returns a new array each time makes React render forever.
   const allOutsource = useSupply((s) => s.outsourceOrders);
   const workOrders = React.useMemo(() => allOutsource.filter((o) => o.orderId === order.id && o.status !== "cancelled"), [allOutsource, order.id]);
+  const vendorItems = useSupply((s) => s.vendorItems);
+  const serviceWorks = serviceWorkOrders(order, vendorItems);
   const agencyCount = workOrders.length;
   const vendors = useSupply((s) => s.vendors);
   const [paxFn, setPaxFn] = React.useState<EventFunction | null>(null);
@@ -360,6 +363,14 @@ function OrderView({ order }: { order: Order }) {
               <p className="mb-2 text-xs font-medium text-text-muted">Menu card, without prices</p>
               <PdfDownloads kind="menu" id={order.id} lang={docLang} functions={order.functions} />
             </div>
+            {serviceWorks.length > 0 && (
+              <div className="border-t pt-3">
+                <p className="mb-2 text-xs font-medium text-text-muted">Work orders for extra services: staff, cutlery, water and more (for the vendor only, never the client)</p>
+                <div className="flex flex-wrap gap-2">
+                  {serviceWorks.map((w) => <DownloadPdf key={`${w.fn.id}-${w.vendorId}`} kind="service" id={w.fn.id} vendor={w.vendorId} lang="en" variant="ghost" label={`${w.number} · ${vendors.find((v) => v.id === w.vendorId)?.name ?? "Vendor"} · ${w.fn.name}`} />)}
+                </div>
+              </div>
+            )}
             {workOrders.length > 0 && (
               <div className="border-t pt-3">
                 <p className="mb-2 text-xs font-medium text-text-muted">Work orders for third-party agencies (for the vendor only, never the client)</p>

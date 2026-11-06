@@ -54,6 +54,15 @@ export interface Vendor {
   notes: string;
 }
 
+/** One line of a vendor's price list: a service, product or dish they supply and its rate (0027). */
+export interface VendorItem {
+  id: string;
+  vendorId: string;
+  name: string;
+  unit: string;
+  rate: number;
+}
+
 export interface VendorRate {
   vendorId: string;
   ingredientId: string;

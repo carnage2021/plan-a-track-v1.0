@@ -22,7 +22,7 @@ import { byDay, EventCharges } from "./event-charges";
 type SetDraft = (patch: Partial<QuoteDraft> | ((d: QuoteDraft) => Partial<QuoteDraft>)) => void;
 
 /** Step 1: who the client is and which functions the event has. */
-export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft; setDraft: SetDraft; showErrors?: boolean }) {
+export function DetailsForm({ draft, setDraft, showErrors, noClient }: { draft: QuoteDraft; setDraft: SetDraft; showErrors?: boolean; /** Cost Calculator: the event and its services only, no client */ noClient?: boolean }) {
   const clients = useStore((s) => s.clients);
   const users = useStore((s) => s.users);
   const eventTypes = useEventTypes();
@@ -45,8 +45,9 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
   return (
     <div className="space-y-4">
       <Card className="p-4 md:p-5">
-        <h2 className="font-heading text-base font-semibold">Client</h2>
+        <h2 className="font-heading text-base font-semibold">{noClient ? "Event" : "Client"}</h2>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {!noClient && <>
           <Field label="Client name" error={showErrors && !draft.clientName.trim() ? "Enter the client's name" : ""} className="relative">
             <Input value={draft.clientName} onChange={(e) => setDraft({ clientName: e.target.value, clientId: undefined })} placeholder="Rajesh Shah" autoComplete="off" />
             {suggestions.length > 0 && (
@@ -64,6 +65,7 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
           <Field label="Mobile number" error={showErrors && draft.clientPhone.replace(/\D/g, "").length < 10 ? "Enter a 10-digit mobile number" : ""}>
             <Input inputMode="tel" value={draft.clientPhone} onChange={(e) => setDraft({ clientPhone: e.target.value })} placeholder="98250 12345" />
           </Field>
+          </>}
           <Field label="Event type">
             <Select creatable value={draft.eventType} onChange={(e) => setDraft({ eventType: e.target.value })}>{withCurrent(eventTypes, draft.eventType).map((t) => <option key={t}>{t}</option>)}</Select>
           </Field>
@@ -76,15 +78,15 @@ export function DetailsForm({ draft, setDraft, showErrors }: { draft: QuoteDraft
             <Input type="date" value={end || start} min={start || isoDate(new Date())} onChange={(e) => setDates(start, e.target.value)} />
           </Field>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {!noClient && <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <ContactFields
             value={{ email: draft.clientEmail, altPhone: draft.clientAltPhone, address: draft.clientAddress, coordinatorId: draft.coordinatorId, coordinator: draft.coordinator }}
             onChange={(p) => setDraft({ ...("email" in p ? { clientEmail: p.email } : {}), ...("altPhone" in p ? { clientAltPhone: p.altPhone } : {}), ...("address" in p ? { clientAddress: p.address } : {}), ...("coordinatorId" in p ? { coordinatorId: p.coordinatorId } : {}), ...("coordinator" in p ? { coordinator: p.coordinator } : {}) })}
             users={users}
             ready={contactsReady}
           />
-        </div>
-        {match && <p className="mt-2 flex items-center gap-2 text-xs text-text-muted">Existing client{match.tags.map((t) => <Badge key={t} tone={t === "vip" ? "gold" : "info"}>{t === "vip" ? "VIP" : "Repeat client"}</Badge>)}</p>}
+        </div>}
+        {!noClient && match && <p className="mt-2 flex items-center gap-2 text-xs text-text-muted">Existing client{match.tags.map((t) => <Badge key={t} tone={t === "vip" ? "gold" : "info"}>{t === "vip" ? "VIP" : "Repeat client"}</Badge>)}</p>}
       </Card>
 
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">

@@ -22,6 +22,7 @@ import type { Order, QuoteDraft } from "@/lib/types";
 import { useUi } from "@/lib/ui";
 import { fmtDate, money, num, uid, whatsappLink } from "@/lib/utils";
 import { logWhatsApp } from "@/lib/messages";
+import { useEstimates } from "@/lib/estimates";
 
 const steps = ["Client and event", "Menu", "Extras and total", "Confirm"];
 
@@ -65,6 +66,8 @@ function BookingFlow() {
   const params = useSearchParams();
   const enquiryId = params.get("enquiry") ?? undefined;
   const reviseId = params.get("revise") ?? undefined;
+  // Opened from the Cost Calculator: its events, menu and extras fill in; the client is still to add.
+  const estimateId = params.get("estimate") ?? undefined;
   // A date picked on the calendar starts a new booking on that day.
   const startOn = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") ?? "") ? params.get("date")! : undefined;
   const user = useCurrentUser();
@@ -87,14 +90,21 @@ function BookingFlow() {
       const functions = enquiry.services?.length ? enquiry.services.map((f) => ({ ...f, id: uid(), itemIds: [] })) : [blankFunction("", enquiry.date, enquiry.pax, enquiry.venue)];
       return { ...blankDraft(), clientId: enquiry.clientId, clientName: c?.name ?? "", clientPhone: c?.phone ?? "", clientEmail: c?.email ?? "", clientAltPhone: c?.altPhone ?? "", clientAddress: c?.address ?? "", coordinatorId: enquiry.coordinatorId, coordinator: enquiry.coordinator, eventType: enquiry.eventType, enquiryId, functions, startDate: enquiry.date, endDate: enquiry.endDate ?? enquiry.date, step: 0 };
     }
+    const estimate = useEstimates.getState().list.find((e) => e.id === estimateId);
+    if (estimate) {
+      // Fresh ids, so the same calculation can be booked more than once.
+      const functions = estimate.draft.functions.map((f) => ({ ...f, id: uid(), charges: f.charges?.map((c) => ({ ...c, id: uid() })) }));
+      const span = functions.map((f) => f.date).filter(Boolean).sort();
+      return { ...blankDraft(), eventType: estimate.draft.eventType, functions, extras: estimate.draft.extras.map((e) => ({ ...e, id: uid() })), discount: estimate.draft.discount, startDate: span[0], endDate: span.at(-1), step: 0 };
+    }
     if (startOn) {
       const d = blankDraft();
       return { ...d, startDate: startOn, endDate: startOn, functions: d.functions.map((f) => ({ ...f, date: startOn })) };
     }
     return blankDraft();
-  }, [enquiryId, reviseId, startOn]);
+  }, [enquiryId, reviseId, startOn, estimateId]);
 
-  const { draft, setDraft, clear, restart, resumed } = useQuoteDraft("booking", fresh, !enquiryId && !reviseId && !startOn);
+  const { draft, setDraft, clear, restart, resumed } = useQuoteDraft("booking", fresh, !enquiryId && !reviseId && !startOn && !estimateId);
   const [enquiryOpen, setEnquiryOpen] = React.useState(false);
   // Next keeps a page's state while another page is open, so a booking that was saved would come back as it was left.
   // Once one is saved, leaving booking mode starts the next visit afresh.

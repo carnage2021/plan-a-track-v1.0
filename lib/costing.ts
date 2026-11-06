@@ -27,6 +27,8 @@ export interface CostContext {
   expenses: { orderId?: string; category: string; amount: number; paidTo: string; note: string }[];
   /** Credit notes raised on the order, with GST */
   credited: number;
+  /** Cost Calculator: in-house staff lines are costed at what a worker in that role is paid, since none is planned */
+  staffPay?: Map<string, number>;
 }
 
 export interface MaterialLine { id: string; name: string; section: string; unit: string; qty: number; rate: number; amount: number }
@@ -115,6 +117,13 @@ export function costOrder(o: Order, c: CostContext): OrderCost {
     }
 
   const labour: LabourLine[] = c.tasks.filter((x) => x.orderId === o.id).map((x) => ({ functionId: x.functionId, label: [x.title || x.role, x.qty > 1 ? `${x.qty} × ${x.rate}` : ""].filter(Boolean).join(" · "), amount: x.amount }));
+  if (c.staffPay)
+    for (const fn of o.functions)
+      for (const ch of fn.charges ?? []) {
+        if (ch.kind !== "worker" || ch.vendorId) continue;
+        const pay = c.staffPay.get(ch.label.trim().toLowerCase()) ?? 0;
+        if (pay) labour.push({ functionId: fn.id, label: `${ch.label} · ${ch.qty} × ${pay} (usual pay)`, amount: ch.qty * pay });
+      }
 
   const replace = new Map(c.assets.map((a) => [a.id, a.replacementCost]));
   const other: OtherLine[] = [

@@ -21,7 +21,7 @@ import { cn, fmtDate, money, num, rate } from "@/lib/utils";
 import { DownloadPdf } from "@/components/documents/doc-actions";
 
 /** One order's costing, from everything the platform holds about it. Null until the supply side has loaded. */
-export function useOrderCost(order: Order): OrderCost | null {
+export function useOrderCost(order: Order, estimate = false): OrderCost | null {
   const { items, packages, tenant } = useStore();
   const supply = useSupply();
   const { tasks, workers } = useStaff();
@@ -46,23 +46,36 @@ export function useOrderCost(order: Order): OrderCost | null {
       assets: supply.assets,
       expenses: expenses.map((e) => ({ orderId: e.orderId, category: categoryLabel(e.category), amount: e.amount, paidTo: e.paidTo, note: e.note })),
       credited: balanceOf(order, grand, credits).credited,
+      ...(estimate ? { staffPay: usualPay(workers) } : {}),
     });
-  }, [order, items, packages, tenant.slabs, supply, tasks, workers, trips, expenses, credits]);
+  }, [order, items, packages, tenant.slabs, supply, tasks, workers, trips, expenses, credits, estimate]);
+}
+
+/** What a worker in each role is usually paid for an event (their rate per event, else per day), averaged by role. */
+function usualPay(workers: { role: string; rateEvent: number; rateDay: number; active: boolean }[]) {
+  const by = new Map<string, number[]>();
+  for (const w of workers) {
+    const pay = w.rateEvent || w.rateDay;
+    if (!w.active || !pay) continue;
+    const k = w.role.trim().toLowerCase();
+    by.set(k, [...(by.get(k) ?? []), pay]);
+  }
+  return new Map([...by].map(([k, v]) => [k, Math.round(v.reduce((s, x) => s + x, 0) / v.length)]));
 }
 
 const pct = (n: number) => `${Math.round(n)}%`;
 const tone = (m: number) => (m >= 35 ? "success" : m >= 20 ? "warning" : "danger");
 
 /** Order → Costing: what the order costs, part by part and event by event, and what it earns. Owner and accounts only. */
-export function CostingTab({ order }: { order: Order }) {
-  const cost = useOrderCost(order);
+export function CostingTab({ order, estimate }: { order: Order; /** Cost Calculator: no PDF, no client, staff at usual pay */ estimate?: boolean }) {
+  const cost = useOrderCost(order, estimate);
   const client = useStore((s) => s.clients.find((c) => c.id === order.clientId));
   if (!cost) return <Card className="p-6 text-sm text-text-muted">Loading the costing...</Card>;
   const { totals, gaps } = cost;
   const parts = [
     { key: "material", label: "Raw material", icon: Leaf, amount: totals.material, help: "Recipes at the latest purchase rate, for each dish's kitchen guests" },
     { key: "vendors", label: "Third-party food and services", icon: ChefHat, amount: totals.vendors, help: "Agency orders, or the menu at each dish's agency rate, and extra services given to vendors" },
-    { key: "labour", label: "Staff", icon: Users, amount: totals.labour, help: "Tasks planned in Staff and Tasks" },
+    { key: "labour", label: "Staff", icon: Users, amount: totals.labour, help: estimate ? "In-house staff lines at your workers' usual pay for the role" : "Tasks planned in Staff and Tasks" },
     { key: "transport", label: "Transport", icon: Truck, amount: totals.transport, help: "Trips on the dispatch board" },
     { key: "rentals", label: "Cutlery hire and breakage", icon: IndianRupee, amount: totals.rentals, help: "From the cutlery challans" },
     { key: "expenses", label: "Other expenses", icon: IndianRupee, amount: totals.expenses, help: "Expenses booked to this order" },
@@ -72,10 +85,10 @@ export function CostingTab({ order }: { order: Order }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-text-muted">For you and your accountant only: the client never sees this.</p>
-        <DownloadPdf kind="costing" id={order.id} lang="en" label="Costing sheet PDF" />
+        {!estimate && <DownloadPdf kind="costing" id={order.id} lang="en" label="Costing sheet PDF" />}
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Order earns (before GST)" value={money(cost.revenue)} sub={`Bill with GST ${money(cost.grand)}`} />
+        <StatCard label={estimate ? "This menu earns (before GST)" : "Order earns (before GST)"} value={money(cost.revenue)} sub={`Bill with GST ${money(cost.grand)}`} />
         <StatCard label="Costs" value={money(totals.cost)} sub={`${pct(cost.revenue ? (totals.cost / cost.revenue) * 100 : 0)} of the bill`} />
         <StatCard label="Profit" value={money(cost.profit)} sub="Before your overheads" tone={cost.profit >= 0 ? "success" : "warning"} />
         <StatCard label="Margin" value={pct(cost.margin)} sub="Profit over the bill" tone="info" />
@@ -106,7 +119,7 @@ export function CostingTab({ order }: { order: Order }) {
       <MaterialTable cost={cost} />
       <VendorTable cost={cost} />
       {(cost.labour.length > 0 || cost.other.length > 0) && <OtherTable cost={cost} />}
-      <p className="text-xs text-text-muted">{client?.name} · {order.number}. Figures follow the order as it stands: change the kitchen guests, recipes, agency rates or raw material rates, and the costing follows. {gaps.noLabour && cost.staffCharged > 0 ? `The client pays ${money(cost.staffCharged)} for staff on this order; plan the staff in Staff and Tasks to count what they cost you.` : ""}</p>
+      {estimate ? <p className="text-xs text-text-muted">Worked out from this menu and its extras: raw material from the recipes at the latest rates, third-party dishes at their agency rates, vendors at their price lists and in-house staff at your workers&apos; usual pay. Transport, cutlery hire and other expenses are counted once it is booked.</p> : <p className="text-xs text-text-muted">{client?.name} · {order.number}. Figures follow the order as it stands: change the kitchen guests, recipes, agency rates or raw material rates, and the costing follows. {gaps.noLabour && cost.staffCharged > 0 ? `The client pays ${money(cost.staffCharged)} for staff on this order; plan the staff in Staff and Tasks to count what they cost you.` : ""}</p>}
     </div>
   );
 }

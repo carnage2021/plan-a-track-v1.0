@@ -16,7 +16,7 @@ import { useMessages } from "./messages";
 import { eventsThisMonth, usePlatform } from "./platform";
 import { useLabels } from "./labels";
 import { withBranch } from "./branch";
-import { setCategoryTree, treeOrder, byName } from "./categories";
+import { pricedBy, setCategoryTree, treeOrder, byName } from "./categories";
 import { useStaff } from "./staff";
 import { useSupply } from "./supply-store";
 import type {
@@ -40,6 +40,7 @@ import type {
   SamplePhoto,
 } from "./types";
 import { addDays, financialYear, isoDate, money, uid } from "./utils";
+import { menuPrices } from "./pricing";
 
 // The store is the in-memory copy of the signed-in caterer's data. It is loaded from Supabase
 // after sign-in; every action updates it at once and writes the change to the database behind it.
@@ -133,6 +134,10 @@ interface Actions {
   savePackage: (pkg: Omit<MenuPackage, "id"> & { id?: string }) => void;
   /** Adds a menu category (at the end of its parent's branch), or renames one / changes its icon. Returns its id. */
   saveCategory: (category: Omit<MenuCategory, "id"> & { id?: string }) => string;
+  /** Dishes under a category with one price take it; returns how many changed */
+  syncCategoryPrices: () => number;
+  /** False until 0028: one price for a whole category */
+  categoryPriceReady: boolean;
   /** Puts the categories in this order everywhere the menu is shown. */
   reorderCategories: (ids: string[]) => void;
   /**
@@ -174,7 +179,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false, dishGuestsReady: false, categoryPricesReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false, dishGuestsReady: false, categoryPricesReady: false, categoryPriceReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 
@@ -189,6 +194,12 @@ async function nextNumber(sb: SupabaseClient, docType: "quote" | "order" | "rece
 
 let tenantTimer: ReturnType<typeof setTimeout> | undefined;
 let listening = false;
+
+/** The menu price of a dish in a category with one price: the price, or its share of a set. */
+function categoryDishPrice(categoryId: string) {
+  const c = pricedBy(categoryId);
+  return c?.price ? Math.round((c.price / (c.priceSet && c.priceSet > 1 ? c.priceSet : 1)) * 100) / 100 : undefined;
+}
 
 export const useStore = create<Store>()(
   persist(
@@ -360,7 +371,9 @@ export const useStore = create<Store>()(
       },
 
       saveItem: (item) => {
-        const saved: MenuItem = { ...item, id: item.id ?? uid() };
+        // A dish in a category with one price takes it (its share of a set: 2 for ₹130 is ₹65 a dish on the menu).
+        const fixed = categoryDishPrice(item.categoryId);
+        const saved: MenuItem = { ...item, id: item.id ?? uid(), ...(fixed !== undefined ? { price: fixed } : {}) };
         // Dishes are kept A to Z, so every list of them (the menu, booking mode, documents) reads alphabetically.
         set((s) => ({ items: (item.id ? s.items.map((i) => (i.id === saved.id ? saved : i)) : [saved, ...s.items]).sort(byName) }));
         background((sb) => run(sb.from("menu_items").upsert(itemRow(saved)), "Saving the dish"));
@@ -409,7 +422,7 @@ export const useStore = create<Store>()(
       saveCategory: (category) => {
         const s = get();
         const id = category.id ?? uid();
-        const saved: MenuCategory = { id, name: category.name, icon: category.icon, parentId: category.parentId, atBooking: category.atBooking };
+        const saved: MenuCategory = { id, name: category.name, icon: category.icon, parentId: category.parentId, atBooking: category.atBooking, ...(category.price ? { price: category.price, priceSet: category.priceSet && category.priceSet > 1 ? category.priceSet : undefined } : {}) };
         const exists = s.categories.some((c) => c.id === id);
         const moved = exists && s.categories.find((c) => c.id === id)?.parentId !== saved.parentId;
         // A new sub-category goes at the end of its parent's branch; the list stays in tree order.
@@ -418,7 +431,16 @@ export const useStore = create<Store>()(
         set({ categories: list });
         const changed = !exists || moved ? list : [saved];
         background((sb) => run(sb.from("menu_categories").upsert(changed.map((c) => categoryRow(c, list.findIndex((x) => x.id === c.id)))), "Saving the category"));
+        get().syncCategoryPrices();
         return id;
+      },
+      syncCategoryPrices: () => {
+        // Dishes under a priced category show its price on the menu; the booking works out sets from the category.
+        const changed = get().items.flatMap((i) => { const p = categoryDishPrice(i.categoryId); return p !== undefined && p !== i.price ? [{ ...i, price: p }] : []; });
+        if (!changed.length) return 0;
+        set((s) => ({ items: s.items.map((i) => changed.find((c) => c.id === i.id) ?? i) }));
+        background((sb) => run(sb.from("menu_items").upsert(changed.map(itemRow)), "Saving the dishes' prices"));
+        return changed.length;
       },
       reorderCategories: (ids) => {
         const s = get();
@@ -713,12 +735,13 @@ export const useStore = create<Store>()(
         const fn = s.orders.find((o) => o.id === orderId)?.functions.find((f) => f.id === functionId);
         const item = s.items.find((i) => i.id === itemId);
         if (!fn || !item) return;
-        const before = fn.itemPrices?.[itemId] ?? item.price;
-        if (before === (price ?? item.price)) return;
+        const menu = menuPrices(fn, s.items).get(itemId) ?? item.price;
+        const before = fn.itemPrices?.[itemId] ?? menu;
+        if (before === (price ?? menu)) return;
         const prices = { ...fn.itemPrices };
         if (price === undefined) delete prices[itemId];
         else prices[itemId] = price;
-        const entry = { id: uid(), at: today(), by: s.users.find((u) => u.id === s.currentUserId)?.name ?? "", text: `${fn.name}: ${item.name} per plate changed from ${money(before)} to ${money(price ?? item.price)}`, priceImpact };
+        const entry = { id: uid(), at: today(), by: s.users.find((u) => u.id === s.currentUserId)?.name ?? "", text: `${fn.name}: ${item.name} per plate changed from ${money(before)} to ${money(price ?? menu)}`, priceImpact };
         set((st) => ({
           orders: st.orders.map((o) => (o.id === orderId ? { ...o, functions: o.functions.map((f) => (f.id === functionId ? { ...f, itemPrices: Object.keys(prices).length ? prices : undefined } : f)), changeLog: [entry, ...o.changeLog] } : o)),
         }));

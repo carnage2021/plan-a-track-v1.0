@@ -4,7 +4,7 @@ import * as React from "react";
 import { DocHeader, DocPayBlock, docStyle, useDocs } from "@/components/documents/theme";
 import { byDay } from "@/components/sales/event-charges";
 import { docT } from "@/lib/doc-i18n";
-import { chargeAmount, priceFunction, priceQuote } from "@/lib/pricing";
+import { chargeAmount, eventPrice, priceFunction, priceQuote } from "@/lib/pricing";
 import { pricedAtBooking } from "@/lib/categories";
 import { timeRange } from "@/lib/services";
 import { useStore } from "@/lib/store";
@@ -215,7 +215,7 @@ function EventLines({ f, itemised, lang }: { f: EventFunction; itemised: boolean
   const typed = p.parts.filter((x) => x.typed);
   const catName = (id: string) => categories.find((c) => c.id === id)?.name ?? "";
   const pkg = packages.find((x) => x.id === f.packageId);
-  const priceOf = (i: MenuItem) => f.itemPrices?.[i.id] ?? i.price;
+  const priceOf = eventPrice(f, items);
   const picked = f.itemIds.map((id) => items.find((i) => i.id === id)).filter((i): i is MenuItem => !!i);
   const plates = picked.filter((i) => i.pricingType === "plate");
   const fixed = picked.filter((i) => i.pricingType !== "plate");

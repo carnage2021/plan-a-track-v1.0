@@ -3,16 +3,17 @@
 import { ChevronRight, CornerDownRight, PencilLine, Plus, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Card, Chip, Switch } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/sheet";
-import { branch, fullPath, isMainCourse, isWithin, namedMainCourse, pricedAtBooking, treeOrder } from "@/lib/categories";
+import { branch, categoryPriceText, fullPath, isMainCourse, isWithin, namedMainCourse, pricedAtBooking, treeOrder } from "@/lib/categories";
 import { categoryIcon, categoryIconNames } from "@/lib/icons";
 import { useFoodTypes } from "@/lib/services";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { MenuCategory } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, money } from "@/lib/utils";
 
 type Editing = { category?: MenuCategory; parentId?: string };
 
@@ -31,6 +32,13 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
   const [icon, setIcon] = React.useState(current?.icon ?? categories.find((c) => c.id === editing.parentId)?.icon ?? "Utensils");
   const [parentId, setParentId] = React.useState(current ? (current.parentId ?? "") : (editing.parentId ?? ""));
   const [atBooking, setAtBooking] = React.useState(!!current?.atBooking);
+  const priceReady = useStore((s) => s.categoryPriceReady);
+  const items = useStore((s) => s.items);
+  // One price for every dish inside, per dish or per set of dishes (2 pizzas for ₹130).
+  const [price, setPrice] = React.useState(current?.price ?? 0);
+  const [perSet, setPerSet] = React.useState(!!current?.priceSet && current.priceSet > 1);
+  const [setOf, setSetOf] = React.useState(current?.priceSet && current.priceSet > 1 ? current.priceSet : 2);
+  const dishesInside = current ? items.filter((i) => isWithin(i.categoryId, current.id)).length : 0;
   // A sub-category of a main course category is main course too.
   const inherited = !!parentId && pricedAtBooking(parentId);
   const named = namedMainCourse(name);
@@ -45,7 +53,8 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
 
   const save = () => {
     if (error) return;
-    const id = saveCategory({ id: current?.id, name: name.trim(), icon, parentId: parentId || undefined, atBooking: atBooking && !inherited ? true : undefined });
+    const main = (atBooking && !inherited) || inherited || named;
+    const id = saveCategory({ id: current?.id, name: name.trim(), icon, parentId: parentId || undefined, atBooking: atBooking && !inherited ? true : undefined, ...(priceReady && price > 0 && !main ? { price, priceSet: perSet && setOf > 1 ? setOf : undefined } : {}) });
     if (canTypes) {
       const next = foodTypes.map((t) => {
         const has = t.categoryIds.includes(id);
@@ -89,6 +98,27 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
               <Switch checked={atBooking} label="Main course, price at booking" onCheckedChange={setAtBooking} />
             </label>
           )
+        )}
+        {priceReady && !inherited && !named && !atBooking && (
+          <div className="space-y-2 rounded-xl border p-3">
+            <span className="block text-sm font-medium">One price for every dish inside</span>
+            <span className="block text-xs text-text-muted">Leave it at 0 to price each dish on its own. With a price, every dish here (and in its sub-categories, unless one has its own price) takes it, and a dish cannot have a different price.</span>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Price"><MoneyInput value={price} onChange={setPrice} label="Price for every dish inside" /></Field>
+              <Field label="The price is for">
+                <Select value={perSet ? "set" : "each"} onChange={(e) => setPerSet(e.target.value === "set")}>
+                  <option value="each">Each dish</option>
+                  <option value="set">A set of dishes</option>
+                </Select>
+              </Field>
+            </div>
+            {perSet && (
+              <Field label="Dishes in a set" hint={price > 0 ? `${setOf} dishes for ₹${price}: picking 1 to ${setOf} of them on a service costs ₹${price} a plate, ${setOf + 1} to ${setOf * 2} cost ₹${price * 2}.` : "How many dishes the price is for, e.g. 2 pizzas."}>
+                <Input inputMode="numeric" value={String(setOf)} onChange={(e) => setSetOf(Math.max(2, Number(e.target.value.replace(/\D/g, "")) || 2))} className="w-24" />
+              </Field>
+            )}
+            {price > 0 && current && <p className="text-xs text-primary">{dishesInside} {dishesInside === 1 ? "dish takes" : "dishes take"} this price when you save.</p>}
+          </div>
         )}
         <div>
           <span className="mb-1 block text-xs font-medium text-text-muted">Icon</span>
@@ -248,7 +278,7 @@ export function CategoriesEditor({ canEdit }: { canEdit: boolean }) {
               )}
               <span className={cn("grid shrink-0 place-items-center rounded-xl bg-primary-soft text-primary", depth ? "size-8" : "size-10")}><Icon className={depth ? "size-4" : "size-5"} strokeWidth={1.75} /></span>
               <span className="min-w-0 flex-1">
-                <span className={cn("block truncate", depth ? "text-sm font-medium" : "font-medium")}>{c.name}{isMainCourse(c) && <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 align-middle text-[11px] font-medium text-primary">Main course · rate at booking</span>}</span>
+                <span className={cn("block truncate", depth ? "text-sm font-medium" : "font-medium")}>{c.name}{isMainCourse(c) && <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 align-middle text-[11px] font-medium text-primary">Main course · rate at booking</span>}{!!c.price && <span className="tnum ml-2 rounded-full bg-success/10 px-2 py-0.5 align-middle text-[11px] font-medium text-success" data-no-title-case>{categoryPriceText(c, money)}</span>}</span>
                 <span className="tnum block truncate text-xs text-text-muted">
                   {subs > 0 ? `${all} ${all === 1 ? "dish" : "dishes"} (${own} here) · ${subs} sub-${subs === 1 ? "category" : "categories"}` : `${own} ${own === 1 ? "dish" : "dishes"}`}
                   {depth === 0 && (types.length ? ` · ${types.length === foodTypes.length ? "every food type" : types.join(", ")}` : " · no food type")}

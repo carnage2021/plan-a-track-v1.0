@@ -38,7 +38,7 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
  * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
  * added the client's second phone and the coordinator. */
-export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false, dishGuests: false, categoryPrices: false, recipeBook: false, vendorItems: false };
+export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false, dishGuests: false, categoryPrices: false, recipeBook: false, vendorItems: false, categoryPrice: false, estimates: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -141,7 +141,7 @@ export const clientRow = (c: Client): Row => ({
   ...(schema.contacts ? { alt_phone: c.altPhone || null } : {}),
 });
 
-export const categoryRow = (c: MenuCategory, sort: number): Row => ({ id: c.id, name: c.name, icon: c.icon, sort_order: sort, ...(schema.subcategories ? { parent_id: c.parentId ?? null } : {}), ...(schema.mainRate ? { priced_at_booking: !!c.atBooking } : {}) });
+export const categoryRow = (c: MenuCategory, sort: number): Row => ({ id: c.id, name: c.name, icon: c.icon, sort_order: sort, ...(schema.subcategories ? { parent_id: c.parentId ?? null } : {}), ...(schema.mainRate ? { priced_at_booking: !!c.atBooking } : {}), ...(schema.categoryPrice ? { price: c.price ?? null, price_set: c.price ? c.priceSet ?? null : null } : {}) });
 
 export const itemRow = (i: MenuItem): Row => ({
   id: i.id,
@@ -341,6 +341,7 @@ export interface Loaded {
   mainRateReady: boolean;
   dishGuestsReady: boolean;
   categoryPricesReady: boolean;
+  categoryPriceReady: boolean;
   /** The branch this person is tied to, if the owner assigned one */
   myBranch: string;
 }
@@ -355,6 +356,9 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   schema.packageExtras = !extrasProbe.error;
   schema.subcategories = !(await sb.from("menu_categories").select("parent_id").limit(1)).error;
   schema.mainRate = !(await sb.from("menu_categories").select("priced_at_booking").limit(1)).error;
+  // One price for a whole category, and the Cost Calculator's saved calculations (0028)
+  schema.categoryPrice = !(await sb.from("menu_categories").select("price_set").limit(1)).error;
+  schema.estimates = !(await sb.from("estimates").select("id").limit(1)).error;
   schema.categoryPrices = !(await sb.from("event_functions").select("category_prices").limit(1)).error;
   schema.dishGuests = !(await sb.from("function_items").select("prep_pax").limit(1)).error && !(await sb.from("event_functions").select("package_price").limit(1)).error;
   // Asked of the database, not read off a loaded client, so an account with no clients yet still saves them.
@@ -426,7 +430,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     clients: rowsOf(clients, "Loading clients").map((c) => {
       return { id: c.id, name: c.name, phone: c.phone, email: c.email ?? undefined, address: c.address ?? undefined, gstin: c.gstin ?? undefined, type: c.client_type, tags: c.tags ?? [], language: c.language, birthday: c.birthday ? String(c.birthday).slice(0, 10) : undefined, anniversary: c.anniversary ? String(c.anniversary).slice(0, 10) : undefined, referralCode: c.referral_code ?? undefined, referredBy: c.referred_by ?? undefined, credit: Number(c.credit ?? 0), altPhone: c.alt_phone ?? undefined };
     }),
-    categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon, parentId: c.parent_id ?? undefined, atBooking: c.priced_at_booking ? true : undefined })),
+    categories: rowsOf(categories, "Loading categories").map((c) => ({ id: c.id, name: c.name, icon: c.icon, parentId: c.parent_id ?? undefined, atBooking: c.priced_at_booking ? true : undefined, ...(c.price !== null && c.price !== undefined && Number(c.price) > 0 ? { price: Number(c.price), priceSet: c.price_set && c.price_set > 1 ? c.price_set : undefined } : {}) })),
     items: rowsOf(items, "Loading the menu").map((i) => ({
       id: i.id,
       name: i.name,
@@ -550,6 +554,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     mainRateReady: schema.mainRate,
     dishGuestsReady: schema.dishGuests,
     categoryPricesReady: schema.categoryPrices,
+    categoryPriceReady: schema.categoryPrice,
   };
 }
 

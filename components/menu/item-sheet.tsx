@@ -11,14 +11,14 @@ import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { marginTone } from "@/lib/pricing";
-import { pricedAtBooking, treeOrder } from "@/lib/categories";
+import { categoryPriceText, pricedAtBooking, pricedBy, treeOrder } from "@/lib/categories";
 import { CategoryPicker } from "./category-picker";
 import { useFoodTypes } from "@/lib/services";
 import { AgencyFields, RecipeEditor } from "@/components/supply/recipe";
 import { useStore } from "@/lib/store";
 import { useSupply } from "@/lib/supply-store";
 import type { MenuItem, MenuPackage, PackageAddition } from "@/lib/types";
-import { cn, uid } from "@/lib/utils";
+import { cn, money, uid } from "@/lib/utils";
 import { useAccess } from "@/lib/access";
 
 /** Centre-crops to 4:3 and compresses to WebP at 800 x 600, in the browser. */
@@ -69,6 +69,8 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const margin = form.price ? ((form.price - form.cost) / form.price) * 100 : 0;
   const atBooking = !!form.categoryId && pricedAtBooking(form.categoryId);
+  // In a category with one price, the dish takes it and has none of its own.
+  const priceFrom = form.categoryId ? pricedBy(form.categoryId) : undefined;
   const { hidePrices } = useAccess();
   const errors = {
     name: form.name.trim() ? "" : "Give the dish a name",
@@ -173,7 +175,8 @@ function ItemSheetForm({ open, onOpenChange, item, categoryId }: ItemSheetProps)
             <Select value={form.unit} onChange={(e) => set("unit", e.target.value as MenuItem["unit"])}>{["plate", "glass", "piece", "kg"].map((u) => <option key={u}>{u}</option>)}</Select>
           </Field>
           {!hidePrices && <Field label="Cost price"><MoneyInput value={form.cost} onChange={(v) => set("cost", v)} /></Field>}
-          {!hidePrices && !atBooking && <Field label="Selling price (optional)" error={touched ? errors.price : ""}><MoneyInput value={form.price} onChange={(v) => set("price", v)} /></Field>}
+          {!hidePrices && !atBooking && !priceFrom && <Field label="Selling price (optional)" error={touched ? errors.price : ""}><MoneyInput value={form.price} onChange={(v) => set("price", v)} /></Field>}
+          {!hidePrices && priceFrom && <Field label="Selling price" hint="Change it on the category, under Menu, Categories."><p className="tnum flex h-11 items-center rounded-lg bg-surface-muted px-3 text-sm md:h-9" data-no-title-case>{categoryPriceText(priceFrom, money)} · from {priceFrom.name}</p></Field>}
         </div>
         {atBooking && <p className="rounded-lg bg-primary-soft px-3 py-2 text-xs text-primary">Main course dish: it has no price of its own. The main course rate per plate is typed in at the end of each booking.</p>}
         {form.price > 0 && !hidePrices && !atBooking && <p className="flex items-center justify-between rounded-lg bg-surface-muted px-3 py-2 text-xs text-text-muted">Margin on this dish<Badge tone={marginTone(margin)}>{Math.round(margin)}%</Badge></p>}

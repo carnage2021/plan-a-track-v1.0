@@ -4,7 +4,7 @@ import { Tinos } from "next/font/google";
 import * as React from "react";
 import { byDay } from "@/components/sales/event-charges";
 import { pricedAtBooking, rootOf } from "@/lib/categories";
-import { chargeAmount, type FunctionPrice, priceFunction, priceQuote } from "@/lib/pricing";
+import { type FunctionPrice, chargeAmount, eventPrice, priceFunction, priceQuote } from "@/lib/pricing";
 import { eventSpan, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { Discount, EventFunction, ExtraCharge, MenuItem, MenuPackage } from "@/lib/types";
@@ -33,7 +33,7 @@ function rateParts(f: EventFunction, items: MenuItem[], pkg: MenuPackage | undef
     const i = items.find((x) => x.id === id);
     // Main course dishes are paid for by the main course rate, its own part below.
     if (!i || i.pricingType !== "plate" || (pkg ? !p.extraIds.includes(id) && !p.addOnIds.includes(id) : pricedAtBooking(i.categoryId))) continue;
-    const price = f.itemPrices?.[id] ?? (pricedAtBooking(i.categoryId) ? 0 : i.price);
+    const price = eventPrice(f, items)(i);
     const key = rootOf(i.categoryId);
     parts.set(key, (parts.get(key) ?? 0) + price);
   }
@@ -76,7 +76,7 @@ export function SmallQuote({ data }: { data: SmallQuoteData }) {
   // Counters are priced as a whole, so they sit with the extra charges with just their total.
   const charges = food.flatMap(({ f }) => [
     ...(f.charges ?? []).filter((c) => chargeAmount(c)).map((c) => ({ id: c.id, date: f.date, label: c.kind === "worker" && f.time ? `${c.label} (${clock(f.time)}${f.endTime ? ` To ${clock(f.endTime)}` : ""})` : c.label, qty: c.qty, rate: c.rate, amount: chargeAmount(c) })),
-    ...f.itemIds.map((id) => items.find((i) => i.id === id)).filter((i): i is MenuItem => !!i && i.pricingType !== "plate").map((i) => ({ id: `${f.id}-${i.id}`, date: f.date, label: i.name, qty: 0, rate: 0, amount: f.itemPrices?.[i.id] ?? i.price })).filter((c) => c.amount),
+    ...f.itemIds.map((id) => items.find((i) => i.id === id)).filter((i): i is MenuItem => !!i && i.pricingType !== "plate").map((i) => ({ id: `${f.id}-${i.id}`, date: f.date, label: i.name, qty: 0, rate: 0, amount: eventPrice(f, items)(i) })).filter((c) => c.amount),
   ]);
   const chargeTotal = charges.reduce((s, c) => s + c.amount, 0);
   const after = data.extras.filter((e) => e.amount);

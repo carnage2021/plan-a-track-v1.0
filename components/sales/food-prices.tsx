@@ -7,7 +7,7 @@ import { MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/primitives";
 import { fullPath, pricedAtBooking, rootOf, subPath, treeOrder } from "@/lib/categories";
-import { priceFunction } from "@/lib/pricing";
+import { menuPrices, priceFunction } from "@/lib/pricing";
 import { serviceLine, useFoodTypes } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { EventFunction, MenuItem } from "@/lib/types";
@@ -52,6 +52,9 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{date ? fmtDate(date, { weekday: "long", day: "numeric", month: "long" }) : "No date yet"}</p>
           {fns.map((f) => {
             const p = priceFunction(f, items, packages, slabs);
+            // Menu prices on this event: a dish in a category with one price takes it (or its share of a set).
+            const menu = menuPrices(f, items);
+            const mp = (i: MenuItem) => menu.get(i.id) ?? i.price;
             const pkg = packages.find((x) => x.id === f.packageId);
             const dishes = f.itemIds
               .map((id) => items.find((i) => i.id === id))
@@ -61,7 +64,7 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
             const setDish = (i: MenuItem, price: number) =>
               onPatch(f.id, (cur) => {
                 // Inside a package a dish costs nothing extra; main course dishes have no menu price.
-                const base = (pkg && !p.extraIds.includes(i.id) && i.pricingType === "plate") || pricedAtBooking(i.categoryId) ? 0 : i.price;
+                const base = (pkg && !p.extraIds.includes(i.id) && i.pricingType === "plate") || pricedAtBooking(i.categoryId) ? 0 : mp(i);
                 return { itemPrices: withPrice(cur, i.id, price, base) };
               });
             // One price for the whole main course; any old per-dish main course prices are dropped with it.
@@ -134,7 +137,7 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                     if (plate && !p.extraIds.includes(i.id)) return null;
                     // A main course dish has no menu price, so beyond the package its box starts empty for the price to be typed.
                     const mainBeyond = plate && pricedAtBooking(i.categoryId);
-                    const value = f.itemPrices?.[i.id] ?? (mainBeyond ? 0 : i.price);
+                    const value = f.itemPrices?.[i.id] ?? (mainBeyond ? 0 : mp(i));
                     const tag = plate ? (mainBeyond && !value ? "Beyond the package: enter its price" : "Beyond the package") : "Counter";
                     return (
                       <Row
@@ -146,7 +149,7 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                         value={value}
                         changed={f.itemPrices?.[i.id] !== undefined && !mainBeyond}
                         onChange={(v) => setDish(i, v)}
-                        onReset={() => onPatch(f.id, (cur) => ({ itemPrices: withPrice(cur, i.id, i.price, i.price) }))}
+                        onReset={() => onPatch(f.id, (cur) => ({ itemPrices: withPrice(cur, i.id, mp(i), mp(i)) }))}
                         unit={plate ? "a plate" : "a counter"}
                       />
                     );
@@ -165,10 +168,10 @@ export function FoodPrices({ functions, onPatch }: { functions: EventFunction[];
                       name={i.name}
                       sub={[categories.find((c) => c.id === rootOf(i.categoryId))?.name, subPath(i.categoryId)].filter(Boolean).join(" › ")}
                       tag="Counter"
-                      value={f.itemPrices?.[i.id] ?? i.price}
+                      value={f.itemPrices?.[i.id] ?? mp(i)}
                       changed={f.itemPrices?.[i.id] !== undefined}
                       onChange={(v) => setDish(i, v)}
-                      onReset={() => onPatch(f.id, (cur) => ({ itemPrices: withPrice(cur, i.id, i.price, i.price) }))}
+                      onReset={() => onPatch(f.id, (cur) => ({ itemPrices: withPrice(cur, i.id, mp(i), mp(i)) }))}
                       unit="a counter"
                     />
                   ))}

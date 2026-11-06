@@ -1,4 +1,4 @@
-import { lineage, pricedAtBooking, rootOf } from "./categories";
+import { lineage, pricedAtBooking, pricedBy, rootOf } from "./categories";
 import type { Discount, EventCharge, EventFunction, ExtraCharge, MenuItem, MenuPackage, Tenant } from "./types";
 
 /** One charge line's amount, kept to the paisa. */
@@ -62,6 +62,38 @@ export function slabPct(pax: number, slabs: Tenant["slabs"]) {
   return 0;
 }
 
+/**
+ * Each picked dish's menu price on this event, before any price typed for the booking. A dish in a category with one
+ * price takes it: "each" is that price per dish; a set ("2 for ₹130") is charged per set of dishes picked from that
+ * category on the event (1 or 2 pizzas ₹130, 3 or 4 ₹260), shared across them. Main course dishes are priced at booking.
+ */
+export function menuPrices(fn: Pick<EventFunction, "itemIds">, items: MenuItem[]) {
+  const out = new Map<string, number>();
+  const sets = new Map<string, { cat: { price?: number; priceSet?: number }; ids: string[] }>();
+  for (const id of new Set(fn.itemIds)) {
+    const i = items.find((x) => x.id === id);
+    if (!i) continue;
+    if (pricedAtBooking(i.categoryId)) { out.set(id, 0); continue; }
+    const cat = pricedBy(i.categoryId);
+    if (!cat) { out.set(id, i.price); continue; }
+    if (!cat.priceSet || cat.priceSet <= 1) { out.set(id, cat.price ?? 0); continue; }
+    const s = sets.get(cat.id) ?? { cat, ids: [] };
+    s.ids.push(id);
+    sets.set(cat.id, s);
+  }
+  for (const { cat, ids } of sets.values()) {
+    const total = Math.ceil(ids.length / cat.priceSet!) * (cat.price ?? 0);
+    for (const id of ids) out.set(id, total / ids.length);
+  }
+  return out;
+}
+
+/** A dish's price on this event: the price typed for the booking, else its menu price as above. */
+export const eventPrice = (fn: Pick<EventFunction, "itemIds" | "itemPrices">, items: MenuItem[]) => {
+  const menu = menuPrices(fn, items);
+  return (i: Pick<MenuItem, "id" | "price">) => fn.itemPrices?.[i.id] ?? menu.get(i.id) ?? i.price;
+};
+
 export function priceFunction(
   fn: Pick<EventFunction, "pax" | "packageId" | "itemIds" | "itemPrices" | "charges" | "mainRate" | "packagePrice" | "categoryPrices">,
   items: MenuItem[],
@@ -70,7 +102,8 @@ export function priceFunction(
 ): FunctionPrice {
   // A price changed on this quotation or order wins over the menu price. Main course dishes have no menu price;
   // built dish by dish they are paid for by the main course rate (the sum of their typed prices, or typed whole).
-  const byId = new Map(items.map((i) => [i.id, fn.itemPrices?.[i.id] !== undefined ? { ...i, price: fn.itemPrices[i.id] } : pricedAtBooking(i.categoryId) ? { ...i, price: 0 } : i]));
+  const menu = menuPrices(fn, items);
+  const byId = new Map(items.map((i) => [i.id, fn.itemPrices?.[i.id] !== undefined ? { ...i, price: fn.itemPrices[i.id] } : menu.has(i.id) ? { ...i, price: menu.get(i.id)! } : i]));
   const picked = fn.itemIds.map((id) => byId.get(id)).filter((i): i is MenuItem => !!i);
   const plateItems = picked.filter((i) => i.pricingType === "plate");
   const fixed = picked.filter((i) => i.pricingType !== "plate").reduce((s, i) => s + i.price, 0);

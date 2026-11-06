@@ -147,6 +147,8 @@ function Import() {
       await reload();
       // New purchase rates flow into the food cost of every dish whose recipe uses them.
       if (list.key === "ingredients") useSupply.getState().recostDishes(applied.filter((u) => "last_rate" in u.values).map((u) => u.id));
+      // Dishes uploaded into a category with one price take it.
+      if (list.key === "menu") useStore.getState().syncCategoryPrices();
       loadHistory();
       setBusy(false);
     }

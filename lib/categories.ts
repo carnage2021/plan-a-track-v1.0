@@ -30,6 +30,23 @@ export const isMainCourse = (c?: Pick<MenuCategory, "name" | "atBooking">) => !!
 /** True when dishes in this category have no price of their own: it, or a category above it, is the main course. */
 export const pricedAtBooking = (categoryId: string) => lineage(categoryId).some((id) => isMainCourse(byId.get(id)));
 
+/**
+ * The category whose one price covers a dish here: this one or the nearest above it with a price (Woodfire pizza
+ * ₹130). None for the main course, which is priced at booking.
+ */
+export function pricedBy(categoryId: string) {
+  if (pricedAtBooking(categoryId)) return undefined;
+  for (const id of lineage(categoryId)) {
+    const c = byId.get(id);
+    if (c?.price && c.price > 0) return c;
+  }
+  return undefined;
+}
+
+/** "₹130 each" or "2 for ₹130", for a priced category. */
+export const categoryPriceText = (c: Pick<MenuCategory, "price" | "priceSet">, money: (n: number) => string) =>
+  !c.price ? "" : c.priceSet && c.priceSet > 1 ? `${c.priceSet} for ${money(c.price)}` : `${money(c.price)} each`;
+
 /** True when a dish's category is this one or sits anywhere under it. */
 export const isWithin = (categoryId: string, ancestorId: string) => lineage(categoryId).includes(ancestorId);
 

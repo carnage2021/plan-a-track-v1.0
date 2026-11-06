@@ -178,6 +178,10 @@ export interface MenuCategory {
   parentId?: string;
   /** Main course: its dishes have no price; the rate per plate is typed in at booking. Sub-categories follow it. */
   atBooking?: boolean;
+  /** One price for every dish inside (0028): Woodfire pizza ₹130. The nearest priced category wins. */
+  price?: number;
+  /** The price is for a set of this many dishes (2 pizzas for ₹130); empty or 1 is per dish */
+  priceSet?: number;
 }
 
 export interface MenuItem {

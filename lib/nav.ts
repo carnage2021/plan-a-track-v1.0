@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Calculator,
   Contact,
   BarChart3,
   CalendarDays,
@@ -40,6 +41,7 @@ export const navItems: NavItem[] = [
   { key: "calendar", href: "/calendar", icon: CalendarDays, roles: ["owner", "sales", "operations", "kitchen"] },
   { key: "clients", href: "/clients", icon: Contact, roles: ["owner", "sales", "accountant"] },
   { key: "orders", href: "/orders", icon: ClipboardList, roles: ["owner", "sales", "operations", "accountant"] },
+  { key: "calculator", href: "/calculator", icon: Calculator, roles: ["owner", "sales", "accountant"] },
   { key: "menu", href: "/menu", icon: UtensilsCrossed, roles: ["owner", "sales", "kitchen"] },
   { key: "kitchen", href: "/kitchen", icon: ChefHat, roles: ["owner", "operations", "kitchen"] },
   { key: "dispatch", href: "/dispatch", icon: Truck, roles: ["owner", "operations", "store"] },
@@ -62,7 +64,7 @@ export const navItems: NavItem[] = [
 
 /** Items a role cannot use are hidden, not greyed. The owner's role settings can narrow this further. */
 /** Pages added later go with the module they belong to, so plans and role settings made before them still work. */
-const follows: Record<string, string> = { recipes: "purchase" };
+const follows: Record<string, string> = { recipes: "purchase", calculator: "orders" };
 
 export function navFor(role: Role, access?: TenantAccess, planModules?: string[]) {
   const narrowed = role === "owner" ? undefined : access?.roles[role];

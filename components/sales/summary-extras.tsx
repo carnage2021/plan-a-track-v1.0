@@ -6,7 +6,7 @@ import { MoneyInput } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/primitives";
-import { priceFunction, type QuoteTotals } from "@/lib/pricing";
+import { menuPrices, priceFunction, type QuoteTotals } from "@/lib/pricing";
 import { referrerOf, useStore } from "@/lib/store";
 import type { Discount, EventFunction, QuoteDraft, ReferralSettings } from "@/lib/types";
 import { money, num } from "@/lib/utils";
@@ -61,7 +61,8 @@ export function ExtraDishes({ functions, onPrice, readOnly, title = "Extra dishe
           <ul className="divide-y">
             {ids.map((id) => {
               const item = items.find((i) => i.id === id)!;
-              return <PriceRow key={`${id}-${f.itemPrices?.[id] ?? item.price}`} name={item.name} sub={`${categories.find((c) => c.id === item.categoryId)?.name ?? ""}, beyond the package`} menuPrice={item.price} price={f.itemPrices?.[id] ?? item.price} pax={f.pax} onSave={(p) => onPrice(f.id, id, p)} readOnly={readOnly} />;
+              const menu = menuPrices(f, items).get(id) ?? item.price;
+              return <PriceRow key={`${id}-${f.itemPrices?.[id] ?? menu}`} name={item.name} sub={`${categories.find((c) => c.id === item.categoryId)?.name ?? ""}, beyond the package`} menuPrice={menu} price={f.itemPrices?.[id] ?? menu} pax={f.pax} onSave={(p) => onPrice(f.id, id, p)} readOnly={readOnly} />;
             })}
           </ul>
         </section>

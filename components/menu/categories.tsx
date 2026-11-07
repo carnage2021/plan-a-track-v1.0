@@ -37,7 +37,9 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
   // One price for every dish inside, per dish or per set of dishes (2 pizzas for ₹130).
   const [price, setPrice] = React.useState(current?.price ?? 0);
   const [perSet, setPerSet] = React.useState(!!current?.priceSet && current.priceSet > 1);
-  const [setOf, setSetOf] = React.useState(current?.priceSet && current.priceSet > 1 ? current.priceSet : 2);
+  // Typed as text so the box can be cleared and any number written (2, 3, 4, 10).
+  const [setText, setSetText] = React.useState(String(current?.priceSet && current.priceSet > 1 ? current.priceSet : 2));
+  const setOf = Math.max(1, Math.floor(Number(setText) || 0));
   const dishesInside = current ? items.filter((i) => isWithin(i.categoryId, current.id)).length : 0;
   // A sub-category of a main course category is main course too.
   const inherited = !!parentId && pricedAtBooking(parentId);
@@ -52,7 +54,7 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
   const error = !name.trim() ? "Give it a name" : taken ? "There is already a category with this name here" : "";
 
   const save = () => {
-    if (error) return;
+    if (error || (perSet && price > 0 && !setText)) return;
     const main = (atBooking && !inherited) || inherited || named;
     const id = saveCategory({ id: current?.id, name: name.trim(), icon, parentId: parentId || undefined, atBooking: atBooking && !inherited ? true : undefined, ...(priceReady && price > 0 && !main ? { price, priceSet: perSet && setOf > 1 ? setOf : undefined } : {}) });
     if (canTypes) {
@@ -113,8 +115,8 @@ function CategoryModal({ editing, onClose }: { editing: Editing; onClose: () => 
               </Field>
             </div>
             {perSet && (
-              <Field label="Dishes in a set" hint={price > 0 ? `${setOf} dishes for ₹${price}: picking 1 to ${setOf} of them on a service costs ₹${price} a plate, ${setOf + 1} to ${setOf * 2} cost ₹${price * 2}.` : "How many dishes the price is for, e.g. 2 pizzas."}>
-                <Input inputMode="numeric" value={String(setOf)} onChange={(e) => setSetOf(Math.max(2, Number(e.target.value.replace(/\D/g, "")) || 2))} className="w-24" />
+              <Field label="Dishes in a set" error={!setText ? "Type how many dishes the price is for" : ""} hint={setOf === 1 ? "1 dish in a set is the same as a price for each dish." : price > 0 ? `${setOf} dishes for ₹${price}: picking 1 to ${setOf} of them on a service costs ₹${price} a plate, ${setOf + 1} to ${setOf * 2} cost ₹${price * 2}.${current && dishesInside && setOf > dishesInside ? ` There are ${dishesInside} dishes here now.` : ""}` : "How many dishes the price is for: any number, e.g. 2, 3 or 4 pizzas."}>
+                <Input inputMode="numeric" aria-label="Dishes in a set" value={setText} onChange={(e) => setSetText(e.target.value.replace(/\D/g, "").slice(0, 3))} className="w-24" />
               </Field>
             )}
             {price > 0 && current && <p className="text-xs text-primary">{dishesInside} {dishesInside === 1 ? "dish takes" : "dishes take"} this price when you save.</p>}

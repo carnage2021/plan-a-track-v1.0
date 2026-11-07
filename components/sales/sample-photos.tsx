@@ -1,13 +1,15 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element -- photos come from links the caterer imports, any host */
-import { Check, ChevronLeft, ChevronRight, Images, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Images, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { Dialog } from "radix-ui";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
+import { mediaUrl } from "@/lib/db";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { toast } from "sonner";
 import { sameThing } from "@/lib/utils";
 import { starterPhotos } from "@/lib/starter-photos";
 import type { SamplePhoto } from "@/lib/types";
@@ -188,8 +190,29 @@ export function SamplePhotosForm() {
   const isOwner = useCurrentUser().role === "owner";
   const [form, setForm] = React.useState<Omit<SamplePhoto, "id">>({ kind: "staff", name: "", photoUrl: "", note: "" });
   const [viewing, setViewing] = React.useState<SamplePhoto | undefined>();
+  const uploadMedia = useStore((s) => s.uploadMedia);
+  const [uploading, setUploading] = React.useState(false);
+  const file = React.useRef<HTMLInputElement>(null);
+  // A photo from the phone or computer goes to the account's own storage, so it always shows.
+  const upload = async (f?: File) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return toast.error("Choose a photo (JPG, PNG or WEBP)");
+    if (f.size > 8 * 1024 * 1024) return toast.error("That photo is over 8 MB", { description: "Send it to yourself on WhatsApp and save it again; that makes it smaller." });
+    setUploading(true);
+    try {
+      const path = await uploadMedia(f, f.name);
+      setForm((cur) => ({ ...cur, photoUrl: mediaUrl(path) ?? "", name: cur.name || f.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ") }));
+    } catch (e) {
+      toast.error("The photo was not uploaded", { description: e instanceof Error ? e.message : undefined });
+    } finally {
+      setUploading(false);
+      if (file.current) file.current.value = "";
+    }
+  };
   if (!ready) return <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">Run supabase/migrations/0021_sample_photos.sql in the Supabase SQL editor, then reload, to add sample photos.</p>;
-  const valid = form.name.trim() && /^https?:\/\/\S+$/i.test(form.photoUrl.trim());
+  // A share link (OneDrive, Google Drive, Photos, WhatsApp) opens a page, not the photo, so it would show broken.
+  const sharePage = /(1drv\.ms|onedrive\.live|sharepoint\.com|drive\.google|photos\.app\.goo\.gl|photos\.google|wa\.me|whatsapp\.com)/i.test(form.photoUrl);
+  const valid = form.name.trim() && /^https?:\/\/\S+$/i.test(form.photoUrl.trim()) && !sharePage;
 
   return (
     <div className="space-y-5">
@@ -223,7 +246,13 @@ export function SamplePhotosForm() {
         <form className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); if (!valid) return; add({ ...form, name: form.name.trim(), photoUrl: form.photoUrl.trim() }); setForm({ ...form, name: "", photoUrl: "", note: "" }); }}>
           <Field label="Type"><Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as SamplePhoto["kind"] })}>{photoKinds.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}</Select></Field>
           <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={form.kind === "staff" ? "Waiter" : form.kind === "cutlery" ? "Dinner plate" : "Mandap stage"} /></Field>
-          <Field label="Photo link" className="sm:col-span-2"><Input value={form.photoUrl} onChange={(e) => setForm({ ...form, photoUrl: e.target.value })} placeholder="https://..." /></Field>
+          <div className="flex flex-wrap items-end gap-3 sm:col-span-2">
+            <input ref={file} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-label="Choose a photo to upload" onChange={(e) => void upload(e.target.files?.[0])} />
+            <Button type="button" loading={uploading} onClick={() => file.current?.click()}><Upload strokeWidth={1.75} />Upload a photo</Button>
+            {form.photoUrl && !sharePage && /^https?:/.test(form.photoUrl) && <img src={form.photoUrl} alt="Chosen photo" className="h-16 w-20 rounded-lg border object-cover" />}
+            <span className="text-xs text-text-muted">From your phone or computer, or paste a direct photo link below.</span>
+          </div>
+          <Field label="Photo link" className="sm:col-span-2" error={sharePage ? "This is a share page, not the photo itself, so it cannot show. Use Upload a photo instead." : ""}><Input value={form.photoUrl} onChange={(e) => setForm({ ...form, photoUrl: e.target.value })} placeholder="https://... (a link that ends in .jpg or .png)" /></Field>
           <Field label="Note"><Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Optional" /></Field>
           <div className="flex items-end"><Button type="submit" variant="primary" disabled={!valid}><Plus strokeWidth={1.75} />Add photo</Button></div>
         </form>

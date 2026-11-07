@@ -1,11 +1,12 @@
 "use client";
 
-import { Gift, MessageCircle, Phone, Search, Sparkles, UtensilsCrossed } from "lucide-react";
+import { ChevronRight, Gift, MessageCircle, Phone, Search, Sparkles, UtensilsCrossed } from "lucide-react";
 import Image from "next/image";
 import * as React from "react";
 import { VegMark } from "@/components/shared/badges";
 import { Input } from "@/components/ui/input";
 import { Chip, Skeleton } from "@/components/ui/primitives";
+import { Sheet } from "@/components/ui/sheet";
 import { mediaUrl } from "@/lib/db";
 import { supabase } from "@/lib/supabase/client";
 import type { Diet } from "@/lib/types";
@@ -17,7 +18,9 @@ import { cn, fmtDate, initials, money, whatsappLink } from "@/lib/utils";
 export interface PublicTenant { name: string; tagline: string; city?: string; phone: string; logo?: string; brand: string; prices?: boolean }
 export interface PublicItem { id: string; category: string; name: string; local: string; diet: Diet; description: string; photo?: string; bestseller?: boolean; unit?: string; price?: number; note?: string }
 export interface PublicCategory { id: string; name: string; sort?: number; parent?: string | null }
-export interface Catalogue { tenant: PublicTenant; categories: PublicCategory[]; items: PublicItem[]; packages: { name: string; description: string; minPax: number; price?: number }[] }
+/** A package as the public sees it; courses, extra lines and suggested dishes come with 0029 */
+export interface PublicPackage { id?: string; name: string; description: string; minPax: number; price?: number; choices?: { category: string; choose: number }[]; additions?: { name: string; count: number }[]; suggested?: string[] }
+export interface Catalogue { tenant: PublicTenant; categories: PublicCategory[]; items: PublicItem[]; packages: PublicPackage[] }
 export interface EventMenu { tenant: PublicTenant; function: { name: string; date: string; eventType: string }; categories: PublicCategory[]; items: PublicItem[] }
 
 /** Calls one of the public database functions; null means the page does not exist or is switched off. */
@@ -145,6 +148,7 @@ export interface PublicReferral {
 
 export function CataloguePage({ data, referral }: { data: Catalogue; referral?: PublicReferral | null }) {
   const { tenant } = data;
+  const [openPkg, setOpenPkg] = React.useState<PublicPackage | null>(null);
   const offer = referral && (referral.offer.type === "percent" ? `${referral.offer.value}% off${referral.offer.max ? ` (up to ${money(referral.offer.max)})` : ""}` : `${money(referral.offer.value)} off`);
   const enquire = whatsappLink(tenant.phone, `Hi ${tenant.name}, I saw your menu online and would like a quotation.${referral ? `\nReferral code: ${referral.code}` : ""}\nEvent: \nDate: \nGuests: `);
   return (
@@ -164,17 +168,20 @@ export function CataloguePage({ data, referral }: { data: Catalogue; referral?: 
             <h2 className="font-heading text-xl font-semibold">Packages</h2>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {data.packages.map((p) => (
-                <article key={p.name} className="rounded-2xl border bg-surface p-4">
-                  <p className="font-heading text-lg font-semibold">{p.name}</p>
+                <button key={p.id ?? p.name} type="button" onClick={() => setOpenPkg(p)} className="group rounded-2xl border bg-surface p-4 text-left transition-colors hover:border-brand/50">
+                  <p className="flex items-center justify-between gap-2 font-heading text-lg font-semibold">{p.name}<ChevronRight className="size-5 shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5" strokeWidth={1.75} /></p>
                   {p.description && <p className="mt-1 text-sm text-text-muted">{p.description}</p>}
                   <p className="tnum mt-2 text-sm">{p.price != null && <span className="font-semibold">{money(p.price)} per plate</span>}{p.minPax > 0 && <span className="text-text-muted">{p.price != null ? " · " : ""}from {p.minPax} guests</span>}</p>
-                </article>
+                  {!!p.choices?.length && <p className="mt-2 line-clamp-2 text-xs text-text-muted">{p.choices.map((c) => `${data.categories.find((x) => x.id === c.category)?.name ?? "Dishes"} ${c.choose}`).join(" · ")}</p>}
+                  <p className="mt-2 text-xs font-medium text-brand">{p.suggested?.length ? `See ${p.suggested.length} suggested ${p.suggested.length === 1 ? "dish" : "dishes"}` : "See what it includes"}</p>
+                </button>
               ))}
             </div>
           </section>
         )}
         <div className="mt-6"><DishGrid categories={data.categories} items={data.items} showPrice={tenant.prices} /></div>
       </main>
+      <PackageSheet pkg={openPkg} data={data} onClose={() => setOpenPkg(null)} />
       {tenant.phone && (
         <div className="fixed inset-x-0 bottom-0 border-t bg-surface/95 p-3 backdrop-blur">
           <div className="mx-auto flex max-w-5xl gap-2">
@@ -184,6 +191,64 @@ export function CataloguePage({ data, referral }: { data: Catalogue; referral?: 
         </div>
       )}
     </PublicShell>
+  );
+}
+
+/**
+ * One package opened on the public menu: what it covers (its courses and extra lines) and the dishes the caterer
+ * suggests for it, with their photos, under the course each one fills.
+ */
+function PackageSheet({ pkg, data, onClose }: { pkg: PublicPackage | null; data: Catalogue; onClose: () => void }) {
+  const name = (id: string) => data.categories.find((c) => c.id === id)?.name ?? "";
+  // A dish counts under the nearest course of the package it sits inside (Paneer sabji under Main course).
+  const courseOf = (categoryId: string) => {
+    const seen = new Set<string>();
+    for (let at: string | null | undefined = categoryId; at && !seen.has(at); at = data.categories.find((c) => c.id === at)?.parent) {
+      seen.add(at);
+      if (pkg?.choices?.some((c) => c.category === at)) return at;
+    }
+    return "";
+  };
+  const dishes = (pkg?.suggested ?? []).map((id) => data.items.find((i) => i.id === id)).filter((i): i is PublicItem => !!i);
+  const groups = [...(pkg?.choices ?? []).map((c) => ({ id: c.category, title: `${name(c.category)} · choose ${c.choose}` })), { id: "", title: pkg?.choices?.length ? "More ideas" : "Suggested dishes" }]
+    .map((g) => ({ ...g, list: dishes.filter((d) => courseOf(d.category) === g.id) }))
+    .filter((g) => g.list.length);
+  return (
+    <Sheet open={!!pkg} onOpenChange={(o) => !o && onClose()} title={pkg?.name ?? ""} description={pkg?.description || undefined} wide>
+      {pkg && (
+        <div className="space-y-5 pb-4">
+          {(pkg.price != null || pkg.minPax > 0) && <p className="tnum text-sm">{pkg.price != null && <span className="font-semibold">{money(pkg.price)} per plate</span>}{pkg.minPax > 0 && <span className="text-text-muted">{pkg.price != null ? " · " : ""}from {pkg.minPax} guests</span>}</p>}
+          {(!!pkg.choices?.length || !!pkg.additions?.length) && (
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">The package covers</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {pkg.choices?.map((c) => <span key={c.category} className="rounded-full border bg-surface px-3 py-1 text-sm">{name(c.category)} <span className="font-semibold">{c.choose}</span></span>)}
+                {pkg.additions?.map((a, i) => <span key={i} className="rounded-full bg-brand/10 px-3 py-1 text-sm text-brand">{a.name}{a.count ? ` ${a.count}` : ""}</span>)}
+              </div>
+            </section>
+          )}
+          {groups.length > 0 ? groups.map((g) => (
+            <section key={g.id || "more"}>
+              <h3 className="font-heading text-base font-semibold">{g.title}</h3>
+              <p className="text-xs text-text-muted">Suggested dishes; you can choose any from the menu</p>
+              <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {g.list.map((i) => (
+                  <article key={i.id} className="overflow-hidden rounded-xl border bg-surface">
+                    <div className="relative aspect-[4/3] bg-primary-soft">
+                      {i.photo ? <Image src={mediaUrl(i.photo)!} alt={i.name} fill sizes="(max-width: 640px) 50vw, 220px" className="object-cover" /> : <UtensilsCrossed className="absolute inset-0 m-auto size-7 text-accent-gold" strokeWidth={1.5} />}
+                    </div>
+                    <div className="p-2.5">
+                      <p className="flex items-start gap-1.5 text-sm font-medium leading-snug"><VegMark diet={i.diet} className="mt-0.5" /><span>{i.name}</span></p>
+                      {i.local && <p className="text-xs text-text-muted">{i.local}</p>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )) : <p className="rounded-xl border border-dashed p-6 text-center text-sm text-text-muted">Ask us on WhatsApp for dish ideas for this package.</p>}
+        </div>
+      )}
+    </Sheet>
   );
 }
 

@@ -38,7 +38,7 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
  * package additions and archiving; referrals once 0014 has added referral codes, raw material changes and
  * per-quotation dish prices; subcategories once 0015 has added parent categories; contacts once 0016 has
  * added the client's second phone and the coordinator. */
-export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false, dishGuests: false, categoryPrices: false, recipeBook: false, vendorItems: false, categoryPrice: false, estimates: false };
+export const schema = { coordinator: false, supply: false, services: false, packageExtras: false, referrals: false, subcategories: false, contacts: false, charges: false, mainRate: false, subEvents: false, dishGuests: false, categoryPrices: false, recipeBook: false, vendorItems: false, categoryPrice: false, estimates: false, packageSuggestions: false };
 
 export async function probeSupply(sb: SB) {
   schema.supply = !(await sb.from("ingredients").select("id").limit(1)).error;
@@ -174,6 +174,7 @@ export const packageRow = (p: MenuPackage): Row => ({
   fixed_item_ids: p.fixedItemIds,
   ...(schema.services ? { food_type_id: p.foodTypeId ?? null } : {}),
   ...(schema.packageExtras ? { additions: p.additions ?? [], archived: !!p.archived } : {}),
+  ...(schema.packageSuggestions ? { public_suggestions: p.publicSuggestions ?? [] } : {}),
 });
 
 export const enquiryRow = (e: Enquiry): Row => ({
@@ -342,6 +343,7 @@ export interface Loaded {
   dishGuestsReady: boolean;
   categoryPricesReady: boolean;
   categoryPriceReady: boolean;
+  packageSuggestionsReady: boolean;
   /** The branch this person is tied to, if the owner assigned one */
   myBranch: string;
 }
@@ -359,6 +361,8 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
   // One price for a whole category, and the Cost Calculator's saved calculations (0028)
   schema.categoryPrice = !(await sb.from("menu_categories").select("price_set").limit(1)).error;
   schema.estimates = !(await sb.from("estimates").select("id").limit(1)).error;
+  // Dishes suggested for each package on the public menu (0029)
+  schema.packageSuggestions = !(await sb.from("packages").select("public_suggestions").limit(1)).error;
   schema.categoryPrices = !(await sb.from("event_functions").select("category_prices").limit(1)).error;
   schema.dishGuests = !(await sb.from("function_items").select("prep_pax").limit(1)).error && !(await sb.from("event_functions").select("package_price").limit(1)).error;
   // Asked of the database, not read off a loaded client, so an account with no clients yet still saves them.
@@ -466,6 +470,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
       foodTypeId: p.food_type_id ?? undefined,
       additions: Array.isArray(p.additions) ? p.additions : [],
       archived: !!p.archived,
+      publicSuggestions: Array.isArray(p.public_suggestions) ? p.public_suggestions : [],
     })),
     enquiries: rowsOf(enquiries, "Loading enquiries").filter(inBranch).map((e) => ({
       id: e.id,
@@ -555,6 +560,7 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
     dishGuestsReady: schema.dishGuests,
     categoryPricesReady: schema.categoryPrices,
     categoryPriceReady: schema.categoryPrice,
+    packageSuggestionsReady: schema.packageSuggestions,
   };
 }
 

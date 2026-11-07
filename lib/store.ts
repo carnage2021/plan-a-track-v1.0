@@ -138,6 +138,8 @@ interface Actions {
   syncCategoryPrices: () => number;
   /** False until 0028: one price for a whole category */
   categoryPriceReady: boolean;
+  /** False until 0029: dishes suggested for packages on the public menu */
+  packageSuggestionsReady: boolean;
   /** Puts the categories in this order everywhere the menu is shown. */
   reorderCategories: (ids: string[]) => void;
   /**
@@ -179,7 +181,7 @@ const blankTenant: Tenant = {
 };
 
 const signedOut = {
-  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false, dishGuestsReady: false, categoryPricesReady: false, categoryPriceReady: false,
+  tenantId: "", tenant: blankTenant, users: [], clients: [], categories: [], items: [], packages: [], enquiries: [], quotations: [], orders: [], branches: [], branchesEnabled: false, myBranch: "", servicesReady: false, packageExtrasReady: false, referralsReady: false, chargesReady: false, subcategoriesReady: false, contactsReady: false, eventTypes: [], eventTypesReady: false, subEventsReady: false, samplePhotos: [], samplePhotosReady: false, mainRateReady: false, dishGuestsReady: false, categoryPricesReady: false, categoryPriceReady: false, packageSuggestionsReady: false,
   currentUserId: "", myRole: "owner" as Role, viewAs: undefined, signedIn: false, setupDone: false,
 };
 

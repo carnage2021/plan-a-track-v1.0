@@ -231,6 +231,8 @@ export interface MenuPackage {
   additions?: PackageAddition[];
   /** Removed from offer but kept, because quotations or orders use it */
   archived?: boolean;
+  /** Dishes shown on the public menu as ideas for this package (0029); bookings are not affected */
+  publicSuggestions?: string[];
 }
 
 export interface PackageAddition {

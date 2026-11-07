@@ -5,6 +5,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { DocHeader, DocThemeContext, QrCode, docFrame, docStyle, docThemes } from "@/components/documents/theme";
 import { Button } from "@/components/ui/button";
+import { PackageSuggestions } from "@/components/settings/package-suggestions";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { ToggleRow } from "@/components/ui/primitives";
 import { defaultDocs, mediaUrl } from "@/lib/db";
@@ -122,6 +123,7 @@ export function PublicMenuForm() {
               </div>
             </div>
           )}
+          <PackageSuggestions />
         </>
       )}
     </div>

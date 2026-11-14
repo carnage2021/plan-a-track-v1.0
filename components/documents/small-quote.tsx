@@ -1,6 +1,6 @@
 "use client";
 
-import { Tinos } from "next/font/google";
+import localFont from "next/font/local";
 import * as React from "react";
 import { byDay } from "@/components/sales/event-charges";
 import { pricedAtBooking, rootOf } from "@/lib/categories";
@@ -43,7 +43,7 @@ function rateParts(f: EventFunction, items: MenuItem[], pkg: MenuPackage | undef
 
 // Tinos matches Times New Roman letter for letter and ships with the app, so the PDF server, which has no
 // Times New Roman, prints the sheet the same.
-const serif = Tinos({ subsets: ["latin"], weight: ["400", "700"], display: "block" });
+const Tinos = localFont({ src: [{ path: "../../app/fonts/tinos-400.woff2", weight: "400", style: "normal" }, { path: "../../app/fonts/tinos-700.woff2", weight: "700", style: "normal" }], display: "block" });
 
 /** Times the way the sheet writes them: 04:00 pm. */
 const clock = (t: string) => { const [h, m] = t.split(":").map(Number); return `${String(h % 12 || 12).padStart(2, "0")}:${String(m || 0).padStart(2, "0")} ${h >= 12 ? "pm" : "am"}`; };
@@ -92,7 +92,7 @@ export function SmallQuote({ data }: { data: SmallQuoteData }) {
   );
 
   return (
-    <article className="tnum bg-white px-[6mm] py-[4mm] text-[15px] leading-tight text-black" style={{ fontFamily: `"Times New Roman", ${serif.style.fontFamily}, serif` }}>
+    <article className="tnum bg-white px-[6mm] py-[4mm] text-[15px] leading-tight text-black" style={{ fontFamily: `"Times New Roman", ${Tinos.style.fontFamily}, serif` }}>
       <table className="w-full border-collapse border-2 border-black">
         <colgroup><col className="w-[15%]" /><col className="w-[44%]" /><col className="w-[14%]" /><col className="w-[11%]" /><col className="w-[16%]" /></colgroup>
         <thead>

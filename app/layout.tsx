@@ -1,22 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Noto_Sans_Devanagari, Noto_Sans_Gujarati, Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500"] });
-const jakarta = Plus_Jakarta_Sans({ variable: "--font-jakarta", subsets: ["latin"], weight: ["600", "700"] });
-const devanagari = Noto_Sans_Devanagari({
-  variable: "--font-devanagari",
-  subsets: ["devanagari"],
-  weight: ["400", "500", "600"],
-  preload: false,
-});
-const gujarati = Noto_Sans_Gujarati({
-  variable: "--font-gujarati",
-  subsets: ["gujarati"],
-  weight: ["400", "500", "600"],
-  preload: false,
-});
+// The fonts ship with the app (app/fonts, from Google Fonts): next/font/google fetched them at build time and kept
+// failing on Vercel ("queries have exactly one entry"), so every deploy broke. These are variable fonts.
+const inter = localFont({ variable: "--font-inter", src: [{ path: "./fonts/inter.woff2", weight: "400 500", style: "normal" }], display: "swap" });
+const jakarta = localFont({ variable: "--font-jakarta", src: [{ path: "./fonts/jakarta.woff2", weight: "600 700", style: "normal" }], display: "swap" });
+const devanagari = localFont({ variable: "--font-devanagari", src: [{ path: "./fonts/devanagari.woff2", weight: "400 600", style: "normal" }], display: "swap", preload: false });
+const gujarati = localFont({ variable: "--font-gujarati", src: [{ path: "./fonts/gujarati.woff2", weight: "400 600", style: "normal" }], display: "swap", preload: false });
 
 export const metadata: Metadata = {
   title: "Catering Manager",

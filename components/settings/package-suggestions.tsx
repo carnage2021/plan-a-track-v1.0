@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 const fold = (s: string) => s.toLowerCase().replace(/[^a-z0-9ऀ-૿]/g, "");
 
 /**
- * Settings → Public menu: dishes suggested for each package, shown with their photos when a visitor opens the
+ * Public menu page (sidebar): dishes suggested for each package, shown with their photos when a visitor opens the
  * package on the public menu ("Starters 2: Paneer Tikka, Hara Bhara Kabab…"). Ideas only; bookings are not affected.
  */
 export function PackageSuggestions() {

@@ -70,6 +70,10 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   const [showAll, setShowAll] = React.useState(false);
   const sections = React.useRef(new Map<string, HTMLElement>());
   const tabsRef = React.useRef<HTMLDivElement>(null);
+  // Search, filters and category tabs stay together at the top while the dishes scroll; its height is measured so
+  // a jump or a search lands just under it, never hidden behind it.
+  const barRef = React.useRef<HTMLDivElement>(null);
+  const [barH, setBarH] = React.useState(120);
 
   // The app's sidebar folds away while the menu is open, for room; it comes back as it was afterwards.
   React.useEffect(() => {
@@ -98,6 +102,14 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
   };
   // The food type comes first; a function that already has dishes (from before food types) is not held up.
   const needsFoodType = !foodType && !showAll && fn.itemIds.length === 0;
+  React.useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBarH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+    // The bar shows once a food type is picked.
+  }, [needsFoodType]);
   const toggle = (id: string) => patch({ itemIds: fn.itemIds.includes(id) ? fn.itemIds.filter((x) => x !== id) : [...fn.itemIds, id] });
   const choosePackage = (packageId?: string) => {
     const next = packages.find((p) => p.id === packageId);
@@ -161,19 +173,29 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
         const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
         if (top) setCurrent(top.target.getAttribute("data-section") ?? "");
       },
-      { rootMargin: `-${top + 60}px 0px -60% 0px` },
+      { rootMargin: `-${top + barH + 8}px 0px -55% 0px` },
     );
     for (const el of sections.current.values()) io.observe(el);
     return () => io.disconnect();
-  }, [grouped, top]);
+  }, [grouped, top, barH]);
   React.useEffect(() => {
     tabsRef.current?.querySelector(`[data-tab="${current}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [current]);
   const jump = (id: string) => {
     // A sub-category scrolls to its heading inside its top-level section.
     const el = document.querySelector<HTMLElement>(`[data-sub="${id}"]`) ?? sections.current.get(rootOf(id));
-    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - top - 64, behavior: "smooth" });
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - top - barH - 8, behavior: "smooth" });
   };
+  // Typing a search while far down the menu brings the first results up under the bar.
+  const listRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const el = listRef.current;
+    if (!el || !query) return;
+    const y = el.getBoundingClientRect().top + window.scrollY - top - barH - 8;
+    if (window.scrollY > y) window.scrollTo({ top: y });
+    // Only when the search changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const ruleFor = (categoryId: string) => price.rules.find((r) => r.categoryId === categoryId);
   const countIn = (categoryId: string) => allItems.filter((i) => isWithin(i.categoryId, categoryId) && selected.has(i.id)).length;
@@ -355,6 +377,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
           )}
 
           {!needsFoodType && (<>
+          {/* Search, filters and category tabs: one bar that stays at the top while the dishes scroll. */}
+          <div ref={barRef} className="sticky z-20 -mx-4 border-b bg-bg/95 px-4 pb-1 pt-2 backdrop-blur md:mx-0 md:px-0" style={{ top }}>
           {/* Toolbar: search and the everyday filters in one row; the rest folds under Filters. */}
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative min-w-48 flex-1">
@@ -385,8 +409,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
             </div>
           )}
 
-          {/* Category tabs, sticky under the page header */}
-          <div ref={tabsRef} className="no-scrollbar sticky z-10 -mx-4 mt-3 flex gap-1.5 overflow-x-auto border-b bg-bg/95 px-4 py-2 backdrop-blur md:mx-0 md:px-0" style={{ top }} role="tablist" aria-label="Menu categories">
+          {/* Category tabs */}
+          <div ref={tabsRef} className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto py-1.5" role="tablist" aria-label="Menu categories">
             {grouped.map(({ c }) => {
               const Icon = categoryIcon(c.icon);
               const rule = ruleFor(c.id);
@@ -405,6 +429,8 @@ export function MenuSelector({ functions, onChange, activeId, onActive, extras, 
               );
             })}
           </div>
+          </div>
+          <div ref={listRef} />
 
           {beforeRow.length > 0 && (
             <section className="mt-4">

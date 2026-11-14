@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardList, FileText, MessagesS
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
+import { useHeight } from "@/lib/use-height";
 import { toast } from "sonner";
 import { PdfDownloads } from "@/components/documents/doc-actions";
 import { MenuSelector } from "@/components/menu/menu-selector";
@@ -72,6 +73,8 @@ function BookingFlow() {
   const startOn = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") ?? "") ? params.get("date")! : undefined;
   const user = useCurrentUser();
   const tenant = useStore((s) => s.tenant);
+  // The menu's search bar sits right under this header, whatever its height.
+  const [headerRef, headerH] = useHeight<HTMLElement>(108);
   const createQuotation = useStore((s) => s.createQuotation);
   const convertToOrder = useStore((s) => s.convertToOrder);
 
@@ -214,7 +217,7 @@ function BookingFlow() {
 
   return (
     <div className="min-h-dvh" style={{ "--brand": tenant.brandColor } as React.CSSProperties}>
-      <header className="sticky top-0 z-30">
+      <header ref={headerRef} className="sticky top-0 z-30">
         <div className="flex h-14 items-center gap-3 bg-brand px-4 text-brand-fg md:px-6">
           <BrandMark className="size-9" />
           <div className="min-w-0 flex-1">
@@ -258,7 +261,7 @@ function BookingFlow() {
             {step === 1 && (
               <MenuSelector
                 booking
-                top={124}
+                top={headerH}
                 functions={draft.functions}
                 onChange={(functions) => setDraft({ functions })}
                 activeId={activeFn}

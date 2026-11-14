@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, CalendarCheck, Calculator, Save, X } from "lucid
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
+import { useHeight } from "@/lib/use-height";
 import { toast } from "sonner";
 import { CostingTab } from "@/components/billing/order-costing";
 import { MenuSelector } from "@/components/menu/menu-selector";
@@ -30,6 +31,8 @@ const steps = ["Events and guests", "Menu", "Extras", "Calculation"];
 function Editor({ initial, id: savedId }: { initial: { name: string; draft: QuoteDraft }; id?: string }) {
   const router = useRouter();
   const tenant = useStore((s) => s.tenant);
+  // The menu's search bar sits right under this header, whatever its height.
+  const [headerRef, headerH] = useHeight<HTMLElement>(108);
   const items = useStore((s) => s.items);
   const packages = useStore((s) => s.packages);
   const { ready: canSave, save } = useEstimates();
@@ -91,7 +94,7 @@ function Editor({ initial, id: savedId }: { initial: { name: string; draft: Quot
 
   return (
     <div className="min-h-dvh" style={{ "--brand": tenant.brandColor } as React.CSSProperties}>
-      <header className="sticky top-0 z-30">
+      <header ref={headerRef} className="sticky top-0 z-30">
         <div className="flex h-14 items-center gap-3 bg-brand px-4 text-brand-fg md:px-6">
           <BrandMark className="size-9" />
           <div className="min-w-0 flex-1">
@@ -121,7 +124,7 @@ function Editor({ initial, id: savedId }: { initial: { name: string; draft: Quot
         {step === 1 && (
           <MenuSelector
             booking
-            top={124}
+            top={headerH}
             functions={draft.functions}
             onChange={(functions) => setDraft({ functions })}
             activeId={activeFn}

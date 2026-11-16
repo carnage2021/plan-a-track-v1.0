@@ -8,6 +8,7 @@ import { EventPdf } from "@/components/documents/event-pdf";
 import { OrderBillDoc, ServiceWorkOrderDoc, WorkOrderDoc } from "@/components/documents/order-docs";
 import { serviceWorkOrders } from "@/lib/vendor-services";
 import { SmallQuote } from "@/components/documents/small-quote";
+import { LetterheadDoc } from "@/components/documents/letterhead-doc";
 import { CostingDoc } from "@/components/billing/order-costing";
 import { useStaff } from "@/lib/staff";
 import { useOps } from "@/lib/operations";
@@ -31,7 +32,7 @@ function OrderDoc({ order, variant, lang, day }: { order: Order; variant: "menu"
 function Doc() {
   const { kind, id } = useParams<{ kind: string; id: string }>();
   const params = useSearchParams();
-  const { hydrated, signedIn, quotations, orders, clients, users, tenant } = useStore();
+  const { hydrated, signedIn, quotations, orders, clients, users, tenant, tenantId } = useStore();
   // A day's document holds only that day's events.
   const day = /^\d{4}-\d{2}-\d{2}$/.test(params.get("day") ?? "") ? params.get("day")! : undefined;
   const billingReady = useBilling((s) => s.ready);
@@ -46,12 +47,15 @@ function Doc() {
   const quote = quotations.find((q) => q.id === id);
   // A vendor's work order for extra services is found by its event (id) and the vendor.
   const vendorId = params.get("vendor") ?? "";
+  // The menu on the letterhead: one event of a booking, or (with the account's id) the sample menu or the blank letterhead.
+  const eventId = params.get("event") ?? undefined;
+  const lhMode = (["sample", "blank"] as const).find((m) => m === params.get("mode"));
   const order = orders.find((o) => o.id === id || o.id === invoice?.orderId || o.id === credit?.orderId || o.id === work?.orderId || (kind === "service" && o.functions.some((f) => f.id === id)));
   const vendorItems = useSupply((s) => s.vendorItems);
   const service = kind === "service" && order ? serviceWorkOrders(order, vendorItems).find((w) => w.fn.id === id && w.vendorId === vendorId) : undefined;
   const clientLang = clients.find((c) => c.id === (quote?.clientId ?? order?.clientId))?.language;
   const lang = ((params.get("lang") as Locale | null) ?? clientLang ?? "en") as Locale;
-  const loaded = hydrated && signedIn && (["quote", "menu", "confirmation", "bill", "itemised", "small"].includes(kind) || (kind === "workorder" || kind === "service" ? supplyReady : kind === "costing" ? supplyReady && billingReady && staffReady && opsReady && expensesReady : billingReady));
+  const loaded = hydrated && signedIn && (["quote", "menu", "confirmation", "bill", "itemised", "small", "letterhead"].includes(kind) || (kind === "workorder" || kind === "service" ? supplyReady : kind === "costing" ? supplyReady && billingReady && staffReady && opsReady && expensesReady : billingReady));
 
   let body: React.ReactNode = null;
   if (loaded) {
@@ -64,7 +68,8 @@ function Doc() {
     else if (kind === "small" && (quote || order)) {
       const src = (quote ?? order)!;
       body = <SmallQuote data={{ ...src, clientName: clients.find((c) => c.id === src.clientId)?.name ?? "" }} />;
-    } else if (kind === "costing" && order) body = <CostingDoc order={order} />;
+    } else if (kind === "letterhead" && (lhMode ? id === tenantId : order && (!eventId || order.functions.some((f) => f.id === eventId)))) body = <LetterheadDoc order={lhMode ? undefined : order} eventId={eventId} mode={lhMode} />;
+    else if (kind === "costing" && order) body = <CostingDoc order={order} />;
     else if (kind === "workorder" && work && order) body = <WorkOrderDoc o={work} order={order} />;
     else if (kind === "service" && service && order) body = <ServiceWorkOrderDoc order={order} functionId={id} vendorId={vendorId} />;
     else if (kind === "invoice" && invoice && order) body = <InvoiceDocument invoice={invoice} order={order} lang={lang} />;
@@ -72,7 +77,7 @@ function Doc() {
   }
 
   const found = body !== null;
-  const title = kind === "costing" ? `${order?.number ?? ""} Costing` : kind === "small" ? `${(quote ?? order)?.number ?? ""} Small quotation` : kind === "invoice" ? invoice?.number : kind === "credit" ? credit?.number : kind === "quote" ? quote?.number : kind === "workorder" ? work?.number : kind === "service" ? service?.number : kind === "bill" || kind === "itemised" ? `${order?.number ?? ""} ${kind === "bill" ? "Bill" : "Itemised bill"}` : order?.number;
+  const title = kind === "letterhead" ? undefined : kind === "costing" ? `${order?.number ?? ""} Costing` : kind === "small" ? `${(quote ?? order)?.number ?? ""} Small quotation` : kind === "invoice" ? invoice?.number : kind === "credit" ? credit?.number : kind === "quote" ? quote?.number : kind === "workorder" ? work?.number : kind === "service" ? service?.number : kind === "bill" || kind === "itemised" ? `${order?.number ?? ""} ${kind === "bill" ? "Bill" : "Itemised bill"}` : order?.number;
   // Tells the PDF route the page is finished: data in, fonts and photos loaded.
   React.useEffect(() => {
     if (hydrated && !signedIn) document.body.dataset.ready = "signedout";
@@ -82,6 +87,8 @@ function Doc() {
     document.body.dataset.footer = [tenant.name, title].filter(Boolean).join(" · ");
     let live = true;
     void (async () => {
+      // The letterhead menu measures its rows before laying out its pages.
+      while (live && document.querySelector("[data-paging]")) await new Promise((r) => setTimeout(r, 50));
       await document.fonts.ready;
       await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => { img.onload = img.onerror = r; }))));
       if (live) document.body.dataset.ready = found ? "1" : "missing";
@@ -93,6 +100,8 @@ function Doc() {
 
   if (!loaded) return null;
   if (!body) return <p className="p-8 text-center">This document was not found.</p>;
+  // The letterhead menu's pages are full A4 sheets of their own.
+  if (kind === "letterhead") return <div className="mx-auto w-[794px]">{body}</div>;
   return <div className="mx-auto max-w-[210mm] bg-white">{body}</div>;
 }
 

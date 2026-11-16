@@ -106,6 +106,37 @@ export interface DocSettings {
   showUpiQr: boolean;
   /** Storage path of the authorised signatory's signature */
   signaturePath?: string;
+  /** The menu on the caterer's letterhead, from Order → Documents */
+  letterhead?: Letterhead;
+}
+
+/**
+ * The caterer's letterhead for event menus. "designed": a ready design (cover page, header, footer, watermark) filled
+ * from these details. "upload": their own design as a PDF or picture, with the menu printed inside its blank space.
+ */
+export interface Letterhead {
+  style: "designed" | "upload";
+  /** Designed: the full logo, and the mark alone for the faint watermark (storage paths; SVG or picture) */
+  logoPath?: string;
+  markPath?: string;
+  tagline: string;
+  /** Phone numbers, one per line */
+  phones: string;
+  email: string;
+  /** The address in two lines */
+  address: string;
+  /** Headings, top strip and footer band */
+  primary: string;
+  /** Gold rules and ornaments */
+  accent: string;
+  /** Upload: the design's storage path; a PDF's second page, if it has one, is used for the later pages */
+  filePath?: string;
+  fileType?: "pdf" | "image";
+  fileName?: string;
+  /** Upload: the space its own header, footer and sides take, in mm; the menu stays inside the rest */
+  top: number;
+  bottom: number;
+  side: number;
 }
 
 export interface Coordinator { name: string; phone: string; email: string }

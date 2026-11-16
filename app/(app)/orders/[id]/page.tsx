@@ -1,5 +1,6 @@
 "use client";
 
+import { LetterheadDownloads } from "@/components/documents/letterhead-downloads";
 import { ArrowLeft, Ban, CalendarDays, CheckCircle2, Clock, FileQuestion, FileText, History, MapPin, Phone, Play, Printer, QrCode, Receipt, Send, Users, ClipboardCheck, Tags, UtensilsCrossed, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
@@ -363,6 +364,7 @@ function OrderView({ order }: { order: Order }) {
               <p className="mb-2 text-xs font-medium text-text-muted">Menu card, without prices</p>
               <PdfDownloads kind="menu" id={order.id} lang={docLang} functions={order.functions} />
             </div>
+            <LetterheadDownloads order={order} />
             {serviceWorks.length > 0 && (
               <div className="border-t pt-3">
                 <p className="mb-2 text-xs font-medium text-text-muted">Work orders for extra services: staff, cutlery, water and more (for the vendor only, never the client)</p>

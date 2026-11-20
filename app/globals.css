@@ -195,26 +195,8 @@
 }
 
 /* Marketing page motion. All of it is switched off by the reduced-motion rule above. */
-@keyframes float-a {
-  50% { transform: translateY(-14px) rotate(-1deg); }
-}
-@keyframes float-b {
-  50% { transform: translateY(12px) rotate(1.5deg); }
-}
-@keyframes marquee {
-  to { transform: translateX(-50%); }
-}
 @keyframes rise {
   from { opacity: 0; transform: translateY(28px); }
-}
-@utility animate-float-a {
-  animation: float-a 7s ease-in-out infinite;
-}
-@utility animate-float-b {
-  animation: float-b 8s ease-in-out infinite;
-}
-@utility animate-marquee {
-  animation: marquee 48s linear infinite;
 }
 @utility animate-rise {
   animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -259,17 +241,11 @@
   33% { transform: translate(40px, -30px) scale(1.08); }
   66% { transform: translate(-30px, 20px) scale(0.95); }
 }
-@keyframes marquee-reverse {
-  from { transform: translateX(-50%); }
-  to { transform: translateX(0); }
-}
 @keyframes word-in {
   from { opacity: 0; transform: translateY(0.45em); filter: blur(4px); }
 }
 @utility animate-blob { animation: blob 18s ease-in-out infinite; }
-@utility animate-marquee-reverse { animation: marquee-reverse 56s linear infinite; }
 .word-in { animation: word-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-.marquee-row:hover > * { animation-play-state: paused; }
 
 /* Reveal variants on top of the base .reveal (fade and lift). */
 .reveal[data-from="left"] { transform: translateX(-48px); }
@@ -281,12 +257,8 @@
 @supports (animation-timeline: scroll()) {
   @keyframes progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
   .scroll-progress { animation: progress linear both; animation-timeline: scroll(root); transform-origin: left; }
-  @keyframes hero-tilt { from { transform: perspective(1400px) rotateX(10deg) scale(0.96); } to { transform: none; } }
-  .hero-tilt { animation: hero-tilt linear both; animation-timeline: view(); animation-range: entry 0% cover 45%; }
   @keyframes draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
   .draw-line { animation: draw linear both; animation-timeline: view(); animation-range: entry 20% cover 55%; transform-origin: left; }
-  @keyframes drift-up { from { transform: translateY(60px); } to { transform: translateY(-60px); } }
-  .parallax { animation: drift-up linear both; animation-timeline: view(); }
 }
 @media (prefers-reduced-motion: reduce) {
   .splash { display: none; }

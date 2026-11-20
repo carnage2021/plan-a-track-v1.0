@@ -121,6 +121,25 @@
     "signUp": "Create account",
     "toSignUp": "New here? Create an account",
     "toSignIn": "Already have an account? Sign in",
-    "wrong": "That email and password do not match an account."
+    "wrong": "That email and password do not match an account.",
+    "forgotPassword": "Forgot password?",
+    "forgotTitle": "Reset your password",
+    "forgotSubtitle": "Enter your account email. If you use a staff login ID, ask your account owner to reset your password.",
+    "sendResetLink": "Send reset email",
+    "recoveryReady": "Check your recovery link",
+    "recoverySent": "If the account exists, its recovery instructions have been sent.",
+    "localRecoveryHint": "Local preview saves recovery emails in the private outbox on this computer.",
+    "openReset": "Set a new password",
+    "backToSignIn": "Back to sign in",
+    "recoveryError": "Could not start password recovery.",
+    "resetTitle": "Choose a new password",
+    "resetSubtitle": "Use at least 8 characters. This link works once and expires after 15 minutes.",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "updatePassword": "Update password",
+    "passwordUpdated": "Password updated",
+    "passwordUpdatedHint": "Your old password no longer works. Sign in with the new one.",
+    "passwordsMismatch": "The two passwords do not match.",
+    "resetInvalid": "This reset link is invalid, expired or has already been used."
   }
 }

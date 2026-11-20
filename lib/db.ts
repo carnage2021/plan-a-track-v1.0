@@ -568,5 +568,5 @@ export async function loadAll(sb: SB, userId: string, preferredBranch = ""): Pro
 export function mediaUrl(path?: string) {
   if (!path) return undefined;
   if (/^(\/|https?:|data:|blob:)/.test(path)) return path;
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`;
+  return `/api/local/storage/public/media/${path}`;
 }

@@ -139,35 +139,31 @@ export default function WelcomePage() {
             </ul>
           </div>
           <div className="relative animate-rise [animation-delay:150ms]">
-            <div className="hero-tilt"><Shot src="/landing/booking.png" alt="Booking mode in Plan A Track" priority /></div>
-            <div className="animate-float-a absolute -left-3 top-[18%] hidden w-52 rounded-2xl border bg-surface p-2 shadow-sheet sm:block lg:-left-10">
+            <div><Shot src="/landing/booking.png" alt="Booking mode in Plan A Track" priority /></div>
+            <div className="absolute -left-3 top-[18%] hidden w-52 rounded-2xl border bg-surface p-2 shadow-sheet sm:block lg:-left-10">
               <Image src="/dishes/paneer-butter-masala.jpg" alt="" width={400} height={300} className="aspect-[4/3] w-full rounded-xl object-cover" />
               <p className="mt-2 px-1 font-heading text-sm font-semibold">Paneer Butter Masala</p>
               <p className="flex items-center justify-between px-1 pb-1 text-xs text-text-muted">₹75 per plate<span className="grid size-5 place-items-center rounded-full bg-primary text-primary-fg"><Check className="size-3" strokeWidth={3} /></span></p>
             </div>
-            <div className="animate-float-b absolute -bottom-6 right-3 rounded-2xl border bg-surface px-5 py-4 shadow-sheet lg:-right-6">
+            <div className="absolute -bottom-6 right-3 rounded-2xl border bg-surface px-5 py-4 shadow-sheet lg:-right-6">
               <p className="text-xs text-text-muted">Gold package, per plate</p>
               <p className="font-heading text-3xl font-bold"><CountUp to={650} prefix="₹" /></p>
               <p className="tnum text-xs text-success">200 guests · <CountUp to={136500} prefix="₹" /> with GST</p>
             </div>
-            <div className="animate-float-a absolute -top-5 right-8 hidden items-center gap-2.5 rounded-full border bg-surface py-2 pl-2 pr-4 shadow-sheet [animation-delay:-3s] md:flex">
+            <div className="absolute -top-5 right-8 hidden items-center gap-2.5 rounded-full border bg-surface py-2 pl-2 pr-4 shadow-sheet md:flex">
               <span className="grid size-8 place-items-center rounded-full bg-success/15 text-success"><Check className="size-4" strokeWidth={3} /></span>
               <span className="text-sm"><span className="block font-medium leading-tight">Booking confirmed</span><span className="tnum block text-xs text-text-muted">Advance received</span></span>
             </div>
           </div>
         </section>
 
-        {/* Dish photo marquee */}
-        <div className="space-y-4 border-y bg-surface-muted/60 py-6" aria-hidden>
-          {[dishes, [...dishes].reverse()].map((row, r) => (
-            <div key={r} className="marquee-row">
-              <div className={cn("flex w-max gap-4", r ? "animate-marquee-reverse" : "animate-marquee")}>
-                {[...row, ...row].map((d, i) => (
-                  <Image key={i} src={`/dishes/${d}.jpg`} alt="" width={320} height={240} className="h-24 w-36 rounded-2xl object-cover transition-transform duration-300 hover:scale-105 md:h-32 md:w-48" />
-                ))}
-              </div>
-            </div>
-          ))}
+        {/* Static dish gallery. Keeping image content still avoids distracting movement and scroll jitter. */}
+        <div className="border-y bg-surface-muted/60 py-6" aria-hidden>
+          <div className="mx-auto grid max-w-[1200px] grid-cols-3 gap-3 px-4 md:grid-cols-6 md:gap-4 md:px-6">
+            {dishes.map((d) => (
+              <Image key={d} src={`/dishes/${d}.jpg`} alt="" width={320} height={240} className="aspect-[4/3] w-full rounded-2xl object-cover" />
+            ))}
+          </div>
         </div>
 
         {/* The chain */}
@@ -207,7 +203,7 @@ export default function WelcomePage() {
                     {f.points.map((p) => <li key={p} className="flex items-start gap-3 text-sm"><span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-success/10 text-success"><Check className="size-3" strokeWidth={3} /></span>{p}</li>)}
                   </ul>
                 </Reveal>
-                <Reveal from="scale" delay={150}><div className="parallax transition-transform duration-500 hover:-translate-y-1"><Shot src={f.image} alt={f.alt} crop={f.crop} /></div></Reveal>
+                <Reveal from="scale" delay={150}><div><Shot src={f.image} alt={f.alt} crop={f.crop} /></div></Reveal>
               </div>
             ))}
           </div>

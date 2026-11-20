@@ -70,12 +70,12 @@ export async function GET(request: Request) {
       const name = ((await page.title()) || "Menu").replace(/[^\w.-]+/g, "-");
       // The caterer's own design, when they uploaded one: only a file from this app's storage is fetched.
       const design = await page.evaluate(() => ({ url: document.body.dataset.letterhead ?? "", type: document.body.dataset.letterheadType ?? "" }));
-      const own = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/`;
+      const own = "/api/local/storage/public/media/";
       const pdf = await page.pdf({ printBackground: true, preferCSSPageSize: true, omitBackground: !!design.url, margin: { top: "0", bottom: "0", left: "0", right: "0" } });
       let out: Uint8Array = pdf;
       if (design.url) {
         if (!design.url.startsWith(own)) return Response.json({ error: "The letterhead file is not in this account's storage." }, { status: 400 });
-        const res = await fetch(design.url);
+        const res = await fetch(new URL(design.url, origin));
         if (!res.ok) return Response.json({ error: "The letterhead file could not be read. Upload it again in Settings → Documents." }, { status: 502 });
         out = await onLetterhead(pdf, new Uint8Array(await res.arrayBuffer()));
       }

@@ -1,10 +1,10 @@
-import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createLocalBrowserClient } from "@/lib/local/browser-client";
 
 let client: SupabaseClient | undefined;
 
-/** One browser client for the whole app; the session is kept in cookies. */
+/** One browser client for the whole app; all data stays on this server. */
 export function supabase() {
-  client ??= createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  client ??= createLocalBrowserClient() as unknown as SupabaseClient;
   return client;
 }

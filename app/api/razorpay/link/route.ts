@@ -1,5 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { userFromToken } from "@/lib/local/auth";
+import { executeQuery } from "@/lib/local/database";
 
 /**
  * Creates a Razorpay payment link for part of an order's balance. The caller's own login is used to
@@ -15,10 +16,13 @@ export async function POST(request: Request) {
   const amount = Math.round(Number(body?.amount) * 100);
   if (!auth.startsWith("Bearer ") || !body?.orderId || !(amount >= 100)) return NextResponse.json({ error: "Send an order and an amount of at least ₹1." }, { status: 400 });
 
-  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
-  const { data: order } = await sb.from("orders").select("id, number, event_type, tenant_id, clients(name, phone)").eq("id", body.orderId).maybeSingle();
+  const user = await userFromToken(auth.replace(/^Bearer\s+/i, ""));
+  if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  const orderResult = await executeQuery({ action: "select", table: "orders", columns: "id,number,event_type,tenant_id,client_id", filters: [{ column: "id", op: "eq", value: body.orderId }], one: "maybeSingle" }, { userId: user.id });
+  const order = orderResult.data as { id: string; number: string; event_type: string; tenant_id: string; client_id: string } | null;
   if (!order) return NextResponse.json({ error: "Order not found." }, { status: 404 });
-  const client = (Array.isArray(order.clients) ? order.clients[0] : order.clients) as { name: string; phone: string } | null;
+  const clientResult = await executeQuery({ action: "select", table: "clients", columns: "name,phone", filters: [{ column: "id", op: "eq", value: order.client_id }], one: "maybeSingle" }, { userId: user.id });
+  const client = clientResult.data as { name: string; phone: string } | null;
 
   const res = await fetch("https://api.razorpay.com/v1/payment_links", {
     method: "POST",

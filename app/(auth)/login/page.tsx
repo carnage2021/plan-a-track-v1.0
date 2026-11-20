@@ -76,8 +76,12 @@ function LoginForm() {
       }
       // Staff sign in with the login ID the owner gave them; it is stored as <id>@staff.invalid.
       const login = email.trim().toLowerCase();
-      const { error: authError } = await supabase().auth.signInWithPassword({ email: login.includes("@") ? login : `${login}@staff.invalid`, password });
+      const { data, error: authError } = await supabase().auth.signInWithPassword({ email: login.includes("@") ? login : `${login}@staff.invalid`, password });
       if (authError) throw new Error(t("wrong"));
+      if (data.user?.app_metadata?.platform_admin) {
+        router.replace("/admin");
+        return;
+      }
       if (!(await reload())) throw new Error("This login is not linked to a catering account.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
@@ -86,7 +90,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="grid min-h-dvh lg:grid-cols-2">
+    <div data-no-title-case className="grid min-h-dvh lg:grid-cols-2">
       <div className="relative hidden lg:block">
         <Image src="/dishes/veg-biryani.jpg" alt="" fill priority sizes="50vw" placeholder="blur" blurDataURL={BLUR} className="object-cover" />
         <div className="absolute inset-0 bg-text/55 dark:bg-bg/70" />

@@ -41,7 +41,7 @@ function ResetPasswordForm() {
   };
 
   return (
-    <div className="grid min-h-dvh lg:grid-cols-2">
+    <div data-no-title-case className="grid min-h-dvh lg:grid-cols-2">
       <div className="relative hidden lg:block">
         <Image src="/dishes/veg-biryani.jpg" alt="" fill priority sizes="50vw" placeholder="blur" blurDataURL={BLUR} className="object-cover" />
         <div className="absolute inset-0 bg-text/55 dark:bg-bg/70" />

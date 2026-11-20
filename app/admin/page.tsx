@@ -4,6 +4,7 @@ import { Building2, IndianRupee, LifeBuoy, LogIn, Megaphone, Plus, RefreshCw, Sh
 import Link from "next/link";
 import * as React from "react";
 import { toast } from "sonner";
+import type { SmtpSettings } from "@/lib/local/smtp";
 import { Badge } from "@/components/shared/badges";
 import { MoneyInput, StatCard } from "@/components/shared/blocks";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { cn, daysFromToday, fmtDate, money, moneyShort, localDay } from "@/lib/u
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the admin API returns database rows as they are */
 type Row = Record<string, any>;
-interface Overview { me: { email: string }; accounts: Row[]; plans: Row[]; invoices: Row[]; tickets: Row[]; announcements: Row[]; changelog: Row[]; audit: Row[]; modules: { table: string; n: number }[] }
+interface Overview { smtp: SmtpSettings; me: { email: string }; accounts: Row[]; plans: Row[]; invoices: Row[]; tickets: Row[]; announcements: Row[]; changelog: Row[]; audit: Row[]; modules: { table: string; n: number }[] }
 
 async function api(method: "GET" | "POST", body?: Row) {
   const { data } = await supabase().auth.getSession();
@@ -303,6 +304,51 @@ function Publish({ o, refresh }: { o: Overview; refresh: () => void }) {
   );
 }
 
+function SmtpPanel({ settings, refresh }: { settings: SmtpSettings; refresh: () => void }) {
+  const [draft, setDraft] = React.useState({ ...settings, password: "" });
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  function change(patch: Partial<typeof draft>) {
+    setDraft(previous => ({ ...previous, ...patch }));
+    setError("");
+  }
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const { smtp } = await api("POST", { action: "save_smtp", settings: draft });
+      setDraft({ ...smtp, password: "" });
+      toast.success("SMTP settings saved");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save SMTP settings.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card className="max-w-2xl p-4 md:p-5">
+      <form onSubmit={save} className="space-y-4">
+        <ToggleRow label="Enable SMTP" help="Use this mail server for password recovery. When switched off, the local preview saves recovery emails in its private outbox." checked={draft.enabled} onCheckedChange={enabled => change({ enabled })} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="SMTP host"><Input value={draft.host} required={draft.enabled} placeholder="smtp.example.com" onChange={e => change({ host: e.target.value.trim() })} /></Field>
+          <Field label="Port"><Input type="number" min={1} max={65535} required value={draft.port || ""} onChange={e => change({ port: Number(e.target.value) })} /></Field>
+          <Field label="Connection security"><Select value={draft.security} onChange={e => change({ security: e.target.value as SmtpSettings["security"] })}>
+            <option value="starttls">STARTTLS</option><option value="tls">TLS on connect</option>
+            {process.env.NODE_ENV === "development" && <option value="loopback">Local test server (plain SMTP)</option>}
+          </Select></Field>
+          <Field label="Sender email"><Input type="email" required={draft.enabled} value={draft.sender} onChange={e => change({ sender: e.target.value.trim() })} /></Field>
+          <Field label="SMTP username"><Input autoComplete="off" value={draft.username} onChange={e => change({ username: e.target.value })} /></Field>
+          <Field label="SMTP password" hint={settings.hasPassword ? "Leave blank to keep the saved password for this connection." : "Only required for authenticated SMTP."}><Input type="password" autoComplete="new-password" value={draft.password} onChange={e => change({ password: e.target.value })} /></Field>
+        </div>
+        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+        <Button type="submit" variant="primary" loading={busy}>Save SMTP settings</Button>
+      </form>
+    </Card>
+  );
+}
+
 function Audit({ o }: { o: Overview }) {
   const name = (id: string | null) => o.accounts.find((a) => a.id === id)?.name ?? (id ? "Deleted account" : "Platform");
   return (
@@ -345,6 +391,7 @@ export default function AdminPage() {
             <TabsTrigger value="plans">Plans</TabsTrigger>
             <TabsTrigger value="support"><LifeBuoy className="size-4" strokeWidth={1.75} />Support{open > 0 && <Badge tone="warning">{open}</Badge>}</TabsTrigger>
             <TabsTrigger value="publish">Announcements</TabsTrigger>
+            <TabsTrigger value="smtp">Email / SMTP</TabsTrigger>
             <TabsTrigger value="audit">Audit log</TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard"><Dashboard o={o} /></TabsContent>
@@ -352,6 +399,7 @@ export default function AdminPage() {
           <TabsContent value="plans"><Plans o={o} refresh={load} /></TabsContent>
           <TabsContent value="support"><Support o={o} refresh={load} /></TabsContent>
           <TabsContent value="publish"><Publish o={o} refresh={load} /></TabsContent>
+          <TabsContent value="smtp"><SmtpPanel key={o.smtp.revision} settings={o.smtp} refresh={load} /></TabsContent>
           <TabsContent value="audit"><Audit o={o} /></TabsContent>
         </Tabs>
       </main>

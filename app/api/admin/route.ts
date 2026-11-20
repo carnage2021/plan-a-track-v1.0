@@ -1,3 +1,4 @@
+import { getSmtpSettings, saveSmtpSettings, SmtpInputError } from "@/lib/local/smtp";
 import { NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
 
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
     return { ...t, owner: owner?.name ?? "", ownerEmail: owner ? (login.get(owner.id)?.email ?? "") : "", team: team.length, lastLogin: lasts[lasts.length - 1] ?? null, events: eventsBy.get(t.id) ?? 0, orders: ordersBy.get(t.id) ?? 0, ordersThisMonth: ordersThisMonth.get(t.id) ?? 0 };
   });
   const modules = activity.error ? [] : [...count((activity.data ?? []).map((a) => ({ tenant_id: a.table_name }))).entries()].map(([table, n]) => ({ table, n })).sort((a, b) => b.n - a.n);
-  return NextResponse.json({ me: { id: me.id, email: me.email }, accounts, plans: plans.data, invoices: invoices.data, tickets: tickets.data, announcements: announcements.data, changelog: changelog.data, audit: audit.data, modules });
+  return NextResponse.json({ me: { id: me.id, email: me.email }, accounts, plans: plans.data, invoices: invoices.data, tickets: tickets.data, announcements: announcements.data, changelog: changelog.data, audit: audit.data, modules, smtp: await getSmtpSettings() });
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- action bodies are checked field by field below */
@@ -77,6 +78,15 @@ export async function POST(request: Request) {
   if (tenantId && !tenant) return fail("Account not found.", 404);
 
   switch (body.action) {
+    case "save_smtp": {
+      try {
+        const smtp = await saveSmtpSettings(body.settings);
+        await audit("save_smtp", null, smtp.enabled ? "SMTP enabled" : "SMTP disabled");
+        return NextResponse.json({ smtp });
+      } catch (error) {
+        return error instanceof SmtpInputError ? fail(error.message) : fail("Could not save SMTP settings.", 500);
+      }
+    }
     case "set_status": {
       if (!["trial", "active", "overdue", "suspended"].includes(body.status)) return fail("Unknown status.");
       const { error } = await sb.from("tenants").update({ status: body.status }).eq("id", tenantId!);

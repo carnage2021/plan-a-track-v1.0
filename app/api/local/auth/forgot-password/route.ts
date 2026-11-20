@@ -4,7 +4,7 @@ import { mailSettings, sendEmail } from "@/lib/local/email";
 const cooldown = new Map<string, number>();
 
 export async function POST(request: Request) {
-  const settings = mailSettings();
+  const settings = await mailSettings();
   if (!settings) return Response.json({ error: "Password recovery email is currently unavailable." }, { status: 503 });
   const result = () => Response.json({ message: "Request received", localOutbox: Boolean(settings.outbox) });
   const body = await request.json().catch(() => null);
